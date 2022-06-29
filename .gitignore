@@ -8,3 +8,5 @@ typechain
 cache
 artifacts
 .vscode
+
+test/emails

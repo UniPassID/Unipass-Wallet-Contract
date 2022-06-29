@@ -31,5 +31,9 @@
     "ts-node": "^10.8.1",
     "typechain": "^5.2.0",
     "typescript": "^4.7.4"
+  },
+  "dependencies": {
+    "dkim": "github:zzhengzhuo/node-dkim#next",
+    "mailparser": "zzhengzhuo/mailparser"
   }
 }
