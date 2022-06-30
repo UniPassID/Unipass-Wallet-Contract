@@ -5,7 +5,7 @@ import { DkimParams, parseEmailParams } from "./utils";
 import * as fs from "fs";
 
 describe("ModuleDkimAuth", function () {
-  let moduleDkimAuth: Contract;
+  let dkimAuth: Contract;
   let emails: DkimParams[] = [];
   this.beforeAll(async function () {
     let accounts = await ethers.getSigners();
@@ -13,9 +13,8 @@ describe("ModuleDkimAuth", function () {
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     const dkimKeys = await DkimKeys.deploy(accounts[0].address);
 
-    const ModuleDkimAuth = await ethers.getContractFactory("ModuleDkimAuth");
-    moduleDkimAuth = await ModuleDkimAuth.deploy(accounts[0].address);
-    await moduleDkimAuth.init(dkimKeys.address);
+    const DkimAuth = await ethers.getContractFactory("DkimAuth");
+    dkimAuth = await DkimAuth.deploy(dkimKeys.address);
     const files = await fs.promises.readdir(__dirname + "/emails/emails");
     for (const emailFile of files) {
       const email = await fs.promises.readFile(
@@ -29,7 +28,7 @@ describe("ModuleDkimAuth", function () {
   });
   it("Validate All Emails", async function () {
     emails.forEach(async (value, _index, _array) => {
-      const ret = await moduleDkimAuth.dkimVerify(value);
+      const ret = await dkimAuth.dkimVerify(value);
       expect(ret.ret).true;
       expect(ret.emailHash.startsWith("0x")).true;
       expect(ret.emailHash.length).to.equal(66);

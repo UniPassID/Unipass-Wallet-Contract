@@ -1,21 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
-import "./ModuleFactoryAuth.sol";
 import "../utils/LibDkim.sol";
 import "../../interfaces/IDkimKeys.sol";
 import "../../utils/LibRsa.sol";
 
-contract ModuleDkimAuth is ModuleFactoryAuth {
+abstract contract ModuleDkimAuth {
     using LibDkimValidator for DkimParams;
 
     IDkimKeys public dkimKeys;
-
-    constructor(address _factory) ModuleFactoryAuth(_factory) {}
-
-    function init(IDkimKeys _dkimKeys) external onlyFactory {
-        dkimKeys = _dkimKeys;
-    }
 
     function parseHeader(DkimParams calldata params)
         external
