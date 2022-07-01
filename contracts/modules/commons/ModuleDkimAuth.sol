@@ -37,7 +37,7 @@ abstract contract ModuleDkimAuth {
         (emailHash, sigHashHex, sdid, selector) = params.parseHeader();
         require(
             sigHashHex.length == 66,
-            "ModuleDkimAuth#dkimVeirfy: INVALID_SIGHASHHEX"
+            "ModuleDkimAuth#dkimVerify: INVALID_SIGHASHHEX"
         );
         // 验证dkim签名
         bytes32 hash = sha256(params.emailHeader);
