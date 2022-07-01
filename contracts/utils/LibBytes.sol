@@ -4,6 +4,8 @@ pragma solidity ^0.8.0;
 library LibBytes {
     using LibBytes for bytes;
 
+    bytes16 private constant _HEX_SYMBOLS = "0123456789abcdef";
+
     // Errors
     error ReadFirstUint16OutOfBounds(bytes _data);
     error ReadFirstUint8OutOfBounds(bytes _data);
@@ -251,6 +253,18 @@ library LibBytes {
         }
     }
 
+    function cReadUint32(bytes calldata data, uint256 index)
+        internal
+        pure
+        returns (uint32 a, uint256 newIndex)
+    {
+        assembly {
+            let word := calldataload(add(index, data.offset))
+            a := and(shr(224, word), 0xffffffff)
+            newIndex := add(index, 4)
+        }
+    }
+
     /**
      * @dev Reads bytes from a position in a byte array.
      * @param data Byte array to be read.
@@ -344,5 +358,21 @@ library LibBytes {
             let mask := not(sub(exp(256, sub(32, len)), 1))
             ret := and(mload(add(add(self, 32), idx)), mask)
         }
+    }
+
+    function toHex(uint256 value, uint256 length)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory buffer = new bytes(2 * length + 2);
+        buffer[0] = "0";
+        buffer[1] = "x";
+        for (uint256 i = 2 * length + 1; i > 1; --i) {
+            buffer[i] = _HEX_SYMBOLS[value & 0xf];
+            value >>= 4;
+        }
+        require(value == 0, "Strings: hex length insufficient");
+        return buffer;
     }
 }

@@ -12,7 +12,26 @@ abstract contract ModuleTimeLock {
         delay = 165600;
     }
 
-    function _setNewKeySet(bytes32 _newKeySet) internal {
+    function _requirePending() internal view {
+        require(isPending, "ModuleTimeLock#_requirePending: PENDING");
+    }
+
+    function _requireUnPending() internal view {
+        require(
+            isPending == false,
+            "ModuleTimeLock#_requireUnPending: PENDING"
+        );
+    }
+
+    function requireComplete() internal view {
+        require(isPending, "ModuleTimeLock#requireComplete: PENDING");
+        require(
+            block.timestamp > timestamp,
+            "ModuleTimeLock#requireComplete: INVLIAD_TIMESTAMP"
+        );
+    }
+
+    function _pendNewKeySet(bytes32 _newKeySet) internal {
         require(!isPending, "ModuleTimeLock#_setNewKeySet: IS_PENDING");
         require(
             _newKeySet != bytes32(0),
@@ -38,5 +57,12 @@ abstract contract ModuleTimeLock {
         )
     {
         return (isPending, newKeySet, timestamp);
+    }
+
+    function lock(bytes32 _keySet) external {
+        require(isPending == false, "ModuleTimeLock#lock: IS_PENDING");
+        newKeySet = _keySet;
+        isPending = true;
+        timestamp = block.timestamp + delay;
     }
 }
