@@ -35,6 +35,7 @@
     "typescript": "^4.7.4"
   },
   "dependencies": {
+    "@openzeppelin/contracts": "^4.7.0",
     "@types/node-rsa": "^1.1.1",
     "dkim": "github:zzhengzhuo/node-dkim#next",
     "mailparser": "zzhengzhuo/mailparser",
