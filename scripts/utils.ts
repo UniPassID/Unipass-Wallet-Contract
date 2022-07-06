@@ -8,3 +8,8 @@ console.log(
   "meta nonce key:",
   keccak256(Buffer.from("unipass-wallet:module-auth:meta-nonce", "utf8"))
 );
+
+console.log(
+  "nonce key:",
+  keccak256(Buffer.from("unipass-wallet:module-call:nonce", "utf8"))
+);
