@@ -9,8 +9,10 @@ import "./ModuleTimeLock.sol";
 import "./Implementation.sol";
 import "../../utils/SignatureValidator.sol";
 import "../../Wallet.sol";
+import "../../interfaces/IModuleAuth.sol";
 
 contract ModuleAuth is
+    IModuleAuth,
     ModuleDkimAuth,
     SignatureValidator,
     Implementation,
@@ -20,7 +22,7 @@ contract ModuleAuth is
 {
     using LibBytes for bytes;
 
-    error InvalidSignatureType(uint8);
+    error InvalidSignatureType(SigType);
 
     //                       KEY_SET_KEY = keccak256("unipass-wallet:module-auth:keyset")
     bytes32 private constant KEY_SET_KEY =
@@ -37,10 +39,6 @@ contract ModuleAuth is
 
     uint256 private constant UPDATE_KEYSET = 0;
     uint256 private constant UPDATE_TIMELOCK = 1;
-
-    uint256 private constant SIG_MASKTER_KEY = 0;
-    uint256 private constant SIG_RECOVERY_EMAIL = 1;
-    uint256 private constant SIG_MASKTER_KEY_WITH_RECOVERY_EMAIL = 2;
 
     event KeySetUpdated(bytes32 newKeySet);
 
@@ -109,12 +107,12 @@ contract ModuleAuth is
         return super.recoverSigner(_hash, _signature);
     }
 
-    function getNonce() public view returns (uint256) {
+    function getMetaNonce() public view returns (uint256) {
         uint256 metaNonce = uint256(ModuleStorage.readBytes32(META_NONCE_KEY));
         return metaNonce;
     }
 
-    function _writeNonce(uint256 _nonce) internal {
+    function _writeMetaNonce(uint256 _nonce) private {
         ModuleStorage.writeBytes32(META_NONCE_KEY, bytes32(_nonce));
     }
 
@@ -123,13 +121,11 @@ contract ModuleAuth is
         succ = _nonce > metaNonce;
     }
 
-    function validateSignature(bytes32 _hash, bytes calldata _signature)
-        external
-    {
+    function _executeInner(bytes calldata _input) internal override {
         uint32 metaNonce;
-        (uint8 actionType, uint256 leftIndex) = _signature.readFirstUint8();
-        uint8 sigType;
-        (metaNonce, leftIndex) = _signature.cReadUint32(leftIndex);
+        (uint8 actionType, uint256 leftIndex) = _input.readFirstUint8();
+        SigType sigType;
+        (metaNonce, leftIndex) = _input.cReadUint32(leftIndex);
         require(
             _isValidNonce(metaNonce),
             "ModuleAuth#isValidSignature: INVALID_NONCE"
@@ -137,64 +133,56 @@ contract ModuleAuth is
 
         bytes32 keySet;
         if (actionType == UPDATE_KEYSET) {
+            bytes32 newKeySet = _input.mcReadBytes32(leftIndex);
+            leftIndex += 32;
             bytes32 digestHash = keccak256(
-                abi.encodePacked(metaNonce, address(this), _hash)
+                abi.encodePacked(metaNonce, address(this), newKeySet)
             );
-            sigType = _signature.mcReadUint8(leftIndex);
+            sigType = SigType(_input.mcReadUint8(leftIndex));
             leftIndex++;
 
-            if (sigType == SIG_MASKTER_KEY) {
+            if (sigType == SigType.SigMasterKey) {
                 _requireUnPending();
-                keySet = _validateSigMasterKey(
-                    digestHash,
-                    _signature,
-                    leftIndex
-                );
+                keySet = _validateSigMasterKey(digestHash, _input, leftIndex);
                 require(
                     _isValidKeySet(keySet),
                     "ModuleAuth#validateSignature: INVALID_KEYSET"
                 );
-                _pendNewKeySet(_hash);
-            } else if (sigType == SIG_RECOVERY_EMAIL) {
+                _pendNewKeySet(newKeySet);
+            } else if (sigType == SigType.SigRecoveryEmail) {
                 _requireUnPending();
                 keySet = _validateSigRecoveryEmail(
                     digestHash,
-                    _signature,
+                    _input,
                     leftIndex
                 );
                 require(
                     _isValidKeySet(keySet),
                     "ModuleAuth#validateSignature: INVALID_KEYSET"
                 );
-                _pendNewKeySet(_hash);
-            } else if (sigType == SIG_MASKTER_KEY_WITH_RECOVERY_EMAIL) {
+                _pendNewKeySet(newKeySet);
+            } else if (sigType == SigType.SigMasterKeyWithRecoveryEmail) {
                 keySet = _validateSigMasterKeyWithRecoveryEmail(
                     digestHash,
-                    _signature,
+                    _input,
                     leftIndex
                 );
                 require(
                     _isValidKeySet(keySet),
                     "ModuleAuth#validateSignature: INVALID_KEYSET"
                 );
-                updateKeySet(_hash);
-                _writeNonce(metaNonce);
-            } else {
-                revert InvalidSignatureType(sigType);
+                updateKeySet(newKeySet);
+                _writeMetaNonce(metaNonce);
             }
         } else if (actionType == UPDATE_TIMELOCK) {
             uint32 newDelay;
-            (newDelay, leftIndex) = _signature.cReadUint32(leftIndex);
-            require(
-                _hash ==
-                    keccak256(
-                        abi.encodePacked(metaNonce, address(this), newDelay)
-                    ),
-                "ModuleAuth#validateSignature: INVALID_HASH"
+            (newDelay, leftIndex) = _input.cReadUint32(leftIndex);
+            bytes32 digestHash = keccak256(
+                abi.encodePacked(metaNonce, address(this), newDelay)
             );
             keySet = _validateSigMasterKeyWithRecoveryEmail(
-                _hash,
-                _signature,
+                digestHash,
+                _input,
                 leftIndex
             );
             require(
@@ -202,7 +190,7 @@ contract ModuleAuth is
                 "ModuleAuth#validateSignature: INVALID_KEYSET"
             );
             _setDelay(newDelay);
-            _writeNonce(metaNonce);
+            _writeMetaNonce(metaNonce);
         }
     }
 
@@ -210,6 +198,33 @@ contract ModuleAuth is
         return
             _keySet != bytes32(0) &&
             ModuleStorage.readBytes32(KEY_SET_KEY) == _keySet;
+    }
+
+    function _isValidSignature(
+        SigType _sigType,
+        bytes32 _hash,
+        bytes calldata _signature,
+        uint256 _index
+    ) internal view override returns (bool success) {
+        bytes32 keySet;
+        if (_sigType == SigType.SigMasterKey) {
+            keySet = _validateSigMasterKey(_hash, _signature, _index);
+            success = _isValidKeySet(keySet);
+        } else if (_sigType == SigType.SigRecoveryEmail) {
+            keySet = _validateSigRecoveryEmail(_hash, _signature, _index);
+            success = _isValidKeySet(keySet);
+        } else if (_sigType == SigType.SigMasterKeyWithRecoveryEmail) {
+            keySet = _validateSigMasterKeyWithRecoveryEmail(
+                _hash,
+                _signature,
+                _index
+            );
+            success = _isValidKeySet(keySet);
+        } else if (_sigType == SigType.SigSessionKey) {
+            success = _validateSigSessionKey(_hash, _signature, _index);
+        } else if (_sigType == SigType.SigNone) {
+            success = true;
+        }
     }
 
     function _validateSigMasterKey(
@@ -295,6 +310,31 @@ contract ModuleAuth is
             threshold <= counts,
             "ModuleAuth#_validateSigRecoveryEmail: NOT_ENOUGH_RECOVERY_EMAIL"
         );
+    }
+
+    function _validateSigSessionKey(
+        bytes32 _hash,
+        bytes calldata _signature,
+        uint256 _index
+    ) internal view returns (bool) {
+        address sessionKey;
+        (sessionKey, _index) = _signature.readAddress(_index);
+        uint256 timestamp = uint256(_signature.mcReadBytes32(_index));
+        require(
+            block.timestamp < timestamp,
+            "ModuleAuth#_validateSigSessionKey: INVALID_TIMESTAMP"
+        );
+        bytes memory sessionKeySig;
+        (sessionKeySig, _index) = _signature.readBytes66(_index);
+        address recoverySessionKey = this.recoverySigner(_hash, sessionKeySig);
+        require(
+            sessionKey == recoverySessionKey,
+            "ModuleAuth#_validateSigSessionKey: INVALID_SESSIONKEY"
+        );
+
+        bytes32 digestHash = keccak256(abi.encodePacked(sessionKey, timestamp));
+        bytes32 keySet = _validateSigMasterKey(digestHash, _signature, _index);
+        return _isValidKeySet(keySet);
     }
 
     function _parseRecoveryEmail(
