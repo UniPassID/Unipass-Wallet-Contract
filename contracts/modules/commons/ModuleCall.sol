@@ -54,7 +54,7 @@ abstract contract ModuleCall is IModuleAuth {
         address feeReceiver,
         uint256 feeAmount,
         bytes calldata _signature
-    ) external {
+    ) external payable {
         _validateNonce(_nonce);
 
         uint256 chainId;
@@ -88,13 +88,15 @@ abstract contract ModuleCall is IModuleAuth {
         );
 
         _execute(txhash, _txs, _sigType);
-        _payFee(feeToken, feeReceiver, feeAmount);
+        if (feeAmount != 0) {
+            _payFee(feeToken, feeReceiver, feeAmount);
+        }
     }
 
     function _validateNonce(uint256 _nonce) internal {
         uint256 currentNonce = getNonce();
         require(
-            _nonce + 1 == currentNonce,
+            _nonce == currentNonce + 1,
             "ModuleCall#_validateNonce: INVALID_NONCE"
         );
         _writeNonce(_nonce);
@@ -119,7 +121,7 @@ abstract contract ModuleCall is IModuleAuth {
             if (transaction.callType == CallType.Call) {
                 require(
                     _sigType != SIG_NONE,
-                    "ModuleCall#_execute: INVALID_SIG_TYPE"
+                    "ModuleCall#_execute: INVALID_Call_TYPE"
                 );
                 (success, result) = transaction.target.call{
                     value: transaction.value,
@@ -130,7 +132,7 @@ abstract contract ModuleCall is IModuleAuth {
             } else if (transaction.callType == CallType.DelegateCall) {
                 require(
                     _sigType != SIG_NONE,
-                    "ModuleCall#_execute: INVALID_SIG_TYPE"
+                    "ModuleCall#_execute: INVALID_Call_TYPE"
                 );
                 (success, result) = transaction.target.delegatecall{
                     gas: transaction.gasLimit == 0

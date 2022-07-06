@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 abstract contract ModuleTimeLock {
-    bytes32 public newKeySet;
+    bytes32 public newKeysetHash;
     bool public isPending;
     uint256 public timestamp;
     uint256 public delay;
@@ -31,13 +31,13 @@ abstract contract ModuleTimeLock {
         );
     }
 
-    function _pendNewKeySet(bytes32 _newKeySet) internal {
-        require(!isPending, "ModuleTimeLock#_setNewKeySet: IS_PENDING");
+    function _pendNewKeysetHash(bytes32 _newKeysetHash) internal {
+        require(!isPending, "ModuleTimeLock#_setNewKeysetHash: IS_PENDING");
         require(
-            _newKeySet != bytes32(0),
-            "ModuleTimeLock#_setNewKeySet: INVALID_KEYSET"
+            _newKeysetHash != bytes32(0),
+            "ModuleTimeLock#_setNewKeysetHash: INVALID_KEYSET"
         );
-        newKeySet = _newKeySet;
+        newKeysetHash = _newKeysetHash;
         timestamp = block.timestamp + delay;
         isPending = true;
     }
@@ -56,12 +56,12 @@ abstract contract ModuleTimeLock {
             uint256
         )
     {
-        return (isPending, newKeySet, timestamp);
+        return (isPending, newKeysetHash, timestamp);
     }
 
-    function lock(bytes32 _keySet) external {
+    function lock(bytes32 _keysetHash) external {
         require(isPending == false, "ModuleTimeLock#lock: IS_PENDING");
-        newKeySet = _keySet;
+        newKeysetHash = _keysetHash;
         isPending = true;
         timestamp = block.timestamp + delay;
     }
