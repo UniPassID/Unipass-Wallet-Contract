@@ -252,7 +252,7 @@ describe("ModuleAuth", function () {
   let masterKey: Wallet;
   let threshold: number;
   let recoveryEmails: string[];
-  let keySet: string;
+  let keysetHash: string;
   this.beforeEach(async function () {
     recoveryEmails = [];
     let accounts = await ethers.getSigners();
@@ -268,7 +268,7 @@ describe("ModuleAuth", function () {
     moduleAuth = await ModuleAuth.deploy(factory.address);
     threshold = 4;
 
-    keySet = keccak256(
+    keysetHash = keccak256(
       ethers.utils.solidityPack(
         ["address", "uint16"],
         [masterKey.address, threshold]
@@ -278,16 +278,16 @@ describe("ModuleAuth", function () {
       const recoveryEmail =
         Wallet.createRandom().privateKey.substring(16) + "@mail.unipass.me";
       recoveryEmails.push(recoveryEmail);
-      keySet = keccak256(
+      keysetHash = keccak256(
         ethers.utils.solidityPack(
           ["bytes32", "bytes32"],
-          [keySet, emailHash(recoveryEmail)]
+          [keysetHash, emailHash(recoveryEmail)]
         )
       );
     }
 
     const ret = await (
-      await factory.deploy(moduleAuth.address, keySet, dkimKeys.address)
+      await factory.deploy(moduleAuth.address, keysetHash, dkimKeys.address)
     ).wait();
     expect(ret.status).to.equal(1);
 
@@ -300,7 +300,7 @@ describe("ModuleAuth", function () {
     );
     const codeHash = keccak256(code);
     const salt = keccak256(
-      solidityPack(["bytes32", "address"], [keySet, dkimKeys.address])
+      solidityPack(["bytes32", "address"], [keysetHash, dkimKeys.address])
     );
     const expectedAddress = getCreate2Address(factory.address, salt, codeHash);
     proxyModuleAuth = ModuleAuth.attach(expectedAddress);
