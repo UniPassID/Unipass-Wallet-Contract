@@ -1,249 +1,13 @@
 import { expect } from "chai";
 import { Contract, Wallet } from "ethers";
 import { ethers } from "hardhat";
+import { emailHash } from "./utils/email";
+import { getCreate2Address, keccak256, solidityPack } from "ethers/lib/utils";
 import {
-  DkimParams,
-  emailHash,
-  getSignEmailWithDkim,
-  parseEmailParams,
-  SerializeDkimParams,
-} from "./utils/email";
-import {
-  arrayify,
-  getCreate2Address,
-  keccak256,
-  solidityPack,
-} from "ethers/lib/utils";
-
-enum ActionType {
-  UpdateKeySet = 0,
-  UpdateTimeLock = 1,
-}
-
-enum SigType {
-  SigMasterKey = 0,
-  SigRecoveryEmail = 1,
-  SigMasterKeyWithRecoveryEmail = 2,
-}
-
-export async function generateSignature(
-  contractAddr: string,
-  actionType: ActionType,
-  nonce: number,
-  newDelay: number | undefined,
-  newKeySet: string | undefined,
-  masterKey: Wallet,
-  threshold: number,
-  recoveryEmails: string[],
-  sigType: SigType | undefined
-): Promise<string> {
-  let sig = ethers.utils.solidityPack(["uint8", "uint32"], [actionType, nonce]);
-  switch (actionType) {
-    case ActionType.UpdateKeySet: {
-      const digestHash = keccak256(
-        solidityPack(
-          ["uint32", "address", "bytes32"],
-          [nonce, contractAddr, newKeySet]
-        )
-      );
-      sig = solidityPack(["bytes", "uint8"], [sig, sigType]);
-      switch (sigType) {
-        case SigType.SigMasterKey: {
-          const masterKeySig = await masterKey.signMessage(
-            arrayify(digestHash)
-          );
-          sig = solidityPack(
-            ["bytes", "bytes"],
-            [sig, generateSigMasterKey(masterKeySig, threshold, recoveryEmails)]
-          );
-          break;
-        }
-        case SigType.SigRecoveryEmail: {
-          let recoveryEmailWithDkim: [string, DkimParams | null][] = [];
-          let indexes = [...Array(threshold).keys()].map((v) => v + 1);
-          let index = 0;
-          for (const recoveryEmail of recoveryEmails) {
-            if (indexes.includes(index) === true) {
-              let email = await getSignEmailWithDkim(
-                digestHash,
-                recoveryEmail,
-                "test@unipass.id.com"
-              );
-              let dkimParams = await parseEmailParams(email);
-              recoveryEmailWithDkim.push([
-                emailHash(recoveryEmail),
-                dkimParams,
-              ]);
-            } else {
-              recoveryEmailWithDkim.push([emailHash(recoveryEmail), null]);
-            }
-            index++;
-          }
-          sig = solidityPack(
-            ["bytes", "bytes"],
-            [
-              sig,
-              generateSigRecoveryEmails(
-                masterKey.address,
-                threshold,
-                recoveryEmailWithDkim
-              ),
-            ]
-          );
-          break;
-        }
-        case SigType.SigMasterKeyWithRecoveryEmail: {
-          let recoveryEmailWithDkim: [string, DkimParams | null][] = [];
-          const masterKeySig = await masterKey.signMessage(
-            arrayify(digestHash)
-          );
-          let indexes = [...Array(threshold).keys()].map((v) => v + 1);
-          let index = 0;
-          for (const recoveryEmail of recoveryEmails) {
-            if (indexes.includes(index)) {
-              let email = await getSignEmailWithDkim(
-                digestHash,
-                recoveryEmail,
-                "test@unipass.me"
-              );
-              let DkimParams = await parseEmailParams(email);
-              recoveryEmailWithDkim.push([
-                emailHash(recoveryEmail),
-                DkimParams,
-              ]);
-            } else {
-              recoveryEmailWithDkim.push([emailHash(recoveryEmail), null]);
-            }
-            index++;
-          }
-          sig = solidityPack(
-            ["bytes", "bytes"],
-            [
-              sig,
-              generateSigMasterKeyWithRecoveryEmails(
-                masterKeySig,
-                threshold,
-                recoveryEmailWithDkim
-              ),
-            ]
-          );
-          break;
-        }
-        default: {
-          throw `invalid sigType: ${sigType}`;
-        }
-      }
-      break;
-    }
-    case ActionType.UpdateTimeLock: {
-      const digestHash = keccak256(
-        solidityPack(
-          ["uint32", "address", "uint32"],
-          [nonce, contractAddr, newDelay]
-        )
-      );
-
-      let recoveryEmailWithDkim: [string, DkimParams | null][] = [];
-      const masterKeySig = await masterKey.signMessage(arrayify(digestHash));
-      let indexes = [...Array(threshold).keys()].map((v) => v + 1);
-      let index = 0;
-      for (const recoveryEmail of recoveryEmails) {
-        if (indexes.includes(index)) {
-          let email = await getSignEmailWithDkim(
-            digestHash,
-            recoveryEmail,
-            "test@unipass.me"
-          );
-          let DkimParams = await parseEmailParams(email);
-          recoveryEmailWithDkim.push([emailHash(recoveryEmail), DkimParams]);
-        } else {
-          recoveryEmailWithDkim.push([emailHash(recoveryEmail), null]);
-        }
-        index++;
-      }
-      sig = solidityPack(
-        ["bytes", "uint32", "bytes"],
-        [
-          sig,
-          newDelay,
-          generateSigMasterKeyWithRecoveryEmails(
-            masterKeySig,
-            threshold,
-            recoveryEmailWithDkim
-          ),
-        ]
-      );
-
-      break;
-    }
-    default: {
-      throw `invalid actionType: ${actionType}`;
-    }
-  }
-  return sig;
-}
-
-export function generateSigMasterKey(
-  masterKeySig: string,
-  threshold: number,
-  recoveryEmails: string[]
-): string {
-  let sig = solidityPack(
-    ["bytes", "uint8", "uint16"],
-    [masterKeySig, 2, threshold]
-  );
-  recoveryEmails.forEach((recoveryEmail) => {
-    sig = solidityPack(["bytes", "bytes32"], [sig, emailHash(recoveryEmail)]);
-  });
-  return sig;
-}
-
-export function generateSigRecoveryEmails(
-  masterKey: string,
-  threshold: number,
-  recoveryEmails: [string, DkimParams | null][]
-): string {
-  let sig = solidityPack(["address", "uint16"], [masterKey, threshold]);
-  for (const recoveryEmail of recoveryEmails) {
-    if (recoveryEmail[1] === null) {
-      sig = solidityPack(
-        ["bytes", "uint8", "bytes32"],
-        [sig, 0, recoveryEmail[0]]
-      );
-    } else {
-      sig = solidityPack(
-        ["bytes", "uint8", "bytes32", "bytes"],
-        [sig, 1, recoveryEmail[0], SerializeDkimParams(recoveryEmail[1])]
-      );
-    }
-  }
-  return sig;
-}
-
-export function generateSigMasterKeyWithRecoveryEmails(
-  masterKeySig: string,
-  threshold: number,
-  recoveryEmails: [string, DkimParams | null][]
-): string {
-  let sig = solidityPack(
-    ["bytes", "uint8", "uint16"],
-    [masterKeySig, 2, threshold]
-  );
-  for (const recoveryEmail of recoveryEmails) {
-    if (recoveryEmail[1] == null) {
-      sig = solidityPack(
-        ["bytes", "uint8", "bytes32"],
-        [sig, 0, recoveryEmail[0]]
-      );
-    } else {
-      sig = solidityPack(
-        ["bytes", "uint8", "bytes32", "bytes"],
-        [sig, 1, recoveryEmail[0], SerializeDkimParams(recoveryEmail[1])]
-      );
-    }
-  }
-  return sig;
-}
+  ActionType,
+  generateAccountLayerSignature,
+  SigType,
+} from "./utils/sigPart";
 
 describe("ModuleAuth", function () {
   let moduleAuth: Contract;
@@ -306,11 +70,11 @@ describe("ModuleAuth", function () {
     proxyModuleAuth = ModuleAuth.attach(expectedAddress);
   });
 
-  it("Update KeySet By Master Key", async function () {
+  it("Update KeysetHash By Master Key", async function () {
     const hash = Wallet.createRandom().privateKey;
-    const sig = await generateSignature(
+    const sig = await generateAccountLayerSignature(
       proxyModuleAuth.address,
-      ActionType.UpdateKeySet,
+      ActionType.UpdateKeysetHash,
       1,
       undefined,
       hash,
@@ -324,13 +88,13 @@ describe("ModuleAuth", function () {
     ).wait();
     expect(ret.status).to.equal(1);
     expect(await proxyModuleAuth.isPending()).to.true;
-    expect(await proxyModuleAuth.newKeySet()).to.equal(hash);
+    expect(await proxyModuleAuth.newKeysetHash()).to.equal(hash);
   });
-  it("Update KeySet By Recovery Email", async function () {
+  it("Update KeysetHash By Recovery Email", async function () {
     const hash = Wallet.createRandom().privateKey;
-    const sig = await generateSignature(
+    const sig = await generateAccountLayerSignature(
       proxyModuleAuth.address,
-      ActionType.UpdateKeySet,
+      ActionType.UpdateKeysetHash,
       1,
       undefined,
       hash,
@@ -344,13 +108,13 @@ describe("ModuleAuth", function () {
     ).wait();
     expect(ret.status).to.equal(1);
     expect(await proxyModuleAuth.isPending()).to.true;
-    expect(await proxyModuleAuth.newKeySet()).to.equal(hash);
+    expect(await proxyModuleAuth.newKeysetHash()).to.equal(hash);
   });
-  it("Update KeySet By Master Key And Recovery Email", async function () {
+  it("Update KeysetHash By Master Key And Recovery Email", async function () {
     const hash = Wallet.createRandom().privateKey;
-    const sig = await generateSignature(
+    const sig = await generateAccountLayerSignature(
       proxyModuleAuth.address,
-      ActionType.UpdateKeySet,
+      ActionType.UpdateKeysetHash,
       1,
       undefined,
       hash,
@@ -364,7 +128,7 @@ describe("ModuleAuth", function () {
     ).wait();
     expect(ret.status).to.equal(1);
     expect(await proxyModuleAuth.isPending()).to.false;
-    expect(await proxyModuleAuth.getKeySet()).to.equal(hash);
+    expect(await proxyModuleAuth.getKeysetHash()).to.equal(hash);
   });
   it("Update delays", async function () {
     const metaNonce = 2;
@@ -375,7 +139,7 @@ describe("ModuleAuth", function () {
         [metaNonce, proxyModuleAuth.address, newDelay]
       )
     );
-    const sig = await generateSignature(
+    const sig = await generateAccountLayerSignature(
       proxyModuleAuth.address,
       ActionType.UpdateTimeLock,
       metaNonce,
