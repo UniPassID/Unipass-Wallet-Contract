@@ -6,4 +6,6 @@ import "../modules/commons/ModuleAuth.sol";
 
 contract TestModuleCall is ModuleCall, ModuleAuth {
     constructor(address _factory) ModuleAuth(_factory) {}
+
+    receive() external payable {}
 }
