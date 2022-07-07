@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { Contract, ContractFactory, Wallet } from "ethers";
 import { getCreate2Address, keccak256, sha256 } from "ethers/lib/utils";
 import { ethers } from "hardhat";
+import { getProxyAddress } from "./utils/common";
 
 describe("Factory", function () {
   let greet: Contract;
@@ -44,6 +45,7 @@ describe("Factory", function () {
     );
     const codeHash = keccak256(code);
     console.log("code hash: ", codeHash);
+
     const expectedAddres = getCreate2Address(factory.address, salt, codeHash);
     const proxyGreet = Greet.attach(expectedAddres);
     console.log("get code", await factory.provider.getCode(expectedAddres));

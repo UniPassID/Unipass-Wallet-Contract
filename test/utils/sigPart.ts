@@ -28,6 +28,11 @@ export enum CallType {
   CallAccountLayer,
 }
 
+export enum SignerType {
+  EIP712 = 1,
+  EthSign = 2,
+}
+
 export interface Transaction {
   callType: CallType;
   gasLimit: BigNumber;
@@ -36,15 +41,22 @@ export interface Transaction {
   data: string;
 }
 
+export async function signerSign(
+  hash: string,
+  signer: Wallet
+): Promise<string> {
+  return solidityPack(
+    ["bytes", "uint8"],
+    [await signer.signMessage(arrayify(hash)), SignerType.EthSign]
+  );
+}
+
 export function generateSigMasterKey(
   masterKeySig: string,
   threshold: number,
   recoveryEmails: string[]
 ): string {
-  let sig = solidityPack(
-    ["bytes", "uint8", "uint16"],
-    [masterKeySig, 2, threshold]
-  );
+  let sig = solidityPack(["bytes", "uint16"], [masterKeySig, threshold]);
   recoveryEmails.forEach((recoveryEmail) => {
     sig = solidityPack(["bytes", "bytes32"], [sig, emailHash(recoveryEmail)]);
   });
@@ -78,10 +90,7 @@ export function generateSigMasterKeyWithRecoveryEmails(
   threshold: number,
   recoveryEmails: [string, DkimParams | null][]
 ): string {
-  let sig = solidityPack(
-    ["bytes", "uint8", "uint16"],
-    [masterKeySig, 2, threshold]
-  );
+  let sig = solidityPack(["bytes", "uint16"], [masterKeySig, threshold]);
   for (const recoveryEmail of recoveryEmails) {
     if (recoveryEmail[1] == null) {
       sig = solidityPack(
@@ -95,6 +104,31 @@ export function generateSigMasterKeyWithRecoveryEmails(
       );
     }
   }
+  return sig;
+}
+
+export async function generateSessionKey(
+  masterKey: Wallet,
+  threshold: number,
+  recoveryEmails: string[],
+  digestHash: string,
+  sessionKey: Wallet,
+  expired: number
+): Promise<string> {
+  const permitMessage = keccak256(
+    solidityPack(["address", "uint256"], [sessionKey.address, expired])
+  );
+  const permit = await signerSign(permitMessage, masterKey);
+  const sessionKeySig = await signerSign(digestHash, sessionKey);
+  const sig = solidityPack(
+    ["address", "uint256", "bytes", "bytes"],
+    [
+      sessionKey.address,
+      expired,
+      sessionKeySig,
+      generateSigMasterKey(permit, threshold, recoveryEmails),
+    ]
+  );
   return sig;
 }
 
@@ -125,9 +159,7 @@ export async function generateAccountLayerSignature(
       sig = solidityPack(["bytes", "uint8"], [sig, sigType]);
       switch (sigType) {
         case SigType.SigMasterKey: {
-          const masterKeySig = await masterKey.signMessage(
-            arrayify(digestHash)
-          );
+          const masterKeySig = await signerSign(digestHash, masterKey);
           sig = solidityPack(
             ["bytes", "bytes"],
             [sig, generateSigMasterKey(masterKeySig, threshold, recoveryEmails)]
@@ -170,9 +202,7 @@ export async function generateAccountLayerSignature(
         }
         case SigType.SigMasterKeyWithRecoveryEmail: {
           let recoveryEmailWithDkim: [string, DkimParams | null][] = [];
-          const masterKeySig = await masterKey.signMessage(
-            arrayify(digestHash)
-          );
+          const masterKeySig = await signerSign(digestHash, masterKey);
           let indexes = [...Array(threshold).keys()].map((v) => v + 1);
           let index = 0;
           for (const recoveryEmail of recoveryEmails) {
@@ -205,6 +235,7 @@ export async function generateAccountLayerSignature(
           );
           break;
         }
+
         default: {
           throw `invalid sigType: ${sigType}`;
         }
@@ -220,7 +251,7 @@ export async function generateAccountLayerSignature(
       );
 
       let recoveryEmailWithDkim: [string, DkimParams | null][] = [];
-      const masterKeySig = await masterKey.signMessage(arrayify(digestHash));
+      const masterKeySig = await signerSign(digestHash, masterKey);
       let indexes = [...Array(threshold).keys()].map((v) => v + 1);
       let index = 0;
       for (const recoveryEmail of recoveryEmails) {
@@ -269,6 +300,8 @@ export async function generateTransactionSig(
   threshold: number,
   recoveryEmails: string[],
   recoveryEmailsIndexes: number[],
+  sessionKey: Wallet | undefined,
+  expired: number | undefined,
   sigType: SigType
 ): Promise<string> {
   const digestHash = keccak256(
@@ -293,7 +326,7 @@ export async function generateTransactionSig(
   let sig: string = solidityPack(["uint8"], [sigType]);
   switch (sigType) {
     case SigType.SigMasterKey: {
-      const masterKeySig = await masterKey.signMessage(arrayify(digestHash));
+      const masterKeySig = await signerSign(digestHash, masterKey);
       sig = solidityPack(
         ["bytes", "bytes"],
         [sig, generateSigMasterKey(masterKeySig, threshold, recoveryEmails)]
@@ -332,7 +365,7 @@ export async function generateTransactionSig(
       break;
     }
     case SigType.SigMasterKeyWithRecoveryEmail: {
-      const masterKeySig = await masterKey.signMessage(arrayify(digestHash));
+      const masterKeySig = await signerSign(digestHash, masterKey);
       let index = 0;
       let recoveryEmailWithDkim: [string, DkimParams | null][] = [];
       for (const recoveryEmail of recoveryEmails) {
@@ -361,6 +394,29 @@ export async function generateTransactionSig(
         ]
       );
 
+      break;
+    }
+    case SigType.SigSessionKey: {
+      if (sessionKey === undefined) {
+        throw "expected Session Key";
+      }
+      if (expired === undefined) {
+        throw "expected Expired";
+      }
+      sig = solidityPack(
+        ["bytes", "bytes"],
+        [
+          sig,
+          await generateSessionKey(
+            masterKey,
+            threshold,
+            recoveryEmails,
+            digestHash,
+            sessionKey,
+            expired
+          ),
+        ]
+      );
       break;
     }
     case SigType.SigNone: {

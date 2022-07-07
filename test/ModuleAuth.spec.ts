@@ -8,6 +8,11 @@ import {
   generateAccountLayerSignature,
   SigType,
 } from "./utils/sigPart";
+import {
+  generateRecoveryEmails,
+  getKeysetHash,
+  getProxyAddress,
+} from "./utils/common";
 
 describe("ModuleAuth", function () {
   let moduleAuth: Contract;
@@ -18,7 +23,6 @@ describe("ModuleAuth", function () {
   let recoveryEmails: string[];
   let keysetHash: string;
   this.beforeEach(async function () {
-    recoveryEmails = [];
     let accounts = await ethers.getSigners();
     masterKey = Wallet.createRandom();
 
@@ -32,41 +36,20 @@ describe("ModuleAuth", function () {
     moduleAuth = await ModuleAuth.deploy(factory.address);
     threshold = 4;
 
-    keysetHash = keccak256(
-      ethers.utils.solidityPack(
-        ["address", "uint16"],
-        [masterKey.address, threshold]
-      )
-    );
-    for (let i = 0; i < 10; i++) {
-      const recoveryEmail =
-        Wallet.createRandom().privateKey.substring(16) + "@mail.unipass.me";
-      recoveryEmails.push(recoveryEmail);
-      keysetHash = keccak256(
-        ethers.utils.solidityPack(
-          ["bytes32", "bytes32"],
-          [keysetHash, emailHash(recoveryEmail)]
-        )
-      );
-    }
+    recoveryEmails = generateRecoveryEmails(10);
+    keysetHash = getKeysetHash(masterKey.address, threshold, recoveryEmails);
 
     const ret = await (
       await factory.deploy(moduleAuth.address, keysetHash, dkimKeys.address)
     ).wait();
     expect(ret.status).to.equal(1);
 
-    const code = ethers.utils.solidityPack(
-      ["bytes", "uint256"],
-      [
-        "0x603a600e3d39601a805130553df3363d3d373d3d3d363d30545af43d82803e903d91601857fd5bf3",
-        moduleAuth.address,
-      ]
+    const expectedAddress = getProxyAddress(
+      moduleAuth.address,
+      dkimKeys.address,
+      factory.address,
+      keysetHash
     );
-    const codeHash = keccak256(code);
-    const salt = keccak256(
-      solidityPack(["bytes32", "address"], [keysetHash, dkimKeys.address])
-    );
-    const expectedAddress = getCreate2Address(factory.address, salt, codeHash);
     proxyModuleAuth = ModuleAuth.attach(expectedAddress);
   });
 

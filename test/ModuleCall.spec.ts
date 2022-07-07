@@ -1,7 +1,12 @@
 import { expect } from "chai";
 import { Contract, ContractFactory, Wallet } from "ethers";
-import { getCreate2Address, keccak256, solidityPack } from "ethers/lib/utils";
 import { ethers } from "hardhat";
+import {
+  generateRecoveryEmails,
+  getKeysetHash,
+  getProxyAddress,
+  optimalGasLimit,
+} from "./utils/common";
 import { emailHash } from "./utils/email";
 import {
   ActionType,
@@ -10,8 +15,6 @@ import {
   generateTransactionSig,
   SigType,
 } from "./utils/sigPart";
-
-const optimalGasLimit = ethers.constants.Two.pow(21);
 
 describe("ModuleCall", function () {
   let testModuleCall: Contract;
@@ -36,43 +39,22 @@ describe("ModuleCall", function () {
   });
   this.beforeEach(async function () {
     threshold = 4;
-    recoveryEmails = [];
     masterKey = Wallet.createRandom();
 
-    keysetHash = keccak256(
-      ethers.utils.solidityPack(
-        ["address", "uint16"],
-        [masterKey.address, threshold]
-      )
-    );
-    for (let i = 0; i < 10; i++) {
-      const recoveryEmail =
-        Wallet.createRandom().privateKey.substring(16) + "@mail.unipass.me";
-      recoveryEmails.push(recoveryEmail);
-      keysetHash = keccak256(
-        ethers.utils.solidityPack(
-          ["bytes32", "bytes32"],
-          [keysetHash, emailHash(recoveryEmail)]
-        )
-      );
-    }
+    recoveryEmails = generateRecoveryEmails(10);
+    keysetHash = getKeysetHash(masterKey.address, threshold, recoveryEmails);
+
     const ret = await (
       await factory.deploy(testModuleCall.address, keysetHash, dkimKeys.address)
     ).wait();
     expect(ret.status).to.equal(1);
 
-    const code = ethers.utils.solidityPack(
-      ["bytes", "uint256"],
-      [
-        "0x603a600e3d39601a805130553df3363d3d373d3d3d363d30545af43d82803e903d91601857fd5bf3",
-        testModuleCall.address,
-      ]
+    const expectedAddress = getProxyAddress(
+      testModuleCall.address,
+      dkimKeys.address,
+      factory.address,
+      keysetHash
     );
-    const codeHash = keccak256(code);
-    const salt = keccak256(
-      solidityPack(["bytes32", "address"], [keysetHash, dkimKeys.address])
-    );
-    const expectedAddress = getCreate2Address(factory.address, salt, codeHash);
     proxyTestModuleCall = TestModuleCall.attach(expectedAddress);
     const txRet = await (
       await ethers.getSigners()
@@ -108,6 +90,8 @@ describe("ModuleCall", function () {
       threshold,
       recoveryEmails,
       [...Array(threshold).keys()].map((v) => v + 1),
+      undefined,
+      undefined,
       SigType.SigMasterKey
     );
     const ret = await (
@@ -163,6 +147,8 @@ describe("ModuleCall", function () {
       threshold,
       recoveryEmails,
       [...Array(threshold).keys()].map((v) => v + 1),
+      undefined,
+      undefined,
       SigType.SigNone
     );
     const ret = await (
@@ -227,6 +213,8 @@ describe("ModuleCall", function () {
       threshold,
       recoveryEmails,
       [...Array(threshold).keys()].map((v) => v + 1),
+      undefined,
+      undefined,
       SigType.SigMasterKey
     );
     const ret = await (

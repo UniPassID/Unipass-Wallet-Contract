@@ -40,7 +40,7 @@ abstract contract ModuleCall is IModuleAuth {
     uint256 private constant SIG_NONE = 4;
 
     function getNonce() public view returns (uint256) {
-        return uint256(ModuleStorage.readBytes32Map(NONCE_KEY, bytes32(0)));
+        return uint256(ModuleStorage.readBytes32(NONCE_KEY));
     }
 
     function _writeNonce(uint256 _nonce) private {
