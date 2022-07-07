@@ -64,10 +64,8 @@ abstract contract ModuleCall is IModuleAuth {
 
         bytes32 txhash = keccak256(
             abi.encodePacked(
-                chainId,
-                keccak256(abi.encode(_nonce, _txs)),
+                abi.encodePacked(chainId, keccak256(abi.encode(_nonce, _txs))),
                 feeToken,
-                feeReceiver,
                 feeAmount
             )
         );
