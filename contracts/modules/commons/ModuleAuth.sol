@@ -123,7 +123,7 @@ contract ModuleAuth is
         succ = _nonce > metaNonce;
     }
 
-    function _executeInner(bytes calldata _input) internal override {
+    function executeAccountTx(bytes calldata _input) public override {
         uint32 metaNonce;
         (uint8 actionType, uint256 leftIndex) = _input.readFirstUint8();
         SigType sigType;
@@ -210,12 +210,12 @@ contract ModuleAuth is
             ModuleStorage.readBytes32(KEY_SET_KEY) == _keysetHash;
     }
 
-    function _isValidSignature(
+    function isValidSignature(
         SigType _sigType,
         bytes32 _hash,
         bytes calldata _signature,
         uint256 _index
-    ) internal view override returns (bool success) {
+    ) public view override returns (bool success) {
         bytes32 keysetHash;
         if (_sigType == SigType.SigMasterKey) {
             keysetHash = _validateSigMasterKey(_hash, _signature, _index);
