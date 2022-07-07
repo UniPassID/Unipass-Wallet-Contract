@@ -130,7 +130,7 @@ contract ModuleAuth is
         (metaNonce, leftIndex) = _input.cReadUint32(leftIndex);
         require(
             _isValidNonce(metaNonce),
-            "ModuleAuth#isValidSignature: INVALID_NONCE"
+            "ModuleAuth#executeAccountTx: INVALID_NONCE"
         );
 
         bytes32 keysetHash;
@@ -330,6 +330,7 @@ contract ModuleAuth is
         address sessionKey;
         (sessionKey, _index) = _signature.readAddress(_index);
         uint256 timestamp = uint256(_signature.mcReadBytes32(_index));
+        _index += 32;
         require(
             block.timestamp < timestamp,
             "ModuleAuth#_validateSigSessionKey: INVALID_TIMESTAMP"
