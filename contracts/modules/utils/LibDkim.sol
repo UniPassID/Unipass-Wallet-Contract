@@ -128,7 +128,7 @@ library LibDkimValidator {
         v = (v >> 128) | (v << 128);
     }
 
-    function parseHeader(DkimParams calldata self)
+    function parseHeader(DkimParams memory self)
         internal
         pure
         returns (

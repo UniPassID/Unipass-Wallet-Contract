@@ -47,8 +47,6 @@ describe("Factory", function () {
     const expectedAddres = getCreate2Address(factory.address, salt, codeHash);
     const proxyGreet = Greet.attach(expectedAddres);
     console.log("get code", await factory.provider.getCode(expectedAddres));
-    console.log(factory.provider);
-    console.log(ethers.getDefaultProvider());
 
     // expect(await proxyGreet.no()).to.equal(threshold);
     // expect(await proxyGreet.inner(0)).to.equal(recoveryEmails[0]);

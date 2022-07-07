@@ -83,9 +83,7 @@ describe("ModuleAuth", function () {
       recoveryEmails,
       SigType.SigMasterKey
     );
-    const ret = await (
-      await proxyModuleAuth.validateSignature(hash, sig)
-    ).wait();
+    const ret = await (await proxyModuleAuth.executeAccountTx(sig)).wait();
     expect(ret.status).to.equal(1);
     expect(await proxyModuleAuth.isPending()).to.true;
     expect(await proxyModuleAuth.newKeysetHash()).to.equal(hash);
@@ -103,9 +101,7 @@ describe("ModuleAuth", function () {
       recoveryEmails,
       SigType.SigRecoveryEmail
     );
-    const ret = await (
-      await proxyModuleAuth.validateSignature(hash, sig)
-    ).wait();
+    const ret = await (await proxyModuleAuth.executeAccountTx(sig)).wait();
     expect(ret.status).to.equal(1);
     expect(await proxyModuleAuth.isPending()).to.true;
     expect(await proxyModuleAuth.newKeysetHash()).to.equal(hash);
@@ -123,9 +119,7 @@ describe("ModuleAuth", function () {
       recoveryEmails,
       SigType.SigMasterKeyWithRecoveryEmail
     );
-    const ret = await (
-      await proxyModuleAuth.validateSignature(hash, sig)
-    ).wait();
+    const ret = await (await proxyModuleAuth.executeAccountTx(sig)).wait();
     expect(ret.status).to.equal(1);
     expect(await proxyModuleAuth.isPending()).to.false;
     expect(await proxyModuleAuth.getKeysetHash()).to.equal(hash);
@@ -133,12 +127,7 @@ describe("ModuleAuth", function () {
   it("Update delays", async function () {
     const metaNonce = 2;
     const newDelay = 2;
-    const hash = keccak256(
-      solidityPack(
-        ["uint32", "address", "uint32"],
-        [metaNonce, proxyModuleAuth.address, newDelay]
-      )
-    );
+
     const sig = await generateAccountLayerSignature(
       proxyModuleAuth.address,
       ActionType.UpdateTimeLock,
@@ -150,9 +139,7 @@ describe("ModuleAuth", function () {
       recoveryEmails,
       undefined
     );
-    const ret = await (
-      await proxyModuleAuth.validateSignature(hash, sig)
-    ).wait();
+    const ret = await (await proxyModuleAuth.executeAccountTx(sig)).wait();
     expect(ret.status).to.equal(1);
     expect(await proxyModuleAuth.isPending()).to.false;
     expect(await proxyModuleAuth.delay()).to.equal(newDelay);

@@ -10,12 +10,12 @@ abstract contract IModuleAuth {
         SigNone
     }
 
-    function _executeInner(bytes calldata _input) internal virtual;
+    function executeAccountTx(bytes calldata _input) public virtual;
 
-    function _isValidSignature(
+    function isValidSignature(
         SigType _sigType,
         bytes32 _hash,
         bytes calldata _signature,
         uint256 _index
-    ) internal virtual returns (bool);
+    ) public virtual returns (bool);
 }

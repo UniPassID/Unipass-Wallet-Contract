@@ -10,20 +10,7 @@ abstract contract ModuleDkimAuth {
 
     IDkimKeys public dkimKeys;
 
-    function parseHeader(DkimParams calldata params)
-        external
-        pure
-        returns (
-            bytes32 emailHash,
-            bytes memory sigHashHex,
-            bytes memory sdid,
-            bytes memory selector
-        )
-    {
-        (emailHash, sigHashHex, sdid, selector) = params.parseHeader();
-    }
-
-    function dkimVerify(DkimParams calldata params)
+    function dkimVerify(DkimParams memory params)
         external
         view
         returns (

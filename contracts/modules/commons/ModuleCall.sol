@@ -81,7 +81,7 @@ abstract contract ModuleCall is IModuleAuth {
             "ModuleCall#execute: INVALID_SIG_TYPE"
         );
         require(
-            _isValidSignature(sigType, txhash, _signature, index),
+            isValidSignature(sigType, txhash, _signature, index),
             "ModuleCall#execute: INVALID_SIGNATURE"
         );
 
@@ -138,7 +138,7 @@ abstract contract ModuleCall is IModuleAuth {
                         : transaction.gasLimit
                 }(transaction.data);
             } else if (transaction.callType == CallType.CallAccountLayer) {
-                _executeInner(transaction.data);
+                executeAccountTx(transaction.data);
                 success = true;
             }
             if (success) {
