@@ -264,7 +264,6 @@ export async function generateTransactionSig(
   tx: Transaction[],
   nonce: number,
   feeToken: string,
-  feeReceiver: string,
   feeAmount: number,
   masterKey: Wallet,
   threshold: number,
@@ -274,7 +273,7 @@ export async function generateTransactionSig(
 ): Promise<string> {
   const digestHash = keccak256(
     solidityPack(
-      ["uint256", "bytes32", "address", "address", "uint256"],
+      ["uint256", "bytes32", "address", "uint256"],
       [
         chainId,
         keccak256(
@@ -287,7 +286,6 @@ export async function generateTransactionSig(
           )
         ),
         feeToken,
-        feeReceiver,
         feeAmount,
       ]
     )
