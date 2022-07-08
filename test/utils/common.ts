@@ -1,11 +1,23 @@
 import { Wallet } from "ethers";
 import { getCreate2Address, keccak256, solidityPack } from "ethers/lib/utils";
+import { ethers } from "hardhat";
 import { emailHash } from "./email";
 
 export const optimalGasLimit = ethers.constants.Two.pow(21);
 
 export function throwError(msg: string) {
   throw msg;
+}
+
+export async function transferEth(to: string, amount: number) {
+  return await (
+    await (
+      await ethers.getSigners()
+    )[0].sendTransaction({
+      to,
+      value: ethers.utils.parseEther(amount.toString()),
+    })
+  ).wait();
 }
 
 export function getKeysetHash(

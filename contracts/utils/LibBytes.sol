@@ -247,9 +247,8 @@ library LibBytes {
         returns (bytes4 a, uint256 newIndex)
     {
         assembly {
-            let word := calldataload(add(index, data.offset))
-            a := and(shr(240, word), 0xffff)
-            newIndex := add(index, 2)
+            a := calldataload(add(index, data.offset))
+            newIndex := add(index, 4)
         }
     }
 

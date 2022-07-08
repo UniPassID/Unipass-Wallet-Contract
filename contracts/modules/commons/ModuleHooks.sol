@@ -11,6 +11,8 @@ import "../../interfaces/IModuleHooks.sol";
 import "../../interfaces/IModuleAuth.sol";
 import "../../utils/LibBytes.sol";
 
+import "hardhat/console.sol";
+
 contract ModuleHooks is
     IERC1155Receiver,
     IERC721Receiver,
@@ -54,11 +56,11 @@ contract ModuleHooks is
             (signature, index) = _input.cReadBytes4(index);
             address implementation;
             (implementation, index) = _input.readAddress(index);
-            _addHook(signature, implementation);
+            _addHook(bytes4(signature), implementation);
         } else if (actionType == HookActionType.RemoveHook) {
             bytes4 signature;
             (signature, index) = _input.cReadBytes4(index);
-            _removeHook(signature);
+            _removeHook(bytes4(signature));
         } else {
             revert invalidHookActionType(actionType);
         }

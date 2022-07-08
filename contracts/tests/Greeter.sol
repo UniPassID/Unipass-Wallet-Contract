@@ -12,4 +12,8 @@ contract Greeter {
         greeting = _greeting;
         no = _no;
     }
+
+    function ret1() public pure returns (uint256) {
+        return 1;
+    }
 }

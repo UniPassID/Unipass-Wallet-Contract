@@ -7,7 +7,6 @@ import {
   getProxyAddress,
   optimalGasLimit,
 } from "./utils/common";
-import { emailHash } from "./utils/email";
 import {
   ActionType,
   CallType,
