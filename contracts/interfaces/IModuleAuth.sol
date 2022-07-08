@@ -1,15 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
-abstract contract IModuleAuth {
-    enum SigType {
-        SigMasterKey,
-        SigRecoveryEmail,
-        SigMasterKeyWithRecoveryEmail,
-        SigSessionKey,
-        SigNone
-    }
+import "../utils/SigPart.sol";
 
+abstract contract IModuleAuth {
     function executeAccountTx(bytes calldata _input) public virtual;
 
     function isValidSignature(

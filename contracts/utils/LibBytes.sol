@@ -241,6 +241,18 @@ library LibBytes {
         if (newIndex > data.length) revert ReadUint16OutOfBounds(data, index);
     }
 
+    function cReadBytes4(bytes calldata data, uint256 index)
+        internal
+        pure
+        returns (bytes4 a, uint256 newIndex)
+    {
+        assembly {
+            let word := calldataload(add(index, data.offset))
+            a := and(shr(240, word), 0xffff)
+            newIndex := add(index, 2)
+        }
+    }
+
     function cReadUint16(bytes calldata data, uint256 index)
         internal
         pure
