@@ -6,8 +6,9 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./ModuleStorage.sol";
 import "../../utils/LibBytes.sol";
 import "../../interfaces/IModuleAuth.sol";
+import "../../interfaces/IModuleHooks.sol";
 
-abstract contract ModuleCall is IModuleAuth {
+abstract contract ModuleCall is IModuleAuth, IModuleHooks {
     using LibBytes for bytes;
     using SafeERC20 for IERC20;
 
@@ -22,10 +23,12 @@ abstract contract ModuleCall is IModuleAuth {
     enum CallType {
         Call,
         DelegateCall,
-        CallAccountLayer
+        CallAccountLayer,
+        CallHooks
     }
 
     error txFailed(Transaction, bytes32, bytes);
+    error invalidCallType(CallType);
 
     event TxExecuted(bytes32);
 
@@ -36,6 +39,7 @@ abstract contract ModuleCall is IModuleAuth {
         );
 
     uint256 private constant SIG_MASTER_KEY = 0;
+    uint256 private constant SIG_MASTER_KEY_WITH_RECOVERY_EMAILS = 2;
     uint256 private constant SIG_SESSION_KEY = 3;
     uint256 private constant SIG_NONE = 4;
 
@@ -130,7 +134,7 @@ abstract contract ModuleCall is IModuleAuth {
             } else if (transaction.callType == CallType.DelegateCall) {
                 require(
                     _sigType != SIG_NONE,
-                    "ModuleCall#_execute: INVALID_Call_TYPE"
+                    "ModuleCall#_execute: INVALID_CALL_TYPE"
                 );
                 (success, result) = transaction.target.delegatecall{
                     gas: transaction.gasLimit == 0
@@ -140,6 +144,15 @@ abstract contract ModuleCall is IModuleAuth {
             } else if (transaction.callType == CallType.CallAccountLayer) {
                 executeAccountTx(transaction.data);
                 success = true;
+            } else if (transaction.callType == CallType.CallHooks) {
+                require(
+                    _sigType == SIG_MASTER_KEY_WITH_RECOVERY_EMAILS,
+                    "ModuleCall#_execute: INVALID_CALL_TYPE"
+                );
+                _executeHooksTx(transaction.data);
+                success = true;
+            } else {
+                revert invalidCallType(transaction.callType);
             }
             if (success) {
                 emit TxExecuted(_txHash);
