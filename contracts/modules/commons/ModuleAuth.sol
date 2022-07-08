@@ -11,8 +11,6 @@ import "../../utils/SignatureValidator.sol";
 import "../../Wallet.sol";
 import "../../interfaces/IModuleAuth.sol";
 
-import "hardhat/console.sol";
-
 contract ModuleAuth is
     IModuleAuth,
     ModuleDkimAuth,

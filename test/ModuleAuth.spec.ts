@@ -1,8 +1,8 @@
 import { expect } from "chai";
-import { Contract, Wallet } from "ethers";
+import { Contract, ContractFactory, Wallet } from "ethers";
 import { ethers } from "hardhat";
 import { emailHash } from "./utils/email";
-import { getCreate2Address, keccak256, solidityPack } from "ethers/lib/utils";
+import { getCreate2Address, Interface, keccak256, solidityPack } from "ethers/lib/utils";
 import {
   ActionType,
   generateAccountLayerSignature,
