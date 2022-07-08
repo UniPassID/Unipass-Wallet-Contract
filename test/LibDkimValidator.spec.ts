@@ -27,6 +27,38 @@ describe("LibDkimValidator", function () {
       }
     }
   });
+  it("Validate Emails DKIM From Header Contains Uppercase", async function () {
+    const ret = emails.find((email) => {
+      const headers = Buffer.from(
+        email.emailHeader.substring(2),
+        "hex"
+      ).toString();
+      let ret = headers
+        .split("\r\n")
+        .filter((v) => v.startsWith("from:"))
+        .map((v) => {
+          const ret = /<.+>/.exec(v);
+          if (!!ret && !!ret[0] && !ret[0].includes("protonmail")) {
+            return ret[0];
+          } else {
+            return null;
+          }
+        })
+        .find((v) => {
+          if (!!v && v.toLowerCase() !== v) {
+            return true;
+          } else {
+            return false;
+          }
+        });
+      if (!!ret) {
+        return true;
+      } else {
+        return false;
+      }
+    });
+    expect(ret).to.not.null;
+  });
   it("Validate All Emails", async function () {
     emails.forEach(async (value, _index, _array) => {
       const ret = await emailDkimValidator.parseHeader(value);
