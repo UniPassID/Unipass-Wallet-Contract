@@ -26,6 +26,7 @@ export enum CallType {
   Call,
   DelegateCall,
   CallAccountLayer,
+  CallHooks,
 }
 
 export enum SignerType {
