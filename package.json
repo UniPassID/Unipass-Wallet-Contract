@@ -42,5 +42,6 @@
     "mailparser": "zzhengzhuo/mailparser",
     "node-rsa": "^1.1.1",
     "nodemailer": "^6.7.6"
-  }
+  },
+  "version": "0.0.1"
 }
