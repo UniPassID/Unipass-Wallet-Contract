@@ -1,5 +1,23 @@
 {
   "name": "unipass-wallet-contracts",
+  "description": "Wallet Contracts For Unipass Account System",
+  "version": "0.0.1",
+  "files": [
+    "/contracts/**/*.sol",
+    "!/contracts/tests/**/*"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/UniPassID/Unipass-Wallet-Contract.git"
+  },
+  "keywords": [
+    "unipass",
+    "solidity",
+    "ethereum",
+    "smart",
+    "contracts"
+  ],
+  "author": "UnipassID",
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.0.6",
     "@nomiclabs/hardhat-etherscan": "^3.1.0",
@@ -42,6 +60,5 @@
     "mailparser": "zzhengzhuo/mailparser",
     "node-rsa": "^1.1.1",
     "nodemailer": "^6.7.6"
-  },
-  "version": "0.0.1"
+  }
 }
