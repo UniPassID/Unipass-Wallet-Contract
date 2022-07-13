@@ -2,7 +2,6 @@ import { expect } from "chai";
 import { Contract, Wallet } from "ethers";
 import { solidityPack } from "ethers/lib/utils";
 import { ethers } from "hardhat";
-import { Greeter } from "../typechain";
 import { transferEth } from "./utils/common";
 import { generateHookTx, HookActionType } from "./utils/hook";
 
