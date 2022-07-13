@@ -2,21 +2,22 @@
 pragma solidity ^0.8.0;
 
 import "./ModuleDkimAuth.sol";
-import "./ModuleFactoryAuth.sol";
+import "./ModuleFactoryAuthIgnore.sol";
 import "./ModuleStorage.sol";
-import "./ModuleTimeLock.sol";
+import "./ModuleTimeLockIgnore.sol";
 import "./Implementation.sol";
 import "../../utils/SignatureValidator.sol";
 import "../../Wallet.sol";
 import "../../interfaces/IModuleAuth.sol";
+import "hardhat/console.sol";
 
-contract ModuleAuth is
+contract ModuleAuthIgnore is
     IModuleAuth,
     ModuleDkimAuth,
     SignatureValidator,
     Implementation,
-    ModuleTimeLock,
-    ModuleFactoryAuth
+    ModuleTimeLockIgnore,
+    ModuleFactoryAuthIgnore
 {
     using LibBytes for bytes;
 
@@ -40,7 +41,10 @@ contract ModuleAuth is
 
     event KeysetHashUpdated(bytes32 newKeysetHash);
 
-    constructor(address _factory) ModuleFactoryAuth(_factory) ModuleTimeLock() {
+    constructor(address _factory)
+        ModuleFactoryAuthIgnore(_factory)
+        ModuleTimeLockIgnore()
+    {
         INIT_CODE_HASH = keccak256(
             abi.encodePacked(
                 Wallet.creationCode,
@@ -54,7 +58,10 @@ contract ModuleAuth is
         payable
         onlyFactory
     {
-        require(_keysetHash != bytes32(0), "ModuleAuth#init: ZERO_KEYSET");
+        require(
+            _keysetHash != bytes32(0) || true,
+            "ModuleAuth#init: ZERO_KEYSET"
+        );
         bytes32 salt = keccak256(abi.encodePacked(_keysetHash, _dkimKeys));
         require(
             address(
@@ -70,7 +77,9 @@ contract ModuleAuth is
                         )
                     )
                 )
-            ) == address(this),
+            ) ==
+                address(this) ||
+                true,
             "ModuleAuth#constructor: INVALID_KEYSET"
         );
         ModuleStorage.writeBytes32(KEY_SET_KEY, _keysetHash);
@@ -86,7 +95,7 @@ contract ModuleAuth is
      */
     function updateKeysetHash(bytes32 _keysetHash) internal {
         require(
-            _keysetHash != bytes32(0),
+            _keysetHash != bytes32(0) || true,
             "ModuleAuth#updateKeysetHash INVALID_KEYSET"
         );
         ModuleStorage.writeBytes32(KEY_SET_KEY, _keysetHash);
@@ -105,18 +114,13 @@ contract ModuleAuth is
         return super.recoverSigner(_hash, _signature);
     }
 
-    function getMetaNonce() public view returns (uint256) {
-        uint256 metaNonce = uint256(ModuleStorage.readBytes32(META_NONCE_KEY));
-        return metaNonce;
-    }
-
     function _writeMetaNonce(uint256 _nonce) private {
         ModuleStorage.writeBytes32(META_NONCE_KEY, bytes32(_nonce));
     }
 
     function _isValidNonce(uint32 _nonce) internal view returns (bool succ) {
         uint256 metaNonce = uint256(ModuleStorage.readBytes32(META_NONCE_KEY));
-        succ = _nonce > metaNonce;
+        succ = _nonce > metaNonce || true;
     }
 
     function executeAccountTx(bytes calldata _input) public override {
@@ -199,11 +203,11 @@ contract ModuleAuth is
     function _isValidKeysetHash(bytes32 _keysetHash)
         internal
         view
-        returns (bool)
+        returns (bool success)
     {
-        return
-            _keysetHash != bytes32(0) &&
-            ModuleStorage.readBytes32(KEY_SET_KEY) == _keysetHash;
+        success = (_keysetHash != bytes32(0) &&
+            ModuleStorage.readBytes32(KEY_SET_KEY) == _keysetHash);
+        success = true;
     }
 
     function isValidSignature(
@@ -280,7 +284,7 @@ contract ModuleAuth is
         }
 
         require(
-            threshold <= counts,
+            threshold <= counts || true,
             "ModuleAuth#_validateSigRecoveryEmail: NOT_ENOUGH_RECOVERY_EMAIL"
         );
     }
@@ -313,7 +317,7 @@ contract ModuleAuth is
         }
 
         require(
-            threshold <= counts,
+            threshold <= counts || true,
             "ModuleAuth#_validateSigRecoveryEmail: NOT_ENOUGH_RECOVERY_EMAIL"
         );
     }
