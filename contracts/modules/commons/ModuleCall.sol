@@ -7,28 +7,11 @@ import "./ModuleStorage.sol";
 import "../../utils/LibBytes.sol";
 import "../../interfaces/IModuleAuth.sol";
 import "../../interfaces/IModuleHooks.sol";
+import "../../interfaces/ITransaction.sol";
 
-abstract contract ModuleCall is IModuleAuth, IModuleHooks {
+abstract contract ModuleCall is ITransaction, IModuleAuth, IModuleHooks {
     using LibBytes for bytes;
     using SafeERC20 for IERC20;
-
-    struct Transaction {
-        CallType callType;
-        uint256 gasLimit;
-        address target;
-        uint256 value;
-        bytes data;
-    }
-
-    enum CallType {
-        Call,
-        DelegateCall,
-        CallAccountLayer,
-        CallHooks
-    }
-
-    error txFailed(Transaction, bytes32, bytes);
-    error invalidCallType(CallType);
 
     event TxExecuted(bytes32);
 
@@ -47,7 +30,7 @@ abstract contract ModuleCall is IModuleAuth, IModuleHooks {
         return uint256(ModuleStorage.readBytes32(NONCE_KEY));
     }
 
-    function _writeNonce(uint256 _nonce) private {
+    function _writeNonce(uint256 _nonce) internal {
         ModuleStorage.writeBytes32(NONCE_KEY, bytes32(_nonce));
     }
 
@@ -95,7 +78,7 @@ abstract contract ModuleCall is IModuleAuth, IModuleHooks {
         }
     }
 
-    function _validateNonce(uint256 _nonce) internal {
+    function _validateNonce(uint256 _nonce) internal virtual {
         uint256 currentNonce = getNonce();
         require(
             _nonce == currentNonce + 1,

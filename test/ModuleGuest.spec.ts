@@ -26,7 +26,7 @@ describe("ModuleGuest", function () {
     const Factory = await ethers.getContractFactory("Factory");
     factory = await Factory.deploy();
     ModuleGuest = await ethers.getContractFactory("ModuleGuest");
-    moduleGuest = await ModuleGuest.deploy(factory.address);
+    moduleGuest = await ModuleGuest.deploy();
 
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     wallet = Wallet.createRandom();
