@@ -119,6 +119,14 @@ contract ModuleAuth is
         succ = _nonce > metaNonce;
     }
 
+    function _checkPendNewKeysetHash(bytes32 _newKeysetHash) private {
+        if (delay == 0) {
+            updateKeysetHash(_newKeysetHash);
+        } else {
+            _pendNewKeysetHash(_newKeysetHash);
+        }
+    }
+
     function executeAccountTx(bytes calldata _input) public override {
         uint32 metaNonce;
         (uint8 actionType, uint256 leftIndex) = _input.readFirstUint8();
@@ -150,7 +158,7 @@ contract ModuleAuth is
                     _isValidKeysetHash(keysetHash),
                     "ModuleAuth#validateSignature: INVALID_KEYSET"
                 );
-                _pendNewKeysetHash(newKeysetHash);
+                _checkPendNewKeysetHash(newKeysetHash);
             } else if (sigType == SigType.SigRecoveryEmail) {
                 _requireUnPending();
                 keysetHash = _validateSigRecoveryEmail(
@@ -162,7 +170,7 @@ contract ModuleAuth is
                     _isValidKeysetHash(keysetHash),
                     "ModuleAuth#validateSignature: INVALID_KEYSET"
                 );
-                _pendNewKeysetHash(newKeysetHash);
+                _checkPendNewKeysetHash(newKeysetHash);
             } else if (sigType == SigType.SigMasterKeyWithRecoveryEmail) {
                 keysetHash = _validateSigMasterKeyWithRecoveryEmail(
                     digestHash,
