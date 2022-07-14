@@ -9,7 +9,7 @@ abstract contract ModuleTimeLock {
 
     constructor() {
         // 48 hours
-        delay = 165600;
+        delay = 0;
     }
 
     function _requirePending() internal view {
@@ -43,7 +43,6 @@ abstract contract ModuleTimeLock {
     }
 
     function _setDelay(uint256 _delay) internal {
-        require(_delay != 0, "ModuleTimeLock#_setDelay: ZERO");
         delay = _delay;
     }
 
