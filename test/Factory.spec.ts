@@ -7,12 +7,13 @@ describe("Factory", function () {
   let greet: Contract;
   let Greet: ContractFactory;
   let factory: Contract;
+  let Factory: ContractFactory;
   let masterKey: string;
   let salt: string;
   let threshold: number;
   let recoveryEmails: string[] = [];
   this.beforeAll(async function () {
-    const Factory = await ethers.getContractFactory("Factory");
+    Factory = await ethers.getContractFactory("Factory");
     factory = await Factory.deploy();
     Greet = await ethers.getContractFactory("Greeter");
     greet = await Greet.deploy();

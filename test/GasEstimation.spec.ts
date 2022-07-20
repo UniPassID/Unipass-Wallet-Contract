@@ -44,12 +44,7 @@ describe("GasEstimation", function () {
   this.beforeAll(async function () {
     const Factory = await ethers.getContractFactory("Factory");
     factory = await Factory.deploy();
-    // ModuleMainGasEstimation = await ethers.getContractFactory(
-    //   "ModuleMainGasEstimation"
-    // );
-    // moduleMainGasEstimation = await ModuleMainGasEstimation.deploy(
-    //   factory.address
-    // );
+
     ModuleMain = await ethers.getContractFactory("ModuleMain");
     moduleMain = await ModuleMain.deploy(factory.address);
 
@@ -293,9 +288,8 @@ describe("GasEstimation", function () {
       estimate.gas.toNumber() + txBaseCost(moduleGuestTxData)
     ).to.approximately(realTx.gasUsed.toNumber(), 5000);
     proxyModuleMain = ModuleMain.attach(expectedAddress);
-    const ret = await proxyModuleMain.getPendingStatus();
-    expect(ret[0]).to.true;
-    expect(ret[1]).to.equal(newKeysetHash);
+    const ret = await proxyModuleMain.getKeysetHash();
+    expect(ret).to.equal(newKeysetHash);
     expect(await proxyModuleMain.provider.getBalance(expectedAddress)).to.equal(
       value
     );

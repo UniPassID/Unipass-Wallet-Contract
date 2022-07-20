@@ -1,13 +1,13 @@
 import { expect } from "chai";
 import { Contract } from "ethers";
 import { ethers } from "hardhat";
-import { DkimParams, parseEmailParams } from "./utils/email";
+import { DkimParams, parseEmailParams, EmailParams } from "./utils/email";
 import * as fs from "fs";
 
 describe("LibDkimValidator", function () {
   let emailDkimValidator: Contract;
-  let emails: DkimParams[] = [];
-  let email1275: DkimParams;
+  let emails: EmailParams[] = [];
+  let email1275: EmailParams;
   this.beforeAll(async function () {
     const EmailDkimValidator = await ethers.getContractFactory(
       "EmailDkimValidator"
@@ -18,19 +18,17 @@ describe("LibDkimValidator", function () {
       const email = await fs.promises.readFile(
         __dirname + `/emails/emails/${emailFile}`
       );
-      const params = await parseEmailParams(email.toString());
-      if (params != null && params != undefined) {
-        emails.push(params);
-        if (emailFile == "email-1275.eml") {
-          email1275 = params;
-        }
+      const ret = await parseEmailParams(email.toString());
+      emails.push(ret);
+      if (emailFile == "email-1275.eml") {
+        email1275 = ret;
       }
     }
   });
   it("Validate Emails DKIM From Header Contains Uppercase", async function () {
-    const ret = emails.find((email) => {
+    const ret = emails.find(({ params, from }) => {
       const headers = Buffer.from(
-        email.emailHeader.substring(2),
+        params.emailHeader.substring(2),
         "hex"
       ).toString();
       let ret = headers
@@ -60,10 +58,9 @@ describe("LibDkimValidator", function () {
     expect(ret).to.not.null;
   });
   it("Validate All Emails", async function () {
-    emails.forEach(async (value, _index, _array) => {
-      const ret = await emailDkimValidator.parseHeader(value);
-      expect(ret.emailHash.startsWith("0x")).true;
-      expect(ret.emailHash.length).to.equal(66);
+    emails.forEach(async ({ params, from }, _index, _array) => {
+      const ret = await emailDkimValidator.parseHeader(params);
+      expect(ret.emailfrom).to.equal(ethers.utils.hexValue(from));
       expect(ret.sigHashHex.startsWith("0x")).true;
       expect(ret.sigHashHex.length).to.equal(134);
       expect(ret.sdid.startsWith("0x")).true;
@@ -73,7 +70,7 @@ describe("LibDkimValidator", function () {
     });
   });
   it("Validate Utf8 Subject", async function () {
-    const ret = await emailDkimValidator.parseHeader(email1275);
+    const ret = await emailDkimValidator.parseHeader(email1275.params);
     expect(ret.sigHashHex).to.equal(
       "0x" +
         Buffer.from(
