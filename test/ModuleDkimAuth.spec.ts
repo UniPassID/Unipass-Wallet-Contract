@@ -6,7 +6,7 @@ import * as fs from "fs";
 
 describe("ModuleDkimAuth", function () {
   let dkimAuth: Contract;
-  let emails: DkimParams[] = [];
+  let emails: { from: string; params: DkimParams }[] = [];
   this.beforeAll(async function () {
     let accounts = await ethers.getSigners();
 
@@ -21,14 +21,12 @@ describe("ModuleDkimAuth", function () {
         __dirname + `/emails/emails/${emailFile}`
       );
       const params = await parseEmailParams(email.toString());
-      if (params != null && params != undefined) {
-        emails.push(params);
-      }
+      emails.push(params);
     }
   });
   it("Validate All Emails", async function () {
-    emails.forEach(async (value, _index, _array) => {
-      const ret = await dkimAuth.dkimVerify(value);
+    emails.forEach(async ({ params, from }, _index, _array) => {
+      const ret = await dkimAuth.dkimVerify(params, from);
       expect(ret.ret).true;
       expect(ret.emailHash.startsWith("0x")).true;
       expect(ret.emailHash.length).to.equal(66);

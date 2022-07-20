@@ -1,5 +1,5 @@
-import { sha256 } from "ethereumjs-util";
 import DKIM from "nodemailer/lib/dkim";
+import { sha256 } from "ethereumjs-util";
 import MailComposer from "nodemailer/lib/mail-composer";
 import * as Dkim from "dkim";
 import NodeRSA from "node-rsa";
@@ -9,12 +9,6 @@ const mailParser = require("mailparser");
 const MAX_EMAIL_LEN = 100;
 const FR_EMAIL_LEN = Math.floor(MAX_EMAIL_LEN / 31) + 1;
 const MIN_EMAIL_LEN = 6;
-
-export interface Signature {
-  signature: Buffer;
-  domain: string;
-  selector: string;
-}
 
 export interface DkimParams {
   emailHeader: string;
@@ -35,7 +29,6 @@ export interface DkimParams {
 }
 
 /**
- * 
  * @param params Solidity Dkim Validating Params
  * @returns Params Serializing String
  */
@@ -115,11 +108,11 @@ export const UnipassIdKey = new NodeRSA({
   ),
 });
 
-let node_key = UnipassIdKey.exportKey("pkcs8-public").split("\n");
-node_key.shift();
-node_key.pop();
-const dkim_key = "k=rsa; p=" + node_key;
-export const UnipassIdDkimKey = Dkim.Key.parse(dkim_key);
+const nodeKey = UnipassIdKey.exportKey("pkcs8-public").split("\n");
+nodeKey.shift();
+nodeKey.pop();
+const dkimKey = "k=rsa; p=" + nodeKey;
+export const UnipassIdDkimKey = Dkim.Key.parse(dkimKey);
 
 export async function getSignEmailWithDkim(
   subject: string,
@@ -143,7 +136,7 @@ export async function getSignEmailWithDkim(
 }
 
 export async function signEmailWithDkim(mail: MailComposer, dkim: DKIM) {
-  let msg = await mail.compile().build();
+  const msg = await mail.compile().build();
   const signedMsg = dkim.sign(msg);
   let buff = "";
   for await (const chunk of signedMsg) {
@@ -164,24 +157,40 @@ function updateEmail(emailAddress: string) {
   emailAddress = emailAddress.toLocaleLowerCase().trim();
   const emailData = emailAddress.split("@");
   let prefix = emailData[0].split("+")[0];
-  if (emailData[1] != "gmail.com") return `${prefix}@${emailData[1]}`;
-  const reg = new RegExp(/[\.]+/, "g");
+  if (emailData[1] !== "gmail.com") return `${prefix}@${emailData[1]}`;
+  const reg = /[.]+/g;
   prefix = prefix.trim().replace(reg, "");
   return `${prefix}@${emailData[1]}`;
 }
 
 export function emailHash(emailAddress: string): string {
-  emailAddress = updateEmail(emailAddress);
+  if (!emailAddress) return "";
+  emailAddress = emailAddress.toLowerCase();
+  const split = emailAddress.split("@", 2);
+
+  if (
+    split[1] == "gmail.com" ||
+    split[1] == "googlemail.com" ||
+    split[1] == "protonmail.com" ||
+    split[1] == "ptoton.me" ||
+    split[1] == "pm.me"
+  ) {
+    emailAddress = Buffer.concat([
+      Buffer.from(split[0].replace(".", "")),
+      Buffer.from("@"),
+      Buffer.from(split[1]),
+    ]).toString("utf8");
+  }
+
+  return pureEmailHash(emailAddress);
+}
+
+export function pureEmailHash(emailAddress: string): string {
   if (!emailAddress) return "";
 
-  const split = emailAddress.split("@", 2);
-  let buf = Buffer.concat([
-    Buffer.from(split[0]),
-    Buffer.from("@"),
-    Buffer.from(split[1]),
-  ]);
+  let buf = Buffer.from(emailAddress, "utf-8");
   let i;
-  const len = split[0].length + 1 + split[1].length;
+  const len = buf.length;
   for (i = 0; i < FR_EMAIL_LEN * 31 - len; ++i)
     buf = Buffer.concat([buf, new Uint8Array([0])]);
   const hash = sha256(Buffer.from(buf));
@@ -215,27 +224,27 @@ export function getDkimParams(
   subjectPadding: string,
   fromHeader: string
 ): DkimParams {
-  if (isSubBase64.length == 0) {
+  if (isSubBase64.length === 0) {
     isSubBase64.push(false);
   }
-  for (let result of results) {
-    let processedHeader = result.processedHeader;
-    let fromIndex = processedHeader.indexOf("from:");
-    let fromEndIndex = processedHeader.indexOf("\r\n", fromIndex);
+  for (const result of results) {
+    const processedHeader = result.processedHeader;
+    const fromIndex = processedHeader.indexOf("from:");
+    const fromEndIndex = processedHeader.indexOf("\r\n", fromIndex);
 
     let fromLeftIndex = processedHeader.indexOf(
       "<" + fromHeader + ">",
       fromIndex
     );
-    if (fromLeftIndex == -1 || fromLeftIndex > fromEndIndex) {
+    if (fromLeftIndex === -1 || fromLeftIndex > fromEndIndex) {
       fromLeftIndex = processedHeader.indexOf(fromHeader);
     } else {
       fromLeftIndex += 1;
     }
-    let fromRightIndex = fromLeftIndex + fromHeader.length - 1;
+    const fromRightIndex = fromLeftIndex + fromHeader.length - 1;
 
-    let signature = result.signature as any as Signature;
-    if (signature.domain == "1e100.net") {
+    const signature = result.signature as any as Signature;
+    if (signature.domain === "1e100.net") {
       continue;
     }
 
@@ -251,7 +260,7 @@ export function getDkimParams(
       dkimHeaderIndex
     );
     const selectorRightIndex = selectorIndex + signature.selector.length;
-    let params = {
+    const params = {
       emailHeader: "0x" + Buffer.from(processedHeader, "utf-8").toString("hex"),
       dkimSig: "0x" + signature.signature.toString("hex"),
       fromIndex,
@@ -273,13 +282,18 @@ export function getDkimParams(
   throw "Email parsed failed";
 }
 
-export async function parseEmailParams(email: string): Promise<DkimParams> {
-  let mail = await mailParser.simpleParser(email, {
+export interface EmailParams {
+  params: DkimParams;
+  from: string;
+}
+
+export async function parseEmailParams(email: string): Promise<EmailParams> {
+  const mail = await mailParser.simpleParser(email, {
     subjectSep: " ",
     isSepBase64: true,
   });
 
-  let subs = {
+  const subs = {
     subs: [],
     subsAllLen: 0,
     subjectPadding: "",
@@ -289,20 +303,21 @@ export async function parseEmailParams(email: string): Promise<DkimParams> {
     dealSubPart(index, s, mail.isSubBase64, subs);
   });
 
-  let from = mail.headers.get("from").value[0].address;
+  const from: string = mail.headers.get("from").value[0].address;
   const results: Dkim.VerifyResult[] = (await verifyDKIMContent(
     Buffer.from(email, "utf-8")
   )) as Dkim.VerifyResult[];
-  if (from.split("@")[1] == "unipass.id") {
+  if (from.split("@")[1] === "unipass.id") {
     Dkim.configKey(null);
   }
-  return getDkimParams(
+  const params = getDkimParams(
     results,
     subs.subs,
     subs.subIsBase64,
     subs.subjectPadding,
     from
   );
+  return { params, from };
 }
 
 function dealSubPart(
@@ -390,7 +405,7 @@ export async function getEmailFromTx(tx: any) {
     tx = tx.QuickAddLocalKeyTx;
 
     const params = [];
-    for (let email of tx.emailHeaders) {
+    for (const email of tx.emailHeaders) {
       const decoded = Buffer.from(email.slice(2), "hex").toString();
       params.push(decoded);
     }
@@ -400,7 +415,7 @@ export async function getEmailFromTx(tx: any) {
     tx = tx.StartRecoveryTx;
 
     const params = [];
-    for (let email of tx.emailHeaders) {
+    for (const email of tx.emailHeaders) {
       const decoded = Buffer.from(email.slice(2), "hex").toString();
       params.push(decoded);
     }

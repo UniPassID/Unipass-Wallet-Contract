@@ -161,7 +161,7 @@ describe("ModuleCall", function () {
       )
     ).wait();
     expect(ret.status).to.equal(1);
-    expect(await proxyTestModuleCall.newKeysetHash()).to.equal(newKeysetHash);
+    expect(await proxyTestModuleCall.getKeysetHash()).to.equal(newKeysetHash);
   });
   it("Test Multiple Transactions", async function () {
     const to = Wallet.createRandom();
@@ -230,6 +230,6 @@ describe("ModuleCall", function () {
     expect(await proxyTestModuleCall.provider.getBalance(to.address)).equal(
       value
     );
-    expect(await proxyTestModuleCall.newKeysetHash()).to.equal(newKeysetHash);
+    expect(await proxyTestModuleCall.getKeysetHash()).to.equal(newKeysetHash);
   });
 });

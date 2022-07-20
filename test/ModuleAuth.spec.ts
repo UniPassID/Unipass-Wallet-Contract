@@ -51,7 +51,7 @@ describe("ModuleAuth", function () {
     proxyModuleAuth = ModuleAuth.attach(expectedAddress);
   });
 
-  it("Update KeysetHash By Master Key", async function () {
+  it("Update KeysetHash By Single Master Key", async function () {
     const hash = Wallet.createRandom().privateKey;
     const sig = await generateAccountLayerSignature(
       proxyModuleAuth.address,
@@ -66,8 +66,8 @@ describe("ModuleAuth", function () {
     );
     const ret = await (await proxyModuleAuth.executeAccountTx(sig)).wait();
     expect(ret.status).to.equal(1);
-    expect(await proxyModuleAuth.isPending()).to.true;
-    expect(await proxyModuleAuth.newKeysetHash()).to.equal(hash);
+    expect(await proxyModuleAuth.isPending()).to.false;
+    expect(await proxyModuleAuth.getKeysetHash()).to.equal(hash);
   });
   it("Update KeysetHash By Recovery Email", async function () {
     const hash = Wallet.createRandom().privateKey;
@@ -84,8 +84,8 @@ describe("ModuleAuth", function () {
     );
     const ret = await (await proxyModuleAuth.executeAccountTx(sig)).wait();
     expect(ret.status).to.equal(1);
-    expect(await proxyModuleAuth.isPending()).to.true;
-    expect(await proxyModuleAuth.newKeysetHash()).to.equal(hash);
+    expect(await proxyModuleAuth.isPending()).to.false;
+    expect(await proxyModuleAuth.getKeysetHash()).to.equal(hash);
   });
   it("Update KeysetHash By Master Key And Recovery Email", async function () {
     const hash = Wallet.createRandom().privateKey;

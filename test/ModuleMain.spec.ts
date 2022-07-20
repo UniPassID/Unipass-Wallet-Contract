@@ -87,8 +87,7 @@ describe("ModuleMain", function () {
     });
 
     it("User Registered", async () => {
-      let recipt;
-      recipt = await (
+      const recipt = await (
         await factory.deploy(moduleMain.address, keysetHash, dkimKeys.address)
       ).wait();
       expect(recipt.status).to.equal(1);
@@ -118,7 +117,7 @@ describe("ModuleMain", function () {
       permit,
       0
     );
-    expect(ret).to.true;
+    expect(ret).to.be.true;
   });
   it("Test Transfer", async () => {
     const nonce = (await proxyModuleMain.getNonce()) + 1;
@@ -133,14 +132,14 @@ describe("ModuleMain", function () {
     const to2 = Wallet.createRandom();
     const value1 = 10;
     const value2 = 20;
-    let tx1 = {
+    const tx1 = {
       callType: CallType.Call,
       gasLimit: optimalGasLimit,
       target: to1.address,
       value: value1,
       data: "0x",
     };
-    let tx2 = {
+    const tx2 = {
       callType: CallType.Call,
       gasLimit: optimalGasLimit,
       target: to2.address,

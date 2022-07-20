@@ -6,6 +6,7 @@ import {
   emailHash,
   getSignEmailWithDkim,
   parseEmailParams,
+  pureEmailHash,
   SerializeDkimParams,
 } from "./email";
 
@@ -59,7 +60,10 @@ export function generateSigMasterKey(
 ): string {
   let sig = solidityPack(["bytes", "uint16"], [masterKeySig, threshold]);
   recoveryEmails.forEach((recoveryEmail) => {
-    sig = solidityPack(["bytes", "bytes32"], [sig, emailHash(recoveryEmail)]);
+    sig = solidityPack(
+      ["bytes", "bytes32"],
+      [sig, pureEmailHash(recoveryEmail)]
+    );
   });
   return sig;
 }
@@ -73,13 +77,19 @@ export function generateSigRecoveryEmails(
   for (const recoveryEmail of recoveryEmails) {
     if (recoveryEmail[1] === null) {
       sig = solidityPack(
-        ["bytes", "uint8", "bytes32"],
-        [sig, 0, recoveryEmail[0]]
+        ["bytes", "uint8", "uint8", "bytes"],
+        [sig, 0, recoveryEmail[0].length, Buffer.from(recoveryEmail[0])]
       );
     } else {
       sig = solidityPack(
-        ["bytes", "uint8", "bytes32", "bytes"],
-        [sig, 1, recoveryEmail[0], SerializeDkimParams(recoveryEmail[1])]
+        ["bytes", "uint8", "uint8", "bytes", "bytes"],
+        [
+          sig,
+          1,
+          recoveryEmail[0].length,
+          Buffer.from(recoveryEmail[0]),
+          SerializeDkimParams(recoveryEmail[1]),
+        ]
       );
     }
   }
@@ -93,15 +103,21 @@ export function generateSigMasterKeyWithRecoveryEmails(
 ): string {
   let sig = solidityPack(["bytes", "uint16"], [masterKeySig, threshold]);
   for (const recoveryEmail of recoveryEmails) {
-    if (recoveryEmail[1] == null) {
+    if (recoveryEmail[1] === null) {
       sig = solidityPack(
-        ["bytes", "uint8", "bytes32"],
-        [sig, 0, recoveryEmail[0]]
+        ["bytes", "uint8", "uint8", "bytes"],
+        [sig, 0, recoveryEmail[0].length, Buffer.from(recoveryEmail[0])]
       );
     } else {
       sig = solidityPack(
-        ["bytes", "uint8", "bytes32", "bytes"],
-        [sig, 1, recoveryEmail[0], SerializeDkimParams(recoveryEmail[1])]
+        ["bytes", "uint8", "uint8", "bytes", "bytes"],
+        [
+          sig,
+          1,
+          recoveryEmail[0].length,
+          Buffer.from(recoveryEmail[0]),
+          SerializeDkimParams(recoveryEmail[1]),
+        ]
       );
     }
   }
@@ -178,13 +194,10 @@ export async function generateAccountLayerSignature(
                 recoveryEmail,
                 "test@unipass.id.com"
               );
-              let dkimParams = await parseEmailParams(email);
-              recoveryEmailWithDkim.push([
-                emailHash(recoveryEmail),
-                dkimParams,
-              ]);
+              let { params, from } = await parseEmailParams(email);
+              recoveryEmailWithDkim.push([recoveryEmail, params]);
             } else {
-              recoveryEmailWithDkim.push([emailHash(recoveryEmail), null]);
+              recoveryEmailWithDkim.push([recoveryEmail, null]);
             }
             index++;
           }
@@ -213,13 +226,10 @@ export async function generateAccountLayerSignature(
                 recoveryEmail,
                 "test@unipass.me"
               );
-              let DkimParams = await parseEmailParams(email);
-              recoveryEmailWithDkim.push([
-                emailHash(recoveryEmail),
-                DkimParams,
-              ]);
+              let { params, from } = await parseEmailParams(email);
+              recoveryEmailWithDkim.push([recoveryEmail, params]);
             } else {
-              recoveryEmailWithDkim.push([emailHash(recoveryEmail), null]);
+              recoveryEmailWithDkim.push([recoveryEmail, null]);
             }
             index++;
           }
@@ -262,10 +272,10 @@ export async function generateAccountLayerSignature(
             recoveryEmail,
             "test@unipass.me"
           );
-          let DkimParams = await parseEmailParams(email);
-          recoveryEmailWithDkim.push([emailHash(recoveryEmail), DkimParams]);
+          let { params, from } = await parseEmailParams(email);
+          recoveryEmailWithDkim.push([recoveryEmail, params]);
         } else {
-          recoveryEmailWithDkim.push([emailHash(recoveryEmail), null]);
+          recoveryEmailWithDkim.push([recoveryEmail, null]);
         }
         index++;
       }
@@ -344,8 +354,8 @@ export async function generateTransactionSig(
             recoveryEmail,
             "test@unipass.id.com"
           );
-          let dkimParams = await parseEmailParams(email);
-          recoveryEmailWithDkim.push([emailHash(recoveryEmail), dkimParams]);
+          let { params, from } = await parseEmailParams(email);
+          recoveryEmailWithDkim.push([emailHash(recoveryEmail), params]);
         } else {
           recoveryEmailWithDkim.push([emailHash(recoveryEmail), null]);
         }
@@ -376,8 +386,8 @@ export async function generateTransactionSig(
             recoveryEmail,
             "test@unipass.id.com"
           );
-          let dkimParams = await parseEmailParams(email);
-          recoveryEmailWithDkim.push([emailHash(recoveryEmail), dkimParams]);
+          let { params, from } = await parseEmailParams(email);
+          recoveryEmailWithDkim.push([emailHash(recoveryEmail), params]);
         } else {
           recoveryEmailWithDkim.push([emailHash(recoveryEmail), null]);
         }

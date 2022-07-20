@@ -1,7 +1,6 @@
-import { Wallet } from "ethers";
 import { getCreate2Address, keccak256, solidityPack } from "ethers/lib/utils";
 import { ethers } from "hardhat";
-import { emailHash } from "./email";
+import { pureEmailHash } from "./email";
 
 export const optimalGasLimit = ethers.constants.Two.pow(21);
 
@@ -35,7 +34,7 @@ export function getKeysetHash(
     keysetHash = keccak256(
       ethers.utils.solidityPack(
         ["bytes32", "bytes32"],
-        [keysetHash, emailHash(recoveryEmail)]
+        [keysetHash, pureEmailHash(recoveryEmail)]
       )
     );
   });
@@ -44,9 +43,14 @@ export function getKeysetHash(
 
 export function generateRecoveryEmails(length: number): string[] {
   return [...Array(length)].map(() => {
-    const recoveryEmail =
-      Wallet.createRandom().privateKey.substring(16) + "@mail.unipass.me";
-    return recoveryEmail;
+    var result = "";
+    var characters =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    var charactersLength = characters.length;
+    for (var i = 0; i < 16; i++) {
+      result += characters.charAt(Math.floor(Math.random() * charactersLength));
+    }
+    return `${result}@mail.unipass.me`;
   });
 }
 
