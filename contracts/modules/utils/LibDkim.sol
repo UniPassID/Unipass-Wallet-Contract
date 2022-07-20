@@ -28,31 +28,38 @@ library LibDkimValidator {
     using LibDkimValidator for DkimParams;
     using LibSlice for Slice;
 
-    function getEmailHash(bytes memory fromEmail, bytes memory sdid)
+    function checkEmailFrom(bytes memory emailFrom, Slice memory sdid)
         internal
         pure
-        returns (bytes32 emailHash)
+        returns (bytes memory emailFromRet)
     {
-        Slice memory headerSlice = LibSlice.toSlice(fromEmail);
+        emailFromRet = emailFrom.toLower();
+
+        Slice memory headerSlice = LibSlice.toSlice(emailFromRet);
         Slice memory atSlice = LibSlice.stringToSlice("@");
         Slice memory localPart = LibSlice.split(headerSlice, atSlice);
-        Slice memory sdidSlice = LibSlice.toSlice(sdid);
         require(
             headerSlice.equals(LibSlice.stringToSlice("mail.unipass.me")) ||
-                headerSlice.equals(sdidSlice),
+                headerSlice.equals(sdid),
             "ED"
         );
 
-        if (sdidSlice.equals(LibSlice.stringToSlice("gmail.com"))) {
-            emailHash = emailAddressHash(
-                checkFromHeader(localPart, atSlice, headerSlice)
+        if (
+            sdid.equals(LibSlice.stringToSlice("gmail.com")) ||
+            sdid.equals(LibSlice.stringToSlice("googlemail.com")) ||
+            sdid.equals(LibSlice.stringToSlice("protonmail.com")) ||
+            sdid.equals(LibSlice.stringToSlice("proton.me")) ||
+            sdid.equals(LibSlice.stringToSlice("pm.me"))
+        ) {
+            emailFromRet = removeDotForEmailFrom(
+                localPart,
+                atSlice,
+                headerSlice
             );
-        } else {
-            emailHash = emailAddressHash(fromEmail);
         }
     }
 
-    function checkFromHeader(
+    function removeDotForEmailFrom(
         Slice memory localPart,
         Slice memory atSlice,
         Slice memory domainPart
@@ -128,11 +135,11 @@ library LibDkimValidator {
         v = (v >> 128) | (v << 128);
     }
 
-    function parseHeader(DkimParams memory self)
+    function _parseHeader(DkimParams memory self)
         internal
         pure
         returns (
-            bytes32 emailHash,
+            bytes memory emailFrom,
             bytes memory sigHashHex,
             bytes memory sdid,
             bytes memory selector
@@ -246,15 +253,10 @@ library LibDkimValidator {
             self.selectorRightIndex - self.selectorIndex
         );
 
-        bytes memory fromHeader;
-        (fromHeader, _newIndex) = self.emailHeader.readBytes(
+        (emailFrom, _newIndex) = self.emailHeader.readBytes(
             self.fromLeftIndex,
             self.fromRightIndex - self.fromLeftIndex + 1
         );
-        bytes memory email = LibBytes.toLower(fromHeader);
-        emailHash = getEmailHash(email, sdid);
-
-        return (emailHash, sigHashHex, sdid, selector);
     }
 
     function checkSubjectHeader(
