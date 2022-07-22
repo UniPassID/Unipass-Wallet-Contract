@@ -6,7 +6,8 @@ import "@nomiclabs/hardhat-waffle";
 import "@typechain/hardhat";
 import "hardhat-gas-reporter";
 import "solidity-coverage";
-import '@openzeppelin/hardhat-upgrades';
+import "@openzeppelin/hardhat-upgrades";
+import "@tenderly/hardhat-tenderly";
 
 dotenv.config();
 
@@ -56,6 +57,10 @@ const config: HardhatUserConfig = {
   },
   mocha: {
     timeout: 100000000,
+  },
+  tenderly: {
+    project: "@UniPassID/unipass-wallet",
+    username: "zz",
   },
 };
 
