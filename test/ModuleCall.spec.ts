@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { Contract, ContractFactory, Wallet } from "ethers";
+import { BigNumber, Contract, ContractFactory, Wallet } from "ethers";
 import { ethers } from "hardhat";
 import {
   generateRecoveryEmails,
@@ -65,7 +65,7 @@ describe("ModuleCall", function () {
   });
   it("Test A Transfer Transaction", async function () {
     const to = Wallet.createRandom();
-    const value = 10;
+    const value = BigNumber.from(10);
     let tx = {
       callType: CallType.Call,
       gasLimit: optimalGasLimit,
@@ -122,7 +122,7 @@ describe("ModuleCall", function () {
       recoveryEmails,
       SigType.SigMasterKey
     );
-    const value = 0;
+    const value = BigNumber.from(0);
     let tx = {
       callType: CallType.CallAccountLayer,
       gasLimit: optimalGasLimit,
@@ -177,7 +177,7 @@ describe("ModuleCall", function () {
       recoveryEmails,
       SigType.SigMasterKey
     );
-    let value = 0;
+    let value = BigNumber.from(0);
     let tx1 = {
       callType: CallType.CallAccountLayer,
       gasLimit: optimalGasLimit,
@@ -187,7 +187,7 @@ describe("ModuleCall", function () {
     };
 
     data = "0x";
-    value = 100;
+    value = BigNumber.from(100);
     let tx2 = {
       callType: CallType.Call,
       gasLimit: optimalGasLimit,

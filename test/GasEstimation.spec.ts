@@ -1,6 +1,6 @@
 import { deploy } from "@openzeppelin/hardhat-upgrades/dist/utils";
 import { expect } from "chai";
-import { Contract, ContractFactory, Wallet } from "ethers";
+import { BigNumber, Contract, ContractFactory, Wallet } from "ethers";
 import { BytesLike, randomBytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import {
@@ -124,7 +124,7 @@ describe("GasEstimation", function () {
       recoveryEmails,
       SigType.SigMasterKey
     );
-    const value = 0;
+    const value = ethers.constants.Zero;
     let tx = {
       callType: CallType.CallAccountLayer,
       gasLimit: optimalGasLimit,
@@ -211,20 +211,19 @@ describe("GasEstimation", function () {
       recoveryEmails,
       SigType.SigMasterKey
     );
-    let value = 0;
     let accountTx = {
       callType: CallType.CallAccountLayer,
       gasLimit: optimalGasLimit,
       target: expectedAddress,
-      value,
+      value: ethers.constants.Zero,
       data,
     };
-    value = 20;
+    let value = 20;
     let transferTx = {
       callType: CallType.Call,
       gasLimit: optimalGasLimit,
       target: expectedAddress,
-      value,
+      value: BigNumber.from(value),
       data: "0x",
     };
     const nonce = 1;

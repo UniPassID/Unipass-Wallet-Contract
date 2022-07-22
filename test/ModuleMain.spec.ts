@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { Contract, ContractFactory, Wallet } from "ethers";
+import { BigNumber, Contract, ContractFactory, Wallet } from "ethers";
 import { randomBytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import {
@@ -186,7 +186,7 @@ describe("ModuleMain", function () {
       recoveryEmails,
       SigType.SigMasterKey
     );
-    const value = 0;
+    const value = ethers.constants.Zero;
     let tx = {
       callType: CallType.CallAccountLayer,
       gasLimit: ethers.constants.Zero,
@@ -239,8 +239,8 @@ describe("ModuleMain", function () {
 
     const to1 = Wallet.createRandom();
     const to2 = Wallet.createRandom();
-    const value1 = 10;
-    const value2 = 20;
+    const value1 = BigNumber.from(10);
+    const value2 = BigNumber.from(20);
     const tx1 = {
       callType: CallType.Call,
       gasLimit: optimalGasLimit,
@@ -316,14 +316,14 @@ describe("ModuleMain", function () {
       callType: CallType.Call,
       gasLimit: ethers.constants.Zero,
       target: testErc20Token.address,
-      value: 0,
+      value: ethers.constants.Zero,
       data: data1,
     };
     const tx2 = {
       callType: CallType.Call,
       gasLimit: ethers.constants.Zero,
       target: testErc20Token.address,
-      value: 0,
+      value: ethers.constants.Zero,
       data: data2,
     };
 
@@ -378,7 +378,7 @@ describe("ModuleMain", function () {
       callType: CallType.Call,
       gasLimit: ethers.constants.Zero,
       target: testERC721.address,
-      value: 0,
+      value: ethers.constants.Zero,
       data: data1,
     };
 
@@ -443,14 +443,14 @@ describe("ModuleMain", function () {
       callType: CallType.Call,
       gasLimit: ethers.constants.Zero,
       target: testERC1155.address,
-      value: 0,
+      value: ethers.constants.Zero,
       data: data1,
     };
     const tx2 = {
       callType: CallType.Call,
       gasLimit: ethers.constants.Zero,
       target: testERC1155.address,
-      value: 0,
+      value: ethers.constants.Zero,
       data: data2,
     };
 

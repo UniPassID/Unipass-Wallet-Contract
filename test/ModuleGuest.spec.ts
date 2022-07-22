@@ -49,7 +49,7 @@ describe("ModuleGuest", function () {
         callType: CallType.Call,
         gasLimit: optimalGasLimit,
         target: callReceiverMock.address,
-        value: 0,
+        value: ethers.constants.Zero,
         data: data1,
       },
     ];
@@ -77,7 +77,7 @@ describe("ModuleGuest", function () {
         callType: CallType.DelegateCall,
         gasLimit: optimalGasLimit,
         target: callReceiverMock.address,
-        value: 0,
+        value: ethers.constants.Zero,
         data: data1,
       },
     ];
@@ -99,7 +99,7 @@ describe("ModuleGuest", function () {
         callType: CallType.CallAccountLayer,
         gasLimit: optimalGasLimit,
         target: callReceiverMock.address,
-        value: 0,
+        value: ethers.constants.Zero,
         data: data1,
       },
     ];
@@ -121,7 +121,7 @@ describe("ModuleGuest", function () {
         callType: CallType.CallHooks,
         gasLimit: optimalGasLimit,
         target: callReceiverMock.address,
-        value: 0,
+        value: ethers.constants.Zero,
         data: data1,
       },
     ];
@@ -146,7 +146,7 @@ describe("ModuleGuest", function () {
       callType: CallType.Call,
       gasLimit: optimalGasLimit,
       target: callReceiverMock.address,
-      value: 0,
+      value: ethers.constants.Zero,
       data: data2,
     });
     let ret = moduleGuest.execute(

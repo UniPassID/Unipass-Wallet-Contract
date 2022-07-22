@@ -39,7 +39,7 @@ export interface Transaction {
   callType: CallType;
   gasLimit: BigNumber;
   target: string;
-  value: number;
+  value: BigNumber;
   data: string;
 }
 
