@@ -248,7 +248,7 @@ export async function generateAccountLayerSignature(
         }
 
         default: {
-          throw `invalid sigType: ${sigType}`;
+          throw new Error(`invalid sigType: ${sigType}`);
         }
       }
       break;
