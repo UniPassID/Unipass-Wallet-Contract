@@ -1,0 +1,18 @@
+[
+  {
+    "contractName": "Factory",
+    "address": "0x5f89f4d1b81A3e5FD86139fa0A187F21415cA7D3"
+  },
+  {
+    "contractName": "ModuleMain",
+    "address": "0x0F1595a1696D463Bae2bBD4f8e459ef6D1A48f56"
+  },
+  {
+    "contractName": "DkimKeys",
+    "address": "0x17573639890D297436348780bF1bE05C3ccC9808"
+  },
+  {
+    "contractName": "ModuleGuest",
+    "address": "0x0F1595a1696D463Bae2bBD4f8e459ef6D1A48f56"
+  }
+]
