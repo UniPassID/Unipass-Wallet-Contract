@@ -45,12 +45,23 @@ describe("GasEstimation", function () {
     const Factory = await ethers.getContractFactory("Factory");
     factory = await Factory.deploy();
 
-    ModuleMain = await ethers.getContractFactory("ModuleMain");
-    moduleMain = await ModuleMain.deploy(factory.address);
-
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     dkimKeysAdmin = Wallet.createRandom();
     dkimKeys = await DkimKeys.deploy(dkimKeysAdmin.address);
+
+    const ModuleMainUpgradable = await ethers.getContractFactory(
+      "ModuleMainUpgradable"
+    );
+    const moduleMainUpgradable = await ModuleMainUpgradable.deploy(
+      dkimKeys.address
+    );
+
+    ModuleMain = await ethers.getContractFactory("ModuleMain");
+    moduleMain = await ModuleMain.deploy(
+      factory.address,
+      moduleMainUpgradable.address,
+      dkimKeys.address
+    );
 
     const GasEstimation = await ethers.getContractFactory("GasEstimator");
     gasEstimation = await GasEstimation.deploy();
@@ -66,13 +77,12 @@ describe("GasEstimation", function () {
     keysetHash = getKeysetHash(masterKey.address, threshold, recoveryEmails);
 
     const ret = await (
-      await factory.deploy(moduleMain.address, keysetHash, dkimKeys.address)
+      await factory.deploy(moduleMain.address, keysetHash)
     ).wait();
     expect(ret.status).to.equal(1);
 
     const expectedAddress = getProxyAddress(
       moduleMain.address,
-      dkimKeys.address,
       factory.address,
       keysetHash
     );
@@ -90,16 +100,9 @@ describe("GasEstimation", function () {
     const deployData = factory.interface.encodeFunctionData("deploy", [
       moduleMain.address,
       randomBytes(32),
-      dkimKeys.address,
     ]);
     const gasUsed: number = (
-      await (
-        await factory.deploy(
-          moduleMain.address,
-          randomBytes(32),
-          dkimKeys.address
-        )
-      ).wait()
+      await (await factory.deploy(moduleMain.address, randomBytes(32))).wait()
     ).gasUsed.toNumber();
     const estimate = await gasEstimation.callStatic.estimate(
       factory.address,
@@ -119,6 +122,7 @@ describe("GasEstimation", function () {
       1,
       undefined,
       newKeysetHash,
+      undefined,
       masterKey,
       threshold,
       recoveryEmails,
@@ -184,7 +188,6 @@ describe("GasEstimation", function () {
     const deployTxData = factory.interface.encodeFunctionData("deploy", [
       moduleMain.address,
       keysetHash,
-      dkimKeys.address,
     ]);
     const deployTx = {
       callType: CallType.Call,
@@ -195,7 +198,6 @@ describe("GasEstimation", function () {
     };
     const expectedAddress = getProxyAddress(
       moduleMain.address,
-      dkimKeys.address,
       factory.address,
       keysetHash
     );
@@ -206,6 +208,7 @@ describe("GasEstimation", function () {
       1,
       undefined,
       newKeysetHash,
+      undefined,
       masterKey,
       threshold,
       recoveryEmails,

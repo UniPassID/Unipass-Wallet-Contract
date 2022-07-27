@@ -4,12 +4,12 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./ModuleStorage.sol";
+import "./ModuleAuthBase.sol";
 import "../../utils/LibBytes.sol";
-import "../../interfaces/IModuleAuth.sol";
 import "../../interfaces/IModuleHooks.sol";
 import "../../interfaces/ITransaction.sol";
 
-abstract contract ModuleCall is ITransaction, IModuleAuth, IModuleHooks {
+abstract contract ModuleCall is ITransaction, ModuleAuthBase, IModuleHooks {
     using LibBytes for bytes;
     using SafeERC20 for IERC20;
 
@@ -51,7 +51,8 @@ abstract contract ModuleCall is ITransaction, IModuleAuth, IModuleHooks {
 
         bytes32 txhash = keccak256(
             abi.encodePacked(
-                abi.encodePacked(chainId, keccak256(abi.encode(_nonce, _txs))),
+                chainId,
+                keccak256(abi.encode(_nonce, _txs)),
                 feeToken,
                 feeAmount
             )

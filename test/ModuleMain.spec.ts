@@ -37,12 +37,24 @@ describe("ModuleMain", function () {
   this.beforeAll(async function () {
     const Factory = await ethers.getContractFactory("Factory");
     factory = await Factory.deploy();
-    ModuleMain = await ethers.getContractFactory("ModuleMain");
-    moduleMain = await ModuleMain.deploy(factory.address);
 
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     dkimKeysAdmin = Wallet.createRandom();
     dkimKeys = await DkimKeys.deploy(dkimKeysAdmin.address);
+
+    const ModuleMainUpgradable = await ethers.getContractFactory(
+      "ModuleMainUpgradable"
+    );
+    const moduleMainUpgradable = await ModuleMainUpgradable.deploy(
+      dkimKeys.address
+    );
+
+    ModuleMain = await ethers.getContractFactory("ModuleMain");
+    moduleMain = await ModuleMain.deploy(
+      factory.address,
+      moduleMainUpgradable.address,
+      dkimKeys.address
+    );
 
     const TestErc20Token = await ethers.getContractFactory("TestERC20");
     testErc20Token = await TestErc20Token.deploy();
@@ -62,13 +74,12 @@ describe("ModuleMain", function () {
     keysetHash = getKeysetHash(masterKey.address, threshold, recoveryEmails);
 
     let ret = await (
-      await factory.deploy(moduleMain.address, keysetHash, dkimKeys.address)
+      await factory.deploy(moduleMain.address, keysetHash)
     ).wait();
     expect(ret.status).to.equal(1);
 
     const expectedAddress = getProxyAddress(
       moduleMain.address,
-      dkimKeys.address,
       factory.address,
       keysetHash
     );
@@ -128,7 +139,6 @@ describe("ModuleMain", function () {
 
       userAddress = getProxyAddress(
         moduleMain.address,
-        dkimKeys.address,
         factory.address,
         keysetHash
       );
@@ -139,17 +149,12 @@ describe("ModuleMain", function () {
 
     it("User Registered", async () => {
       const recipt = await (
-        await factory.deploy(moduleMain.address, keysetHash, dkimKeys.address)
+        await factory.deploy(moduleMain.address, keysetHash)
       ).wait();
       expect(recipt.status).to.equal(1);
       const code = await moduleMain.provider.getCode(userAddress);
       expect(code).to.not.equal("0x");
     });
-  });
-
-  it("Test Get KeysetHash", async () => {
-    const currentKeysetHash = await proxyModuleMain.getKeysetHash();
-    expect(currentKeysetHash).to.equal(keysetHash);
   });
 
   it("Test Validating Permit", async () => {
@@ -181,6 +186,7 @@ describe("ModuleMain", function () {
       1,
       undefined,
       newKeysetHash,
+      undefined,
       masterKey,
       threshold,
       recoveryEmails,

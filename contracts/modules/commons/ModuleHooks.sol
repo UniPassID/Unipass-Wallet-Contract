@@ -8,7 +8,6 @@ import "../../interfaces/IERC1155Receiver.sol";
 import "../../interfaces/IERC721Receiver.sol";
 import "../../interfaces/IERC223Receiver.sol";
 import "../../interfaces/IModuleHooks.sol";
-import "../../interfaces/IModuleAuth.sol";
 import "../../utils/LibBytes.sol";
 
 import "hardhat/console.sol";
