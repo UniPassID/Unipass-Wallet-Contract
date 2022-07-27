@@ -1,10 +1,4 @@
-import {
-  BigNumber,
-  Contract,
-  ContractFactory,
-  getDefaultProvider,
-  Wallet,
-} from "ethers";
+import { Contract, ContractFactory, Wallet } from "ethers";
 import { hexlify, id, randomBytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import {
@@ -14,12 +8,11 @@ import {
   transferEth,
 } from "./utils/common";
 import {
-  ActionType,
-  CallType,
-  generateAccountLayerSignature,
-  generateTransactionSig,
+  executeCall,
+  executeUpdateKeysetHash,
+  generateTransferTx,
+  generateUpdateKeysetHashTx,
   SigType,
-  Transaction,
 } from "./utils/sigPart";
 
 const runs = 256;
@@ -38,117 +31,6 @@ function report(test: string, values: number[]) {
   );
 }
 
-export async function generateUpdateKeysetHashTx(
-  walletAddr: string,
-  newKeysetHash: string,
-  masterKey: Wallet,
-  threshold: number,
-  recoveryEmails: string[],
-  sigType: SigType
-) {
-  const data = await generateAccountLayerSignature(
-    walletAddr,
-    ActionType.UpdateKeysetHash,
-    1,
-    undefined,
-    newKeysetHash,
-    masterKey,
-    threshold,
-    recoveryEmails,
-    sigType
-  );
-  let tx = {
-    callType: CallType.CallAccountLayer,
-    gasLimit: ethers.constants.Zero,
-    target: ethers.constants.AddressZero,
-    value: ethers.constants.Zero,
-    data,
-  };
-  return tx;
-}
-
-export async function generateTransferTx(
-  gasLimit: BigNumber,
-  value: BigNumber
-) {
-  let tx = {
-    callType: CallType.Call,
-    gasLimit,
-    target: ethers.constants.AddressZero,
-    value,
-    data: "0x",
-  };
-  return tx;
-}
-
-export async function executeUpdateKeysetHash(
-  txs: Transaction[],
-  chainId: number,
-  nonce: number,
-  masterKey: Wallet,
-  threshold: number,
-  recoveryEmails: string[],
-  moduleMain: Contract
-) {
-  const feeToken = ethers.constants.AddressZero;
-  const feeReceiver = ethers.constants.AddressZero;
-  const feeAmount = 0;
-
-  const signature = await generateTransactionSig(
-    chainId,
-    txs,
-    nonce,
-    feeToken,
-    feeAmount,
-    masterKey,
-    threshold,
-    recoveryEmails,
-    [...Array(threshold).keys()].map((v) => v + 1),
-    undefined,
-    undefined,
-    SigType.SigNone
-  );
-  const ret = await (
-    await moduleMain.execute(txs, nonce, feeToken, feeReceiver, 0, signature)
-  ).wait();
-  return ret;
-}
-
-export async function executeCall(
-  txs: Transaction[],
-  chainId: number,
-  nonce: number,
-  masterKey: Wallet,
-  threshold: number,
-  recoveryEmails: string[],
-  sessionKey: Wallet,
-  expired: number,
-  moduleMain: Contract
-) {
-  const feeToken = ethers.constants.AddressZero;
-  const feeReceiver = ethers.constants.AddressZero;
-  const feeAmount = 0;
-
-  const signature = await generateTransactionSig(
-    chainId,
-    txs,
-    nonce,
-    feeToken,
-    feeAmount,
-    masterKey,
-    threshold,
-    recoveryEmails,
-    [...Array(threshold).keys()].map((v) => v + 1),
-    sessionKey,
-    expired,
-    SigType.SigSessionKey
-  );
-  const ret = await (
-    await moduleMain.execute(txs, nonce, feeToken, feeReceiver, 0, signature)
-  ).wait();
-  return ret;
-}
-
 describe("ModuleMain Benchmark", function () {
   let factory: Contract;
   let dkimKeys: Contract;
@@ -159,12 +41,23 @@ describe("ModuleMain Benchmark", function () {
     const Factory = await ethers.getContractFactory("Factory");
     factory = await Factory.deploy();
 
-    ModuleMain = await ethers.getContractFactory("ModuleMain");
-    moduleMain = await ModuleMain.deploy(factory.address);
-
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     const dkimKeysAdmin = Wallet.createRandom();
     dkimKeys = await DkimKeys.deploy(dkimKeysAdmin.address);
+
+    const ModuleMainUpgradable = await ethers.getContractFactory(
+      "ModuleMainUpgradable"
+    );
+    const moduleMainUpgradable = await ModuleMainUpgradable.deploy(
+      dkimKeys.address
+    );
+
+    ModuleMain = await ethers.getContractFactory("ModuleMain");
+    moduleMain = await ModuleMain.deploy(
+      factory.address,
+      moduleMainUpgradable.address,
+      dkimKeys.address
+    );
 
     chainId = await (await moduleMain.provider.getNetwork()).chainId;
   });
@@ -178,7 +71,7 @@ describe("ModuleMain Benchmark", function () {
         for (let i = 0; i < runs; i++) {
           const salt = ethers.utils.hexlify(randomBytes(32));
           const ret = await (
-            await factory.deploy(moduleMain.address, salt, dkimKeys.address)
+            await factory.deploy(moduleMain.address, salt)
           ).wait();
           results.push(ret.gasUsed);
         }
@@ -203,20 +96,9 @@ describe("ModuleMain Benchmark", function () {
               threshold,
               recoveryEmails
             );
-            await (
-              await factory.deploy(
-                moduleMain.address,
-                keysetHash,
-                dkimKeys.address
-              )
-            ).wait();
+            await (await factory.deploy(moduleMain.address, keysetHash)).wait();
             const wallet = ModuleMain.attach(
-              getProxyAddress(
-                moduleMain.address,
-                dkimKeys.address,
-                factory.address,
-                keysetHash
-              )
+              getProxyAddress(moduleMain.address, factory.address, keysetHash)
             );
 
             const transaction = await generateUpdateKeysetHashTx(
@@ -255,24 +137,14 @@ describe("ModuleMain Benchmark", function () {
             threshold,
             recoveryEmails
           );
-          await (
-            await factory.deploy(
-              moduleMain.address,
-              keysetHash,
-              dkimKeys.address
-            )
-          ).wait();
+          await (await factory.deploy(moduleMain.address, keysetHash)).wait();
           const wallet = ModuleMain.attach(
-            getProxyAddress(
-              moduleMain.address,
-              dkimKeys.address,
-              factory.address,
-              keysetHash
-            )
+            getProxyAddress(moduleMain.address, factory.address, keysetHash)
           );
           await transferEth(wallet.address, 1);
 
           const transaction = await generateTransferTx(
+            ethers.constants.AddressZero,
             ethers.constants.Zero,
             ethers.utils.parseEther("0.001")
           );

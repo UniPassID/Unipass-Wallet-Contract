@@ -9,7 +9,7 @@ import {
   ModuleMain__factory,
 } from "../typechain";
 
-const DkimKeysAdmin: string = "0x459De0f95F21A5670393F9e38645e9FB315e73B4";
+const DkimKeysAdmin: string = "0x4d802eb3F2027Ae2d22daa101612BAe022a849Dc";
 
 const prompt = ora();
 const provider = new providers.Web3Provider(network.provider.send);

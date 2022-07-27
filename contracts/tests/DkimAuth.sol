@@ -6,7 +6,5 @@ import "../interfaces/IDkimKeys.sol";
 import "../modules/commons/ModuleDkimAuth.sol";
 
 contract DkimAuth is ModuleDkimAuth {
-    constructor(IDkimKeys _dkimKeys) {
-        dkimKeys = _dkimKeys;
-    }
+    constructor(IDkimKeys _dkimKeys) ModuleDkimAuth(_dkimKeys) {}
 }

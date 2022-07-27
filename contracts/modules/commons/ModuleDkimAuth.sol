@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
+import "./ModuleStorage.sol";
 import "../utils/LibDkim.sol";
 import "../../interfaces/IDkimKeys.sol";
 import "../../utils/LibRsa.sol";
@@ -13,7 +14,11 @@ abstract contract ModuleDkimAuth {
     using LibSlice for Slice;
     using LibBytes for bytes;
 
-    IDkimKeys public dkimKeys;
+    IDkimKeys public immutable dkimKeys;
+
+    constructor(IDkimKeys _dkimKeys) {
+        dkimKeys = _dkimKeys;
+    }
 
     function dkimVerify(DkimParams memory params, bytes memory inputEmailFrom)
         public
@@ -46,7 +51,6 @@ abstract contract ModuleDkimAuth {
         );
         emailHash = LibDkimValidator.emailAddressHash(inputEmailFrom);
 
-        // 验证dkim签名
         bytes32 hash = sha256(params.emailHeader);
         bytes memory n = dkimKeys.getDKIMKey(abi.encodePacked(selector, sdid));
         require(n.length > 0, "zero");
