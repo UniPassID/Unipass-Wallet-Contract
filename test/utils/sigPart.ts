@@ -1,5 +1,5 @@
-import { BigNumber, utils, Wallet } from "ethers";
-import { arrayify, keccak256, solidityPack } from "ethers/lib/utils";
+import { BigNumber, Contract, utils, Wallet } from "ethers";
+import { arrayify, BytesLike, keccak256, solidityPack } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import {
   DkimParams,
@@ -13,6 +13,7 @@ import {
 export enum ActionType {
   UpdateKeysetHash = 0,
   UpdateTimeLock = 1,
+  UpdateImplementation = 2,
 }
 
 export enum SigType {
@@ -38,7 +39,7 @@ export enum SignerType {
 export interface Transaction {
   callType: CallType;
   gasLimit: BigNumber;
-  target: string;
+  target: BytesLike;
   value: BigNumber;
   data: string;
 }
@@ -155,6 +156,7 @@ export async function generateAccountLayerSignature(
   metaNonce: number,
   newDelay: number | undefined,
   newKeysetHash: string | undefined,
+  newImplementation: string | undefined,
   masterKey: Wallet,
   threshold: number,
   recoveryEmails: string[],
@@ -284,6 +286,47 @@ export async function generateAccountLayerSignature(
         [
           sig,
           newDelay,
+          generateSigMasterKeyWithRecoveryEmails(
+            masterKeySig,
+            threshold,
+            recoveryEmailWithDkim
+          ),
+        ]
+      );
+
+      break;
+    }
+    case ActionType.UpdateImplementation: {
+      const digestHash = keccak256(
+        solidityPack(
+          ["uint32", "address", "address"],
+          [metaNonce, contractAddr, newImplementation]
+        )
+      );
+
+      let recoveryEmailWithDkim: [string, DkimParams | null][] = [];
+      const masterKeySig = await signerSign(digestHash, masterKey);
+      let indexes = [...Array(threshold).keys()].map((v) => v + 1);
+      let index = 0;
+      for (const recoveryEmail of recoveryEmails) {
+        if (indexes.includes(index)) {
+          let email = await getSignEmailWithDkim(
+            digestHash,
+            recoveryEmail,
+            "test@unipass.me"
+          );
+          let { params, from } = await parseEmailParams(email);
+          recoveryEmailWithDkim.push([recoveryEmail, params]);
+        } else {
+          recoveryEmailWithDkim.push([recoveryEmail, null]);
+        }
+        index++;
+      }
+      sig = solidityPack(
+        ["bytes", "address", "bytes"],
+        [
+          sig,
+          newImplementation,
           generateSigMasterKeyWithRecoveryEmails(
             masterKeySig,
             threshold,
@@ -438,4 +481,117 @@ export async function generateTransactionSig(
     }
   }
   return sig;
+}
+
+export async function generateUpdateKeysetHashTx(
+  walletAddr: string,
+  newKeysetHash: string,
+  masterKey: Wallet,
+  threshold: number,
+  recoveryEmails: string[],
+  sigType: SigType
+) {
+  const data = await generateAccountLayerSignature(
+    walletAddr,
+    ActionType.UpdateKeysetHash,
+    1,
+    undefined,
+    newKeysetHash,
+    undefined,
+    masterKey,
+    threshold,
+    recoveryEmails,
+    sigType
+  );
+  let tx = {
+    callType: CallType.CallAccountLayer,
+    gasLimit: ethers.constants.Zero,
+    target: ethers.constants.AddressZero,
+    value: ethers.constants.Zero,
+    data,
+  };
+  return tx;
+}
+
+export async function generateTransferTx(
+  target: BytesLike,
+  gasLimit: BigNumber,
+  value: BigNumber
+) {
+  let tx = {
+    callType: CallType.Call,
+    gasLimit,
+    target,
+    value,
+    data: "0x",
+  };
+  return tx;
+}
+
+export async function executeUpdateKeysetHash(
+  txs: Transaction[],
+  chainId: number,
+  nonce: number,
+  masterKey: Wallet,
+  threshold: number,
+  recoveryEmails: string[],
+  moduleMain: Contract
+) {
+  const feeToken = ethers.constants.AddressZero;
+  const feeReceiver = ethers.constants.AddressZero;
+  const feeAmount = 0;
+
+  const signature = await generateTransactionSig(
+    chainId,
+    txs,
+    nonce,
+    feeToken,
+    feeAmount,
+    masterKey,
+    threshold,
+    recoveryEmails,
+    [...Array(threshold).keys()].map((v) => v + 1),
+    undefined,
+    undefined,
+    SigType.SigNone
+  );
+  const ret = await (
+    await moduleMain.execute(txs, nonce, feeToken, feeReceiver, 0, signature)
+  ).wait();
+  return ret;
+}
+
+export async function executeCall(
+  txs: Transaction[],
+  chainId: number,
+  nonce: number,
+  masterKey: Wallet,
+  threshold: number,
+  recoveryEmails: string[],
+  sessionKey: Wallet,
+  expired: number,
+  moduleMain: Contract
+) {
+  const feeToken = ethers.constants.AddressZero;
+  const feeReceiver = ethers.constants.AddressZero;
+  const feeAmount = 0;
+
+  const signature = await generateTransactionSig(
+    chainId,
+    txs,
+    nonce,
+    feeToken,
+    feeAmount,
+    masterKey,
+    threshold,
+    recoveryEmails,
+    [...Array(threshold).keys()].map((v) => v + 1),
+    sessionKey,
+    expired,
+    SigType.SigSessionKey
+  );
+  const ret = await (
+    await moduleMain.execute(txs, nonce, feeToken, feeReceiver, 0, signature)
+  ).wait();
+  return ret;
 }

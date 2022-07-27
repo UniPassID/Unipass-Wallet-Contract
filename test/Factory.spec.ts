@@ -32,9 +32,7 @@ describe("Factory", function () {
     );
   });
   it("Should deploy success", async function () {
-    const ret = await (
-      await factory.deploy(greet.address, salt, Wallet.createRandom().address)
-    ).wait();
+    const ret = await (await factory.deploy(greet.address, salt)).wait();
     expect(ret.status).to.equal(1);
     const code = ethers.utils.solidityPack(
       ["bytes", "uint256"],

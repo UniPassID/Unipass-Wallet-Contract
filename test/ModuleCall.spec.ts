@@ -1,5 +1,6 @@
 import { expect } from "chai";
 import { BigNumber, Contract, ContractFactory, Wallet } from "ethers";
+import { randomBytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import {
   generateRecoveryEmails,
@@ -10,8 +11,11 @@ import {
 import {
   ActionType,
   CallType,
+  executeCall,
   generateAccountLayerSignature,
   generateTransactionSig,
+  generateTransferTx,
+  generateUpdateKeysetHashTx,
   SigType,
 } from "./utils/sigPart";
 
@@ -26,15 +30,30 @@ describe("ModuleCall", function () {
   let threshold: number;
   let recoveryEmails: string[];
   let wallet: Wallet;
+  let chainId: number;
   this.beforeAll(async function () {
     const Factory = await ethers.getContractFactory("Factory");
     factory = await Factory.deploy();
-    TestModuleCall = await ethers.getContractFactory("TestModuleCall");
-    testModuleCall = await TestModuleCall.deploy(factory.address);
 
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     wallet = Wallet.createRandom();
     dkimKeys = await DkimKeys.deploy(wallet.address);
+
+    const ModuleMainUpgradable = await ethers.getContractFactory(
+      "ModuleMainUpgradable"
+    );
+    const moduleMainUpgradable = await ModuleMainUpgradable.deploy(
+      dkimKeys.address
+    );
+
+    TestModuleCall = await ethers.getContractFactory("TestModuleCall");
+    testModuleCall = await TestModuleCall.deploy(
+      factory.address,
+      moduleMainUpgradable.address,
+      dkimKeys.address
+    );
+
+    chainId = (await dkimKeys.provider.getNetwork()).chainId;
   });
   this.beforeEach(async function () {
     threshold = 4;
@@ -44,13 +63,12 @@ describe("ModuleCall", function () {
     keysetHash = getKeysetHash(masterKey.address, threshold, recoveryEmails);
 
     const ret = await (
-      await factory.deploy(testModuleCall.address, keysetHash, dkimKeys.address)
+      await factory.deploy(testModuleCall.address, keysetHash)
     ).wait();
     expect(ret.status).to.equal(1);
 
     const expectedAddress = getProxyAddress(
       testModuleCall.address,
-      dkimKeys.address,
       factory.address,
       keysetHash
     );
@@ -65,167 +83,86 @@ describe("ModuleCall", function () {
   });
   it("Test A Transfer Transaction", async function () {
     const to = Wallet.createRandom();
-    const value = BigNumber.from(10);
-    let tx = {
-      callType: CallType.Call,
-      gasLimit: optimalGasLimit,
-      target: to.address,
-      value,
-      data: "0x",
-    };
+    const value = ethers.utils.parseEther("10");
+    let tx = await generateTransferTx(to.address, optimalGasLimit, value);
     const nonce = 1;
-    const { chainId } = await proxyTestModuleCall.provider.getNetwork();
-    const feeToken = Wallet.createRandom().address;
-    const feeReceiver = Wallet.createRandom().address;
-    const feeAmount = 0;
+    const sessionKey = Wallet.createRandom();
 
-    const signature = generateTransactionSig(
-      chainId,
+    const ret = await executeCall(
       [tx],
+      chainId,
       nonce,
-      feeToken,
-      feeAmount,
       masterKey,
       threshold,
       recoveryEmails,
-      [...Array(threshold).keys()].map((v) => v + 1),
-      undefined,
-      undefined,
-      SigType.SigMasterKey
+      sessionKey,
+      Math.ceil(Date.now() / 1000) + 1000,
+      proxyTestModuleCall
     );
-    const ret = await (
-      await proxyTestModuleCall.execute(
-        [tx],
-        nonce,
-        feeToken,
-        feeReceiver,
-        0,
-        signature
-      )
-    ).wait();
     expect(ret.status).to.equal(1);
     expect(await proxyTestModuleCall.provider.getBalance(to.address)).equal(
       value
     );
   });
   it("Test A Account Layer Transaction", async function () {
-    const to = Wallet.createRandom();
     const newKeysetHash = Wallet.createRandom().privateKey;
-    const data = await generateAccountLayerSignature(
+    const tx = await generateUpdateKeysetHashTx(
       proxyTestModuleCall.address,
-      ActionType.UpdateKeysetHash,
-      1,
-      undefined,
       newKeysetHash,
       masterKey,
       threshold,
       recoveryEmails,
       SigType.SigMasterKey
     );
-    const value = BigNumber.from(0);
-    let tx = {
-      callType: CallType.CallAccountLayer,
-      gasLimit: optimalGasLimit,
-      target: to.address,
-      value,
-      data,
-    };
-    const nonce = 1;
-    const { chainId } = await proxyTestModuleCall.provider.getNetwork();
-    const feeToken = Wallet.createRandom().address;
-    const feeReceiver = Wallet.createRandom().address;
-    const feeAmount = 0;
 
-    const signature = generateTransactionSig(
-      chainId,
+    const nonce = 1;
+    const ret = await executeCall(
       [tx],
+      chainId,
       nonce,
-      feeToken,
-      feeAmount,
       masterKey,
       threshold,
       recoveryEmails,
-      [...Array(threshold).keys()].map((v) => v + 1),
-      undefined,
-      undefined,
-      SigType.SigNone
+      Wallet.createRandom(),
+      Math.ceil(Date.now() / 1000) + 300,
+      proxyTestModuleCall
     );
-    const ret = await (
-      await proxyTestModuleCall.execute(
-        [tx],
-        nonce,
-        feeToken,
-        feeReceiver,
-        0,
-        signature
-      )
-    ).wait();
     expect(ret.status).to.equal(1);
     expect(await proxyTestModuleCall.getKeysetHash()).to.equal(newKeysetHash);
   });
   it("Test Multiple Transactions", async function () {
     const to = Wallet.createRandom();
-    const newKeysetHash = Wallet.createRandom().privateKey;
-    let data = await generateAccountLayerSignature(
+    const value = ethers.utils.parseEther("10");
+    const newKeysetHash = `0x${Buffer.from(randomBytes(32)).toString("hex")}`;
+    const tx1 = await generateUpdateKeysetHashTx(
       proxyTestModuleCall.address,
-      ActionType.UpdateKeysetHash,
-      1,
-      undefined,
       newKeysetHash,
       masterKey,
       threshold,
       recoveryEmails,
       SigType.SigMasterKey
     );
-    let value = BigNumber.from(0);
-    let tx1 = {
-      callType: CallType.CallAccountLayer,
-      gasLimit: optimalGasLimit,
-      target: to.address,
-      value,
-      data,
-    };
-
-    data = "0x";
-    value = BigNumber.from(100);
-    let tx2 = {
-      callType: CallType.Call,
-      gasLimit: optimalGasLimit,
-      target: to.address,
-      value,
-      data,
-    };
+    const tx2 = await generateTransferTx(
+      to.address,
+      ethers.constants.Zero,
+      value
+    );
 
     const nonce = 1;
-    const { chainId } = await proxyTestModuleCall.provider.getNetwork();
-    const feeToken = Wallet.createRandom().address;
-    const feeReceiver = Wallet.createRandom().address;
-    const feeAmount = 0;
+    const sessionKey = Wallet.createRandom();
 
-    const signature = generateTransactionSig(
-      chainId,
+    const ret = await executeCall(
       [tx1, tx2],
+      chainId,
       nonce,
-      feeToken,
-      feeAmount,
       masterKey,
       threshold,
       recoveryEmails,
-      [...Array(threshold).keys()].map((v) => v + 1),
-      undefined,
-      undefined,
-      SigType.SigMasterKey
+      sessionKey,
+      Math.ceil(Date.now() / 1000) + 300,
+      proxyTestModuleCall
     );
-    const ret = await (
-      await proxyTestModuleCall.execute(
-        [tx1, tx2],
-        nonce,
-        feeToken,
-        feeReceiver,
-        0,
-        signature
-      )
-    ).wait();
+
     expect(ret.status).to.equal(1);
     expect(await proxyTestModuleCall.provider.getBalance(to.address)).equal(
       value

@@ -56,7 +56,6 @@ export function generateRecoveryEmails(length: number): string[] {
 
 export function getProxyAddress(
   moduleMainAddress: string,
-  dkimKeysAddress: string,
   factoryAddress: string,
   keysetHash: string
 ): string {
@@ -68,9 +67,11 @@ export function getProxyAddress(
     ]
   );
   const codeHash = keccak256(code);
-  const salt = keccak256(
-    solidityPack(["bytes32", "address"], [keysetHash, dkimKeysAddress])
+
+  const expectedAddress = getCreate2Address(
+    factoryAddress,
+    keysetHash,
+    codeHash
   );
-  const expectedAddress = getCreate2Address(factoryAddress, salt, codeHash);
   return expectedAddress;
 }
