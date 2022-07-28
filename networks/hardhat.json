@@ -1,0 +1,14 @@
+[
+  {
+    "contractName": "ModuleMain",
+    "address": "0xE2C31339212F5374f30BA71d8f2241C0Bede6A6c"
+  },
+  {
+    "contractName": "DkimKeys",
+    "address": "0x634cB2bc8007B574e48a9D3188B4C9f4DD733122"
+  },
+  {
+    "contractName": "ModuleGuest",
+    "address": "0x0c6dc617F634Ed5be817dD256626FF586a564521"
+  }
+]

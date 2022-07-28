@@ -13,7 +13,7 @@ abstract contract ModuleCall is ITransaction, ModuleAuthBase, IModuleHooks {
     using LibBytes for bytes;
     using SafeERC20 for IERC20;
 
-    event TxExecuted(bytes32);
+    event TxExecuted(bytes32 txHash);
 
     // NONCE_KEY = kecaak256("unipass-wallet:module-call:nonce");
     bytes32 private constant NONCE_KEY =

@@ -1,4 +1,4 @@
-import { getCreate2Address, keccak256, solidityPack } from "ethers/lib/utils";
+import { getCreate2Address, keccak256 } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import { pureEmailHash } from "./email";
 

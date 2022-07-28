@@ -24,7 +24,7 @@ contract ModuleGuest {
     error txFailed(Transaction, bytes32, bytes);
     error invalidCallType(CallType);
 
-    event TxExecuted(bytes32);
+    event TxExecuted(bytes32 txHash);
 
     uint256 private constant SIG_MASTER_KEY = 0;
     uint256 private constant SIG_MASTER_KEY_WITH_RECOVERY_EMAILS = 2;
