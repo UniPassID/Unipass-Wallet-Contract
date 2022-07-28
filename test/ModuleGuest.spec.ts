@@ -1,16 +1,17 @@
 import { expect } from "chai";
 import { randomInt } from "crypto";
-import { Contract, ContractFactory, Wallet } from "ethers";
+import { Contract, ContractFactory, Overrides, Wallet } from "ethers";
 import { randomBytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import { optimalGasLimit } from "./utils/common";
+import { Deployer } from "./utils/deployer";
 import { CallType, Transaction } from "./utils/sigPart";
 
 describe("ModuleGuest", function () {
   let moduleGuest: Contract;
   let ModuleGuest: ContractFactory;
 
-  let factory: Contract;
+  let deployer: Deployer;
   let dkimKeys: Contract;
   let wallet: Wallet;
   let txs: Transaction[];
@@ -22,15 +23,26 @@ describe("ModuleGuest", function () {
 
   let nonce: number;
   let sig: string;
+  let txParams: Overrides;
   this.beforeAll(async function () {
-    const Factory = await ethers.getContractFactory("Factory");
-    factory = await Factory.deploy();
+    const [signer] = await ethers.getSigners();
+    deployer = new Deployer(signer);
+    await deployer.deployEip2470();
+    txParams = {
+      gasLimit: 6000000,
+      gasPrice: (await signer.provider?.getGasPrice())?.mul(12).div(10),
+    };
     ModuleGuest = await ethers.getContractFactory("ModuleGuest");
-    moduleGuest = await ModuleGuest.deploy();
+    moduleGuest = await deployer.deployContract(ModuleGuest, 0, txParams);
 
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     wallet = Wallet.createRandom();
-    dkimKeys = await DkimKeys.deploy(wallet.address);
+    dkimKeys = await deployer.deployContract(
+      DkimKeys,
+      0,
+      txParams,
+      wallet.address
+    );
 
     const CallReceiverMock = await ethers.getContractFactory(
       "CallReceiverMock"

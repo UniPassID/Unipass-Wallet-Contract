@@ -1,13 +1,19 @@
 import { expect } from "chai";
-import { BigNumber, Contract, ContractFactory, Wallet } from "ethers";
+import {
+  BigNumber,
+  Contract,
+  ContractFactory,
+  Overrides,
+  Wallet,
+} from "ethers";
 import { randomBytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import {
   generateRecoveryEmails,
   getKeysetHash,
-  getProxyAddress,
   optimalGasLimit,
 } from "./utils/common";
+import { Deployer } from "./utils/deployer";
 import {
   ActionType,
   CallType,
@@ -21,7 +27,7 @@ describe("ModuleMain", function () {
   let moduleMain: Contract;
   let ModuleMain: ContractFactory;
   let proxyModuleMain: Contract;
-  let factory: Contract;
+  let deployer: Deployer;
   let dkimKeys: Contract;
   let masterKey: Wallet;
   let keysetHash: string;
@@ -34,24 +40,40 @@ describe("ModuleMain", function () {
   let value: number;
   let ERC721TokenId: string;
   let ERC1155TokenId: string;
+  let txParams: Overrides;
   this.beforeAll(async function () {
-    const Factory = await ethers.getContractFactory("Factory");
-    factory = await Factory.deploy();
+    const [signer] = await ethers.getSigners();
+    deployer = new Deployer(signer);
+    await deployer.deployEip2470();
+    txParams = {
+      gasLimit: 6000000,
+      gasPrice: (await signer.provider?.getGasPrice())?.mul(12).div(10),
+    };
 
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     dkimKeysAdmin = Wallet.createRandom();
-    dkimKeys = await DkimKeys.deploy(dkimKeysAdmin.address);
+    dkimKeys = await deployer.deployContract(
+      DkimKeys,
+      0,
+      txParams,
+      dkimKeysAdmin.address
+    );
 
     const ModuleMainUpgradable = await ethers.getContractFactory(
       "ModuleMainUpgradable"
     );
-    const moduleMainUpgradable = await ModuleMainUpgradable.deploy(
+    const moduleMainUpgradable = await deployer.deployContract(
+      ModuleMainUpgradable,
+      0,
+      txParams,
       dkimKeys.address
     );
-
     ModuleMain = await ethers.getContractFactory("ModuleMain");
-    moduleMain = await ModuleMain.deploy(
-      factory.address,
+    moduleMain = await deployer.deployContract(
+      ModuleMain,
+      0,
+      txParams,
+      deployer.singleFactoryContract.address,
       moduleMainUpgradable.address,
       dkimKeys.address
     );
@@ -73,17 +95,12 @@ describe("ModuleMain", function () {
     recoveryEmails = generateRecoveryEmails(10);
     keysetHash = getKeysetHash(masterKey.address, threshold, recoveryEmails);
 
-    let ret = await (
-      await factory.deploy(moduleMain.address, keysetHash)
-    ).wait();
-    expect(ret.status).to.equal(1);
-
-    const expectedAddress = getProxyAddress(
+    proxyModuleMain = await deployer.deployProxyContract(
+      moduleMain.interface,
       moduleMain.address,
-      factory.address,
-      keysetHash
+      keysetHash,
+      txParams
     );
-    proxyModuleMain = ModuleMain.attach(expectedAddress);
     const txRet = await (
       await ethers.getSigners()
     )[0].sendTransaction({
@@ -93,7 +110,7 @@ describe("ModuleMain", function () {
     expect((await txRet.wait()).status).to.equal(1);
 
     value = 100;
-    ret = await (
+    let ret = await (
       await testErc20Token.mint(proxyModuleMain.address, value)
     ).wait();
     expect(ret.status).to.equal(1);
@@ -137,9 +154,8 @@ describe("ModuleMain", function () {
       recoveryEmails = generateRecoveryEmails(10);
       keysetHash = getKeysetHash(masterKey.address, threshold, recoveryEmails);
 
-      userAddress = getProxyAddress(
+      userAddress = deployer.getProxyContractAddress(
         moduleMain.address,
-        factory.address,
         keysetHash
       );
 
@@ -148,10 +164,12 @@ describe("ModuleMain", function () {
     });
 
     it("User Registered", async () => {
-      const recipt = await (
-        await factory.deploy(moduleMain.address, keysetHash)
-      ).wait();
-      expect(recipt.status).to.equal(1);
+      await deployer.deployProxyContract(
+        moduleMain.interface,
+        moduleMain.address,
+        keysetHash,
+        txParams
+      );
       const code = await moduleMain.provider.getCode(userAddress);
       expect(code).to.not.equal("0x");
     });

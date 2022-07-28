@@ -1,5 +1,11 @@
 import { expect } from "chai";
-import { BigNumber, Contract, ContractFactory, Wallet } from "ethers";
+import {
+  BigNumber,
+  Contract,
+  ContractFactory,
+  Overrides,
+  Wallet,
+} from "ethers";
 import { randomBytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import {
@@ -8,6 +14,7 @@ import {
   getProxyAddress,
   optimalGasLimit,
 } from "./utils/common";
+import { Deployer } from "./utils/deployer";
 import {
   ActionType,
   CallType,
@@ -23,7 +30,7 @@ describe("ModuleCall", function () {
   let testModuleCall: Contract;
   let TestModuleCall: ContractFactory;
   let proxyTestModuleCall: Contract;
-  let factory: Contract;
+  let deployer: Deployer;
   let dkimKeys: Contract;
   let masterKey: Wallet;
   let keysetHash: string;
@@ -31,24 +38,41 @@ describe("ModuleCall", function () {
   let recoveryEmails: string[];
   let wallet: Wallet;
   let chainId: number;
+  let txParams: Overrides;
   this.beforeAll(async function () {
-    const Factory = await ethers.getContractFactory("Factory");
-    factory = await Factory.deploy();
+    const [signer] = await ethers.getSigners();
+    deployer = new Deployer(signer);
+    await deployer.deployEip2470();
+    txParams = {
+      gasLimit: 6000000,
+      gasPrice: (await signer.provider?.getGasPrice())?.mul(12).div(10),
+    };
 
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     wallet = Wallet.createRandom();
-    dkimKeys = await DkimKeys.deploy(wallet.address);
+    dkimKeys = await deployer.deployContract(
+      DkimKeys,
+      0,
+      txParams,
+      wallet.address
+    );
 
     const ModuleMainUpgradable = await ethers.getContractFactory(
       "ModuleMainUpgradable"
     );
-    const moduleMainUpgradable = await ModuleMainUpgradable.deploy(
+    const moduleMainUpgradable = await deployer.deployContract(
+      ModuleMainUpgradable,
+      0,
+      txParams,
       dkimKeys.address
     );
 
     TestModuleCall = await ethers.getContractFactory("TestModuleCall");
-    testModuleCall = await TestModuleCall.deploy(
-      factory.address,
+    testModuleCall = await deployer.deployContract(
+      TestModuleCall,
+      0,
+      txParams,
+      deployer.singleFactoryContract.address,
       moduleMainUpgradable.address,
       dkimKeys.address
     );
@@ -62,17 +86,12 @@ describe("ModuleCall", function () {
     recoveryEmails = generateRecoveryEmails(10);
     keysetHash = getKeysetHash(masterKey.address, threshold, recoveryEmails);
 
-    const ret = await (
-      await factory.deploy(testModuleCall.address, keysetHash)
-    ).wait();
-    expect(ret.status).to.equal(1);
-
-    const expectedAddress = getProxyAddress(
+    proxyTestModuleCall = await deployer.deployProxyContract(
+      TestModuleCall.interface,
       testModuleCall.address,
-      factory.address,
-      keysetHash
+      keysetHash,
+      txParams
     );
-    proxyTestModuleCall = TestModuleCall.attach(expectedAddress);
     const txRet = await (
       await ethers.getSigners()
     )[0].sendTransaction({

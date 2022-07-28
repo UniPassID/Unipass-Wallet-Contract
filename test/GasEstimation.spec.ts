@@ -1,6 +1,11 @@
-import { deploy } from "@openzeppelin/hardhat-upgrades/dist/utils";
 import { expect } from "chai";
-import { BigNumber, Contract, ContractFactory, Wallet } from "ethers";
+import {
+  BigNumber,
+  Contract,
+  ContractFactory,
+  Overrides,
+  Wallet,
+} from "ethers";
 import { BytesLike, randomBytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import {
@@ -9,12 +14,15 @@ import {
   getProxyAddress,
   optimalGasLimit,
 } from "./utils/common";
-import { emailHash } from "./utils/email";
+import { Deployer } from "./utils/deployer";
 import {
   ActionType,
   CallType,
+  executeCall,
   generateAccountLayerSignature,
   generateTransactionSig,
+  generateTransferTx,
+  generateUpdateKeysetHashTx,
   SigType,
 } from "./utils/sigPart";
 
@@ -27,47 +35,62 @@ function txBaseCost(data: BytesLike): number {
 }
 
 describe("GasEstimation", function () {
-  // let moduleMainGasEstimation: Contract;
-  // let ModuleMainGasEstimation: ContractFactory;
   let moduleMain: Contract;
   let ModuleMain: ContractFactory;
   let moduleGuest: Contract;
   let proxyModuleMain: Contract;
   let gasEstimation: Contract;
-  let factory: Contract;
+  let deployer: Deployer;
   let dkimKeys: Contract;
   let masterKey: Wallet;
   let keysetHash: string;
   let threshold: number;
   let recoveryEmails: string[];
   let dkimKeysAdmin: Wallet;
+  let txParams: Overrides;
   this.beforeAll(async function () {
-    const Factory = await ethers.getContractFactory("Factory");
-    factory = await Factory.deploy();
+    const [signer] = await ethers.getSigners();
+    deployer = new Deployer(signer);
+    await deployer.deployEip2470();
+    txParams = {
+      gasLimit: 6000000,
+      gasPrice: (await signer.provider?.getGasPrice())?.mul(12).div(10),
+    };
 
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     dkimKeysAdmin = Wallet.createRandom();
-    dkimKeys = await DkimKeys.deploy(dkimKeysAdmin.address);
+    dkimKeys = await deployer.deployContract(
+      DkimKeys,
+      0,
+      txParams,
+      dkimKeysAdmin.address
+    );
 
     const ModuleMainUpgradable = await ethers.getContractFactory(
       "ModuleMainUpgradable"
     );
-    const moduleMainUpgradable = await ModuleMainUpgradable.deploy(
+    const moduleMainUpgradable = await deployer.deployContract(
+      ModuleMainUpgradable,
+      0,
+      txParams,
       dkimKeys.address
     );
 
     ModuleMain = await ethers.getContractFactory("ModuleMain");
-    moduleMain = await ModuleMain.deploy(
-      factory.address,
+    moduleMain = await deployer.deployContract(
+      ModuleMain,
+      0,
+      txParams,
+      deployer.singleFactoryContract.address,
       moduleMainUpgradable.address,
       dkimKeys.address
     );
 
     const GasEstimation = await ethers.getContractFactory("GasEstimator");
-    gasEstimation = await GasEstimation.deploy();
+    gasEstimation = await deployer.deployContract(GasEstimation, 0, txParams);
 
     const ModuleGuest = await ethers.getContractFactory("ModuleGuest");
-    moduleGuest = await ModuleGuest.deploy();
+    moduleGuest = await deployer.deployContract(ModuleGuest, 0, txParams);
   });
   this.beforeEach(async function () {
     threshold = 4;
@@ -76,17 +99,13 @@ describe("GasEstimation", function () {
     recoveryEmails = generateRecoveryEmails(10);
     keysetHash = getKeysetHash(masterKey.address, threshold, recoveryEmails);
 
-    const ret = await (
-      await factory.deploy(moduleMain.address, keysetHash)
-    ).wait();
-    expect(ret.status).to.equal(1);
-
-    const expectedAddress = getProxyAddress(
+    proxyModuleMain = await deployer.deployProxyContract(
+      ModuleMain.interface,
       moduleMain.address,
-      factory.address,
-      keysetHash
+      keysetHash,
+      txParams
     );
-    proxyModuleMain = moduleMain.attach(expectedAddress);
+
     const txRet = await (
       await ethers.getSigners()
     )[0].sendTransaction({
@@ -97,17 +116,24 @@ describe("GasEstimation", function () {
   });
 
   it("Should estimate wallet deployement", async function () {
-    const deployData = factory.interface.encodeFunctionData("deploy", [
-      moduleMain.address,
-      randomBytes(32),
-    ]);
-    const gasUsed: number = (
-      await (await factory.deploy(moduleMain.address, randomBytes(32))).wait()
-    ).gasUsed.toNumber();
+    const deployData =
+      deployer.singleFactoryContract.interface.encodeFunctionData("deploy", [
+        Deployer.getInitCode(moduleMain.address),
+        randomBytes(32),
+      ]);
+
     const estimate = await gasEstimation.callStatic.estimate(
-      factory.address,
+      deployer.singleFactoryContract.address,
       deployData
     );
+    const gasUsed: number = (
+      await (
+        await deployer.singleFactoryContract.deploy(
+          Deployer.getInitCode(moduleMain.address),
+          randomBytes(32)
+        )
+      ).wait()
+    ).gasUsed.toNumber();
 
     expect(estimate.gas.toNumber() + txBaseCost(deployData)).to.approximately(
       gasUsed,
@@ -116,31 +142,21 @@ describe("GasEstimation", function () {
   });
   it("Should estimate account transaction", async function () {
     const newKeysetHash = ethers.utils.hexValue(randomBytes(32));
-    const data = await generateAccountLayerSignature(
+    const tx = await generateUpdateKeysetHashTx(
       proxyModuleMain.address,
-      ActionType.UpdateKeysetHash,
-      1,
-      undefined,
       newKeysetHash,
-      undefined,
       masterKey,
       threshold,
       recoveryEmails,
       SigType.SigMasterKey
     );
-    const value = ethers.constants.Zero;
-    let tx = {
-      callType: CallType.CallAccountLayer,
-      gasLimit: optimalGasLimit,
-      target: ethers.constants.AddressZero,
-      value,
-      data,
-    };
     const nonce = 1;
     const { chainId } = await proxyModuleMain.provider.getNetwork();
     const feeToken = ethers.constants.AddressZero;
     const feeReceiver = ethers.constants.AddressZero;
     const feeAmount = 0;
+    const sessionKey = Wallet.createRandom();
+    const expired = Math.ceil(Date.now() / 1000) + 300;
     const signature = await generateTransactionSig(
       chainId,
       [tx],
@@ -151,9 +167,9 @@ describe("GasEstimation", function () {
       threshold,
       recoveryEmails,
       [...Array(threshold).keys()].map((v) => v + 1),
-      undefined,
-      undefined,
-      SigType.SigNone
+      sessionKey,
+      expired,
+      SigType.SigSessionKey
     );
     const txData = proxyModuleMain.interface.encodeFunctionData("execute", [
       [tx],
@@ -167,16 +183,17 @@ describe("GasEstimation", function () {
       proxyModuleMain.address,
       txData
     );
-    const realTx = await (
-      await proxyModuleMain.execute(
-        [tx],
-        nonce,
-        feeToken,
-        feeReceiver,
-        0,
-        signature
-      )
-    ).wait();
+    const realTx = await executeCall(
+      [tx],
+      chainId,
+      nonce,
+      masterKey,
+      threshold,
+      recoveryEmails,
+      sessionKey,
+      expired,
+      proxyModuleMain
+    );
     expect(estimate.gas.toNumber() + txBaseCost(txData)).to.approximately(
       realTx.gasUsed.toNumber(),
       5000
@@ -185,50 +202,37 @@ describe("GasEstimation", function () {
   it("Should estimate deploy + Account Layer Transaction + Transfer", async function () {
     threshold = 5;
     keysetHash = getKeysetHash(masterKey.address, threshold, recoveryEmails);
-    const deployTxData = factory.interface.encodeFunctionData("deploy", [
-      moduleMain.address,
-      keysetHash,
-    ]);
+    const deployTxData =
+      deployer.singleFactoryContract.interface.encodeFunctionData("deploy", [
+        Deployer.getInitCode(moduleMain.address),
+        keysetHash,
+      ]);
     const deployTx = {
       callType: CallType.Call,
       gasLimit: optimalGasLimit,
-      target: factory.address,
+      target: deployer.singleFactoryContract.address,
       value: 0,
       data: deployTxData,
     };
-    const expectedAddress = getProxyAddress(
+    const expectedAddress = deployer.getProxyContractAddress(
       moduleMain.address,
-      factory.address,
       keysetHash
     );
     const newKeysetHash = ethers.utils.hexValue(randomBytes(32));
-    const data = await generateAccountLayerSignature(
+    const accountTx = await generateUpdateKeysetHashTx(
       expectedAddress,
-      ActionType.UpdateKeysetHash,
-      1,
-      undefined,
       newKeysetHash,
-      undefined,
       masterKey,
       threshold,
       recoveryEmails,
       SigType.SigMasterKey
     );
-    let accountTx = {
-      callType: CallType.CallAccountLayer,
-      gasLimit: optimalGasLimit,
-      target: expectedAddress,
-      value: ethers.constants.Zero,
-      data,
-    };
-    let value = 20;
-    let transferTx = {
-      callType: CallType.Call,
-      gasLimit: optimalGasLimit,
-      target: expectedAddress,
-      value: BigNumber.from(value),
-      data: "0x",
-    };
+    let value = ethers.utils.parseEther("0.1");
+    const transferTx = await generateTransferTx(
+      expectedAddress,
+      ethers.constants.Zero,
+      value
+    );
     const nonce = 1;
     const { chainId } = await moduleGuest.provider.getNetwork();
     const feeToken = ethers.constants.AddressZero;
