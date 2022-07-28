@@ -2,10 +2,7 @@ import { ethers } from "hardhat";
 import { Transaction } from "ethereumjs-tx";
 import { expect } from "chai";
 
-async function main() {
-  if (process.env.RANGERS_TEST_PRIVATE_KEY === undefined) {
-    throw new Error("Expected Private Key");
-  }
+export async function deployEip2470() {
   const wallet = (await ethers.getSigners())[0];
 
   console.log("Start Deploying EIP2470 Transaction");
@@ -13,9 +10,7 @@ async function main() {
   console.log(`Deploying Network: ${ethers.getDefaultProvider().network.name}`);
   console.log(`Deployer Address: ${wallet.address}`);
   console.log(
-    `Deployer Balance: ${
-      (await wallet.getBalance()).toNumber() / 1_000_000_000_000_000_000
-    }`
+    `Deployer Balance: ${ethers.utils.formatEther(await wallet.getBalance())}`
   );
 
   let provider;
@@ -65,7 +60,7 @@ async function main() {
   console.log("Deploy Success");
 }
 
-main().catch((error) => {
+deployEip2470().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });

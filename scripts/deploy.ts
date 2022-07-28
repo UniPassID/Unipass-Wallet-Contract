@@ -1,20 +1,14 @@
-import { UniversalDeployer } from "@0xsequence/deployer";
 import { BigNumber, ContractFactory, providers } from "ethers";
-import { network, run, tenderly } from "hardhat";
+import { ethers, network, run, tenderly } from "hardhat";
 import ora from "ora";
 import fs from "fs";
-import {
-  DkimKeys__factory,
-  Factory__factory,
-  ModuleMain__factory,
-} from "../typechain";
+import { Deployer } from "../test/utils/deployer";
 
 const DkimKeysAdmin: string = "0x4d802eb3F2027Ae2d22daa101612BAe022a849Dc";
 
 const prompt = ora();
 const provider = new providers.Web3Provider(network.provider.send);
 const signer = provider.getSigner();
-const universalDeployer = new UniversalDeployer(network.name, signer.provider);
 const txParams = {
   gasLimit: 6000000,
   gasPrice: BigNumber.from(10).pow(9).mul(16),
@@ -31,7 +25,7 @@ const buildNetworkJson = (
 
 const attempVerify = async <T extends ContractFactory>(
   name: string,
-  _: new () => T,
+  _: T,
   address: string,
   ...args: Parameters<T["deploy"]>
 ) => {
@@ -61,42 +55,46 @@ async function main() {
   prompt.info(`Local Deployer Balance: ${await signer.getBalance()}`);
 
   txParams.gasPrice = gasPrice;
-  const factory = await universalDeployer.deploy(
-    "Factory",
-    Factory__factory,
-    txParams
-  );
 
-  const moduleMain = await universalDeployer.deploy(
-    "ModuleMain",
-    ModuleMain__factory,
-    txParams,
-    0,
-    factory.address
-  );
+  const deployer = new Deployer(signer);
+  await deployer.deployEip2470();
 
-  const dkimKeys = await universalDeployer.deploy(
-    "DkimKeys",
-    DkimKeys__factory,
-    txParams,
+  const DkimKeys = await ethers.getContractFactory("DkimKeys");
+  const dkimKeys = await deployer.deployContract(
+    DkimKeys,
     0,
+    txParams,
     DkimKeysAdmin
   );
 
-  const moduleGuest = await universalDeployer.deploy(
-    "ModuleGuest",
-    ModuleMain__factory,
-    txParams,
-    0,
-    factory.address
+  const ModuleMainUpgradable = await ethers.getContractFactory(
+    "ModuleMainUpgradable"
   );
+  const moduleMainUpgradable = await deployer.deployContract(
+    ModuleMainUpgradable,
+    0,
+    txParams,
+    deployer.singleFactoryContract.address
+  );
+
+  const ModuleMain = await ethers.getContractFactory("ModuleMain");
+  const moduleMain = await deployer.deployContract(
+    ModuleMain,
+    0,
+    txParams,
+    deployer.singleFactoryContract.address,
+    moduleMainUpgradable.address,
+    dkimKeys.address
+  );
+
+  const ModuleGuest = await ethers.getContractFactory("ModuleGuest");
+  const moduleGuest = await deployer.deployContract(ModuleGuest, 0, txParams);
 
   prompt.start(`writing deployment information to ${network.name}.json`);
   fs.writeFileSync(
     `./networks/${network.name}.json`,
     JSON.stringify(
       buildNetworkJson(
-        { name: "Factory", address: factory.address },
         { name: "ModuleMain", address: moduleMain.address },
         {
           name: "DkimKeys",
@@ -112,25 +110,22 @@ async function main() {
 
   prompt.start(`verifying contracts`);
 
-  await attempVerify("Factory", Factory__factory, factory.address);
+  await attempVerify("DkimKeys", DkimKeys, dkimKeys.address, DkimKeysAdmin);
+  await attempVerify(
+    "ModuleMainUpgradable",
+    ModuleMainUpgradable,
+    moduleMainUpgradable.address,
+    deployer.singleFactoryContract.address
+  );
   await attempVerify(
     "ModuleMain",
-    ModuleMain__factory,
+    ModuleMain,
     moduleMain.address,
-    factory.address
+    deployer.singleFactoryContract.address,
+    moduleMainUpgradable.address,
+    dkimKeys.address
   );
-  await attempVerify(
-    "DkimKeys",
-    DkimKeys__factory,
-    dkimKeys.address,
-    DkimKeysAdmin
-  );
-  await attempVerify(
-    "ModuleGuest",
-    ModuleMain__factory,
-    moduleGuest.address,
-    factory.address
-  );
+  await attempVerify("ModuleGuest", ModuleGuest, moduleGuest.address);
 
   prompt.succeed();
 }

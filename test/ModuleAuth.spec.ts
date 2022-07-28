@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { Contract, Wallet } from "ethers";
+import { Contract, Overrides, Wallet } from "ethers";
 import { ethers } from "hardhat";
 import {
   ActionType,
@@ -11,12 +11,13 @@ import {
   getKeysetHash,
   getProxyAddress,
 } from "./utils/common";
+import { Deployer } from "./utils/deployer";
 
 describe("ModuleAuth", function () {
   let moduleAuthFixed: Contract;
   let moduleAuthUpgradable: Contract;
   let proxyModuleAuth: Contract;
-  let factory: Contract;
+  let deployer: Deployer;
   let masterKey: Wallet;
   let threshold: number;
   let recoveryEmails: string[];
@@ -24,18 +25,30 @@ describe("ModuleAuth", function () {
   let chainId: number;
   let nonce: number;
   let metaNonce: number;
+  let txParams: Overrides;
+  let dkimKeysAdmin: Wallet;
   this.beforeAll(async () => {
     chainId = (await ethers.provider.getNetwork()).chainId;
   });
   this.beforeEach(async function () {
-    let accounts = await ethers.getSigners();
+    const [signer] = await ethers.getSigners();
+    txParams = {
+      gasLimit: 6000000,
+      gasPrice: (await signer.getGasPrice()).mul(12).div(10),
+    };
     masterKey = Wallet.createRandom();
 
-    let Factory = await ethers.getContractFactory("Factory");
-    factory = await Factory.deploy();
+    deployer = new Deployer(signer);
+    await deployer.deployEip2470();
 
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
-    const dkimKeys = await DkimKeys.deploy(accounts[0].address);
+    dkimKeysAdmin = Wallet.createRandom();
+    const dkimKeys = await deployer.deployContract(
+      DkimKeys,
+      0,
+      txParams,
+      dkimKeysAdmin.address
+    );
 
     const ModuleAuthUpgradable = await ethers.getContractFactory(
       "ModuleAuthUpgradable"
@@ -43,8 +56,11 @@ describe("ModuleAuth", function () {
     moduleAuthUpgradable = await ModuleAuthUpgradable.deploy(dkimKeys.address);
 
     const ModuleAuthFixed = await ethers.getContractFactory("ModuleAuthFixed");
-    moduleAuthFixed = await ModuleAuthFixed.deploy(
-      factory.address,
+    moduleAuthFixed = await deployer.deployContract(
+      ModuleAuthFixed,
+      0,
+      txParams,
+      deployer.singleFactoryContract.address,
       moduleAuthUpgradable.address,
       dkimKeys.address
     );
@@ -53,21 +69,16 @@ describe("ModuleAuth", function () {
     recoveryEmails = generateRecoveryEmails(10);
     keysetHash = getKeysetHash(masterKey.address, threshold, recoveryEmails);
 
-    const ret = await (
-      await factory.deploy(moduleAuthFixed.address, keysetHash)
-    ).wait();
-    expect(ret.status).to.equal(1);
-
-    const expectedAddress = getProxyAddress(
+    proxyModuleAuth = await deployer.deployProxyContract(
+      moduleAuthFixed.interface,
       moduleAuthFixed.address,
-      factory.address,
-      keysetHash
+      keysetHash,
+      txParams
     );
-    proxyModuleAuth = ModuleAuthFixed.attach(expectedAddress);
     nonce = 1;
     metaNonce = 1;
   });
-  it("Test For ModuleAuthFixed Adn ModuleAuthUpgradable", async () => {
+  it("Test For ModuleAuthFixed And ModuleAuthUpgradable", async () => {
     for (const module of ["ModuleAuthFixed", "ModuleAuthUpgradable"]) {
       if (module === "ModuleAuthUpgradable") {
         const newMasterKey = Wallet.createRandom();
