@@ -1,4 +1,4 @@
-import { Contract, ContractFactory, Wallet } from "ethers";
+import { Contract, ContractFactory, Overrides, Wallet } from "ethers";
 import { hexlify, id, randomBytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import {
@@ -7,6 +7,7 @@ import {
   getProxyAddress,
   transferEth,
 } from "./utils/common";
+import { Deployer } from "./utils/deployer";
 import {
   executeCall,
   executeUpdateKeysetHash,
@@ -32,29 +33,47 @@ function report(test: string, values: number[]) {
 }
 
 describe("ModuleMain Benchmark", function () {
-  let factory: Contract;
+  let deployer: Deployer;
   let dkimKeys: Contract;
   let moduleMain: Contract;
   let ModuleMain: ContractFactory;
   let chainId: number;
+  let txParams: Overrides;
   this.beforeAll(async () => {
-    const Factory = await ethers.getContractFactory("Factory");
-    factory = await Factory.deploy();
+    const [signer] = await ethers.getSigners();
+    deployer = await new Deployer(signer).init();
+    txParams = {
+      gasLimit: 6000000,
+      gasPrice: (await signer.getGasPrice()).mul(12).div(10),
+    };
+
+    const instance = 0;
 
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     const dkimKeysAdmin = Wallet.createRandom();
-    dkimKeys = await DkimKeys.deploy(dkimKeysAdmin.address);
+    dkimKeys = await deployer.deployContract(
+      DkimKeys,
+      instance,
+      txParams,
+      dkimKeysAdmin.address
+    );
 
     const ModuleMainUpgradable = await ethers.getContractFactory(
       "ModuleMainUpgradable"
     );
-    const moduleMainUpgradable = await ModuleMainUpgradable.deploy(
+    const moduleMainUpgradable = await deployer.deployContract(
+      ModuleMainUpgradable,
+      instance,
+      txParams,
       dkimKeys.address
     );
 
     ModuleMain = await ethers.getContractFactory("ModuleMain");
-    moduleMain = await ModuleMain.deploy(
-      factory.address,
+    moduleMain = await deployer.deployContract(
+      ModuleMain,
+      instance,
+      txParams,
+      deployer.singleFactoryContract.address,
       moduleMainUpgradable.address,
       dkimKeys.address
     );
@@ -71,7 +90,12 @@ describe("ModuleMain Benchmark", function () {
         for (let i = 0; i < runs; i++) {
           const salt = ethers.utils.hexlify(randomBytes(32));
           const ret = await (
-            await factory.deploy(moduleMain.address, salt)
+            await deployer.deployProxyContract(
+              moduleMain.interface,
+              moduleMain.address,
+              salt,
+              txParams
+            )
           ).wait();
           results.push(ret.gasUsed);
         }
@@ -96,9 +120,11 @@ describe("ModuleMain Benchmark", function () {
               threshold,
               recoveryEmails
             );
-            await (await factory.deploy(moduleMain.address, keysetHash)).wait();
-            const wallet = ModuleMain.attach(
-              getProxyAddress(moduleMain.address, factory.address, keysetHash)
+            const wallet = await deployer.deployProxyContract(
+              moduleMain.interface,
+              moduleMain.address,
+              keysetHash,
+              txParams
             );
 
             const transaction = await generateUpdateKeysetHashTx(
@@ -137,9 +163,11 @@ describe("ModuleMain Benchmark", function () {
             threshold,
             recoveryEmails
           );
-          await (await factory.deploy(moduleMain.address, keysetHash)).wait();
-          const wallet = ModuleMain.attach(
-            getProxyAddress(moduleMain.address, factory.address, keysetHash)
+          const wallet = await deployer.deployProxyContract(
+            moduleMain.interface,
+            moduleMain.address,
+            keysetHash,
+            txParams
           );
           await transferEth(wallet.address, 1);
 

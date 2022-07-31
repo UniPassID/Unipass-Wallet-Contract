@@ -62,6 +62,11 @@ export class Deployer {
     this.provider = this.signer.provider;
   }
 
+  public async init(): Promise<Deployer> {
+    await this.deployEip2470();
+    return this;
+  }
+
   public async deployEip2470() {
     let ret;
     if (await this.isDeployed(this.singleFactoryContract.address)) {
