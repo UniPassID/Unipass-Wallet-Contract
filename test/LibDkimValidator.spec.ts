@@ -57,18 +57,20 @@ describe("LibDkimValidator", function () {
     });
     expect(ret).to.not.null;
   });
-  it("Validate All Emails", async function () {
-    emails.forEach(async ({ params, from }, _index, _array) => {
-      const ret = await emailDkimValidator.parseHeader(params);
-      expect(ret.emailfrom).to.equal(ethers.utils.hexValue(from));
-      expect(ret.sigHashHex.startsWith("0x")).true;
-      expect(ret.sigHashHex.length).to.equal(134);
-      expect(ret.sdid.startsWith("0x")).true;
-      expect(ret.sdid.length).gt(2);
-      expect(ret.selector.startsWith("0x")).true;
-      expect(ret.selector.length).gt(2);
+  if (process.env.TEST_ALL_EMAILS) {
+    it.only("Validate All Emails", async function () {
+      emails.forEach(async ({ params, from }, _index, _array) => {
+        const ret = await emailDkimValidator.parseHeader(params);
+        expect(ret.emailfrom).to.equal(ethers.utils.hexValue(from));
+        expect(ret.sigHashHex.startsWith("0x")).true;
+        expect(ret.sigHashHex.length).to.equal(134);
+        expect(ret.sdid.startsWith("0x")).true;
+        expect(ret.sdid.length).gt(2);
+        expect(ret.selector.startsWith("0x")).true;
+        expect(ret.selector.length).gt(2);
+      });
     });
-  });
+  }
   it("Validate Utf8 Subject", async function () {
     const ret = await emailDkimValidator.parseHeader(email1275.params);
     expect(ret.sigHashHex).to.equal(

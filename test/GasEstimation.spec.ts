@@ -50,8 +50,8 @@ describe("GasEstimation", function () {
   let txParams: Overrides;
   this.beforeAll(async function () {
     const [signer] = await ethers.getSigners();
-    deployer = new Deployer(signer);
-    await deployer.deployEip2470();
+    deployer = await new Deployer(signer).init();
+
     txParams = {
       gasLimit: 6000000,
       gasPrice: (await signer.provider?.getGasPrice())?.mul(12).div(10),
@@ -294,7 +294,7 @@ describe("GasEstimation", function () {
       estimate.gas.toNumber() + txBaseCost(moduleGuestTxData)
     ).to.approximately(realTx.gasUsed.toNumber(), 5000);
     proxyModuleMain = ModuleMain.attach(expectedAddress);
-    const ret = await proxyModuleMain.getKeysetHash();
+    const ret = await proxyModuleMain.lockedKeysetHash();
     expect(ret).to.equal(newKeysetHash);
     expect(await proxyModuleMain.provider.getBalance(expectedAddress)).to.equal(
       value

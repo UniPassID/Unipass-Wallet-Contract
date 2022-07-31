@@ -12,8 +12,10 @@ import {
 
 export enum ActionType {
   UpdateKeysetHash = 0,
-  UpdateTimeLock = 1,
-  UpdateImplementation = 2,
+  UnlockKeysetHash = 1,
+  CancelLockKeysetHash = 2,
+  UpdateTimeLockDuring = 3,
+  UpdateImplementation = 4,
 }
 
 export enum SigType {
@@ -171,125 +173,80 @@ export async function generateAccountLayerSignature(
       sig = solidityPack(["bytes", "bytes32"], [sig, newKeysetHash]);
       const digestHash = keccak256(
         solidityPack(
-          ["uint32", "address", "bytes32"],
-          [metaNonce, contractAddr, newKeysetHash]
+          ["uint32", "address", "uint8", "bytes32"],
+          [metaNonce, contractAddr, actionType, newKeysetHash]
         )
       );
-      sig = solidityPack(["bytes", "uint8"], [sig, sigType]);
-      switch (sigType) {
-        case SigType.SigMasterKey: {
-          const masterKeySig = await signerSign(digestHash, masterKey);
-          sig = solidityPack(
-            ["bytes", "bytes"],
-            [sig, generateSigMasterKey(masterKeySig, threshold, recoveryEmails)]
-          );
-          break;
-        }
-        case SigType.SigRecoveryEmail: {
-          let recoveryEmailWithDkim: [string, DkimParams | null][] = [];
-          let indexes = [...Array(threshold).keys()].map((v) => v + 1);
-          let index = 0;
-          for (const recoveryEmail of recoveryEmails) {
-            if (indexes.includes(index) === true) {
-              let email = await getSignEmailWithDkim(
-                digestHash,
-                recoveryEmail,
-                "test@unipass.id.com"
-              );
-              let { params, from } = await parseEmailParams(email);
-              recoveryEmailWithDkim.push([recoveryEmail, params]);
-            } else {
-              recoveryEmailWithDkim.push([recoveryEmail, null]);
-            }
-            index++;
-          }
-          sig = solidityPack(
-            ["bytes", "bytes"],
-            [
-              sig,
-              generateSigRecoveryEmails(
-                masterKey.address,
-                threshold,
-                recoveryEmailWithDkim
-              ),
-            ]
-          );
-          break;
-        }
-        case SigType.SigMasterKeyWithRecoveryEmail: {
-          let recoveryEmailWithDkim: [string, DkimParams | null][] = [];
-          const masterKeySig = await signerSign(digestHash, masterKey);
-          let indexes = [...Array(threshold).keys()].map((v) => v + 1);
-          let index = 0;
-          for (const recoveryEmail of recoveryEmails) {
-            if (indexes.includes(index) === true) {
-              let email = await getSignEmailWithDkim(
-                digestHash,
-                recoveryEmail,
-                "test@unipass.me"
-              );
-              let { params, from } = await parseEmailParams(email);
-              recoveryEmailWithDkim.push([recoveryEmail, params]);
-            } else {
-              recoveryEmailWithDkim.push([recoveryEmail, null]);
-            }
-            index++;
-          }
-          sig = solidityPack(
-            ["bytes", "bytes"],
-            [
-              sig,
-              generateSigMasterKeyWithRecoveryEmails(
-                masterKeySig,
-                threshold,
-                recoveryEmailWithDkim
-              ),
-            ]
-          );
-          break;
-        }
-
-        default: {
-          throw new Error(`invalid sigType: ${sigType}`);
-        }
+      if (sigType === undefined) {
+        throw new Error("Expected sigType");
       }
+      sig = solidityPack(
+        ["bytes", "bytes"],
+        [
+          sig,
+          await generateSignature(
+            sigType,
+            digestHash,
+            masterKey,
+            threshold,
+            recoveryEmails
+          ),
+        ]
+      );
+
       break;
     }
-    case ActionType.UpdateTimeLock: {
+    case ActionType.UnlockKeysetHash: {
+      break;
+    }
+    case ActionType.CancelLockKeysetHash: {
+      if (sigType === undefined) {
+        throw new Error("expected SigType");
+      }
       const digestHash = keccak256(
         solidityPack(
-          ["uint32", "address", "uint32"],
-          [metaNonce, contractAddr, newDelay]
+          ["uint32", "address", "uint8"],
+          [metaNonce, contractAddr, actionType]
         )
       );
-
-      let recoveryEmailWithDkim: [string, DkimParams | null][] = [];
-      const masterKeySig = await signerSign(digestHash, masterKey);
-      let indexes = [...Array(threshold).keys()].map((v) => v + 1);
-      let index = 0;
-      for (const recoveryEmail of recoveryEmails) {
-        if (indexes.includes(index)) {
-          let email = await getSignEmailWithDkim(
+      sig = solidityPack(
+        ["bytes", "bytes"],
+        [
+          sig,
+          await generateSignature(
+            sigType,
             digestHash,
-            recoveryEmail,
-            "test@unipass.me"
-          );
-          let { params, from } = await parseEmailParams(email);
-          recoveryEmailWithDkim.push([recoveryEmail, params]);
-        } else {
-          recoveryEmailWithDkim.push([recoveryEmail, null]);
-        }
-        index++;
+            masterKey,
+            threshold,
+            recoveryEmails
+          ),
+        ]
+      );
+
+      break;
+    }
+    case ActionType.UpdateTimeLockDuring: {
+      const digestHash = keccak256(
+        solidityPack(
+          ["uint32", "address", "uint8", "uint32"],
+          [metaNonce, contractAddr, actionType, newDelay]
+        )
+      );
+      if (sigType === undefined) {
+        throw new Error("Expected sigType");
       }
+
       sig = solidityPack(
         ["bytes", "uint32", "bytes"],
         [
           sig,
           newDelay,
-          generateSigMasterKeyWithRecoveryEmails(
-            masterKeySig,
+          await generateSignature(
+            sigType,
+            digestHash,
+            masterKey,
             threshold,
-            recoveryEmailWithDkim
+            recoveryEmails
           ),
         ]
       );
@@ -299,8 +256,8 @@ export async function generateAccountLayerSignature(
     case ActionType.UpdateImplementation: {
       const digestHash = keccak256(
         solidityPack(
-          ["uint32", "address", "address"],
-          [metaNonce, contractAddr, newImplementation]
+          ["uint32", "address", "uint8", "address"],
+          [metaNonce, contractAddr, actionType, newImplementation]
         )
       );
 
@@ -594,4 +551,95 @@ export async function executeCall(
     await moduleMain.execute(txs, nonce, feeToken, feeReceiver, 0, signature)
   ).wait();
   return ret;
+}
+
+export async function generateSignature(
+  sigType: SigType,
+  digestHash: string,
+  masterKey: Wallet,
+  threshold: number,
+  recoveryEmails: string[]
+): Promise<string> {
+  let sig: string = solidityPack(["uint8"], [sigType]);
+  switch (sigType) {
+    case SigType.SigMasterKey: {
+      const masterKeySig = await signerSign(digestHash, masterKey);
+      sig = solidityPack(
+        ["bytes", "bytes"],
+        [sig, generateSigMasterKey(masterKeySig, threshold, recoveryEmails)]
+      );
+      break;
+    }
+    case SigType.SigRecoveryEmail: {
+      let recoveryEmailWithDkim: [string, DkimParams | null][] = [];
+      let indexes = [...Array(threshold).keys()].map((v) => v + 1);
+      let index = 0;
+      for (const recoveryEmail of recoveryEmails) {
+        if (indexes.includes(index) === true) {
+          let email = await getSignEmailWithDkim(
+            digestHash,
+            recoveryEmail,
+            "test@unipass.id.com"
+          );
+          let { params, from } = await parseEmailParams(email);
+          recoveryEmailWithDkim.push([recoveryEmail, params]);
+        } else {
+          recoveryEmailWithDkim.push([recoveryEmail, null]);
+        }
+        index++;
+      }
+      sig = solidityPack(
+        ["bytes", "bytes"],
+        [
+          sig,
+          generateSigRecoveryEmails(
+            masterKey.address,
+            threshold,
+            recoveryEmailWithDkim
+          ),
+        ]
+      );
+      break;
+    }
+    case SigType.SigMasterKeyWithRecoveryEmail: {
+      let recoveryEmailWithDkim: [string, DkimParams | null][] = [];
+      const masterKeySig = await signerSign(digestHash, masterKey);
+      let indexes = [...Array(threshold).keys()].map((v) => v + 1);
+      let index = 0;
+      for (const recoveryEmail of recoveryEmails) {
+        if (indexes.includes(index) === true) {
+          let email = await getSignEmailWithDkim(
+            digestHash,
+            recoveryEmail,
+            "test@unipass.me"
+          );
+          let { params, from } = await parseEmailParams(email);
+          recoveryEmailWithDkim.push([recoveryEmail, params]);
+        } else {
+          recoveryEmailWithDkim.push([recoveryEmail, null]);
+        }
+        index++;
+      }
+      sig = solidityPack(
+        ["bytes", "bytes"],
+        [
+          sig,
+          generateSigMasterKeyWithRecoveryEmails(
+            masterKeySig,
+            threshold,
+            recoveryEmailWithDkim
+          ),
+        ]
+      );
+      break;
+    }
+    case SigType.SigNone: {
+      break;
+    }
+
+    default: {
+      throw new Error(`invalid sigType: ${sigType}`);
+    }
+  }
+  return sig;
 }

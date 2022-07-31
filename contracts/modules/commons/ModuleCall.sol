@@ -126,7 +126,7 @@ abstract contract ModuleCall is ITransaction, ModuleAuthBase, IModuleHooks {
                         : transaction.gasLimit
                 }(transaction.data);
             } else if (transaction.callType == CallType.CallAccountLayer) {
-                executeAccountTx(transaction.data);
+                _executeAccountTx(transaction.data, SigType(_sigType));
                 success = true;
             } else if (transaction.callType == CallType.CallHooks) {
                 require(

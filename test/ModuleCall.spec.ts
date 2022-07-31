@@ -41,8 +41,8 @@ describe("ModuleCall", function () {
   let txParams: Overrides;
   this.beforeAll(async function () {
     const [signer] = await ethers.getSigners();
-    deployer = new Deployer(signer);
-    await deployer.deployEip2470();
+    deployer = await new Deployer(signer).init();
+
     txParams = {
       gasLimit: 6000000,
       gasPrice: (await signer.provider?.getGasPrice())?.mul(12).div(10),
@@ -147,7 +147,9 @@ describe("ModuleCall", function () {
       proxyTestModuleCall
     );
     expect(ret.status).to.equal(1);
-    expect(await proxyTestModuleCall.getKeysetHash()).to.equal(newKeysetHash);
+    expect(await proxyTestModuleCall.lockedKeysetHash()).to.equal(
+      newKeysetHash
+    );
   });
   it("Test Multiple Transactions", async function () {
     const to = Wallet.createRandom();
@@ -186,6 +188,8 @@ describe("ModuleCall", function () {
     expect(await proxyTestModuleCall.provider.getBalance(to.address)).equal(
       value
     );
-    expect(await proxyTestModuleCall.getKeysetHash()).to.equal(newKeysetHash);
+    expect(await proxyTestModuleCall.lockedKeysetHash()).to.equal(
+      newKeysetHash
+    );
   });
 });

@@ -56,8 +56,7 @@ async function main() {
 
   txParams.gasPrice = gasPrice;
 
-  const deployer = new Deployer(signer);
-  await deployer.deployEip2470();
+  const deployer = await new Deployer(signer).init();
 
   const DkimKeys = await ethers.getContractFactory("DkimKeys");
   const dkimKeys = await deployer.deployContract(
