@@ -6,12 +6,9 @@ import {
   generateAccountLayerSignature,
   SigType,
 } from "./utils/sigPart";
-import {
-  generateRecoveryEmails,
-  getKeysetHash,
-  getProxyAddress,
-} from "./utils/common";
+import { generateRecoveryEmails, getKeysetHash } from "./utils/common";
 import { Deployer } from "./utils/deployer";
+import { hexlify, randomBytes } from "ethers/lib/utils";
 
 describe("ModuleAuth", function () {
   let moduleAuthFixed: Contract;
@@ -22,14 +19,10 @@ describe("ModuleAuth", function () {
   let threshold: number;
   let recoveryEmails: string[];
   let keysetHash: string;
-  let chainId: number;
-  let nonce: number;
   let metaNonce: number;
   let txParams: Overrides;
   let dkimKeysAdmin: Wallet;
-  this.beforeAll(async () => {
-    chainId = (await ethers.provider.getNetwork()).chainId;
-  });
+
   this.beforeEach(async function () {
     const [signer] = await ethers.getSigners();
     txParams = {
@@ -38,8 +31,7 @@ describe("ModuleAuth", function () {
     };
     masterKey = Wallet.createRandom();
 
-    deployer = new Deployer(signer);
-    await deployer.deployEip2470();
+    deployer = await new Deployer(signer).init();
 
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     dkimKeysAdmin = Wallet.createRandom();
@@ -75,41 +67,44 @@ describe("ModuleAuth", function () {
       keysetHash,
       txParams
     );
-    nonce = 1;
     metaNonce = 1;
   });
-  it("Test For ModuleAuthFixed And ModuleAuthUpgradable", async () => {
-    for (const module of ["ModuleAuthFixed", "ModuleAuthUpgradable"]) {
-      if (module === "ModuleAuthUpgradable") {
-        const newMasterKey = Wallet.createRandom();
-        const newRecoveryEmails = generateRecoveryEmails(10);
-        const newKeysetHash = getKeysetHash(
-          newMasterKey.address,
-          threshold,
-          newRecoveryEmails
-        );
-        const sig = await generateAccountLayerSignature(
-          proxyModuleAuth.address,
-          ActionType.UpdateKeysetHash,
-          metaNonce,
-          undefined,
-          newKeysetHash,
-          undefined,
-          masterKey,
-          threshold,
-          recoveryEmails,
-          SigType.SigMasterKeyWithRecoveryEmail
-        );
-        const ret = await (await proxyModuleAuth.executeAccountTx(sig)).wait();
-        expect(ret.status).to.equals(1);
-        nonce++;
-        metaNonce++;
-        masterKey = newMasterKey;
-        recoveryEmails = newRecoveryEmails;
-        keysetHash = newKeysetHash;
-      }
+  describe("Test For ModuleAuthFixed And ModuleAuthUpgradable", () => {
+    ["ModuleAuthFixed", "ModuleAuthUpgradable"].forEach(async (module) => {
+      const init = async () => {
+        if (module === "ModuleAuthUpgradable") {
+          const newMasterKey = Wallet.createRandom();
+          const newRecoveryEmails = generateRecoveryEmails(10);
+          const newKeysetHash = getKeysetHash(
+            newMasterKey.address,
+            threshold,
+            newRecoveryEmails
+          );
+          const sig = await generateAccountLayerSignature(
+            proxyModuleAuth.address,
+            ActionType.UpdateKeysetHash,
+            metaNonce,
+            undefined,
+            newKeysetHash,
+            undefined,
+            masterKey,
+            threshold,
+            recoveryEmails,
+            SigType.SigMasterKeyWithRecoveryEmail
+          );
+          const ret = await (
+            await proxyModuleAuth.executeAccountTx(sig)
+          ).wait();
+          expect(ret.status).to.equals(1);
+          metaNonce++;
+          masterKey = newMasterKey;
+          recoveryEmails = newRecoveryEmails;
+          keysetHash = newKeysetHash;
+        }
+      };
 
       it(`Update KeysetHash By Single Master Key For ${module}`, async function () {
+        await init();
         const hash = Wallet.createRandom().privateKey;
         const sig = await generateAccountLayerSignature(
           proxyModuleAuth.address,
@@ -125,12 +120,12 @@ describe("ModuleAuth", function () {
         );
         const ret = await (await proxyModuleAuth.executeAccountTx(sig)).wait();
         expect(ret.status).to.equal(1);
-        expect(await proxyModuleAuth.isPending()).to.false;
-        expect(await proxyModuleAuth.getKeysetHash()).to.equal(hash);
+        expect(await proxyModuleAuth.isLocked()).to.true;
+        expect(await proxyModuleAuth.lockedKeysetHash()).to.equal(hash);
         metaNonce++;
-        nonce++;
       });
       it(`Update KeysetHash By Recovery Email For ${module}`, async function () {
+        await init();
         const hash = Wallet.createRandom().privateKey;
         const sig = await generateAccountLayerSignature(
           proxyModuleAuth.address,
@@ -146,12 +141,12 @@ describe("ModuleAuth", function () {
         );
         const ret = await (await proxyModuleAuth.executeAccountTx(sig)).wait();
         expect(ret.status).to.equal(1);
-        expect(await proxyModuleAuth.isPending()).to.false;
-        expect(await proxyModuleAuth.getKeysetHash()).to.equal(hash);
-        nonce++;
+        expect(await proxyModuleAuth.isLocked()).to.true;
+        expect(await proxyModuleAuth.lockedKeysetHash()).to.equal(hash);
         metaNonce++;
       });
       it(`Update KeysetHash By Master Key And Recovery Email For ${module}`, async function () {
+        await init();
         const hash = Wallet.createRandom().privateKey;
         const sig = await generateAccountLayerSignature(
           proxyModuleAuth.address,
@@ -167,17 +162,17 @@ describe("ModuleAuth", function () {
         );
         const ret = await (await proxyModuleAuth.executeAccountTx(sig)).wait();
         expect(ret.status).to.equal(1);
-        expect(await proxyModuleAuth.isPending()).to.false;
+        expect(await proxyModuleAuth.isLocked()).to.false;
         expect(await proxyModuleAuth.getKeysetHash()).to.equal(hash);
         metaNonce++;
-        nonce++;
       });
-      it(`Update delays For ${module}`, async function () {
-        const newDelay = 2;
-
-        const sig = await generateAccountLayerSignature(
+      it(`UnLock KeysetHash TimeLock For ${module}`, async function () {
+        await init();
+        // Update Delay To 3
+        const newDelay = 3;
+        let sig = await generateAccountLayerSignature(
           proxyModuleAuth.address,
-          ActionType.UpdateTimeLock,
+          ActionType.UpdateTimeLockDuring,
           metaNonce,
           newDelay,
           undefined,
@@ -185,17 +180,127 @@ describe("ModuleAuth", function () {
           masterKey,
           threshold,
           recoveryEmails,
-          undefined
+          SigType.SigMasterKey
+        );
+        let ret = await (await proxyModuleAuth.executeAccountTx(sig)).wait();
+        expect(ret.status).to.equal(1);
+        expect(await proxyModuleAuth.isLocked()).to.false;
+        expect(await proxyModuleAuth.getLockDuring()).to.equal(newDelay);
+        metaNonce++;
+
+        const newKeysetHash = hexlify(randomBytes(32));
+        sig = await generateAccountLayerSignature(
+          proxyModuleAuth.address,
+          ActionType.UpdateKeysetHash,
+          metaNonce,
+          undefined,
+          newKeysetHash,
+          undefined,
+          masterKey,
+          threshold,
+          recoveryEmails,
+          SigType.SigRecoveryEmail
+        );
+        ret = await (await proxyModuleAuth.executeAccountTx(sig)).wait();
+        expect(ret.status).to.equal(1);
+        expect(await proxyModuleAuth.isLocked()).to.true;
+        expect(await proxyModuleAuth.lockedKeysetHash()).to.equal(
+          newKeysetHash
+        );
+        expect(await proxyModuleAuth.getKeysetHash()).not.to.equal(
+          newKeysetHash
+        );
+        metaNonce++;
+
+        await new Promise((resolve) =>
+          setTimeout(resolve, newDelay * 1000 + 1000)
+        );
+        sig = await generateAccountLayerSignature(
+          proxyModuleAuth.address,
+          ActionType.UnlockKeysetHash,
+          metaNonce,
+          undefined,
+          newKeysetHash,
+          undefined,
+          masterKey,
+          threshold,
+          recoveryEmails,
+          SigType.SigRecoveryEmail
+        );
+        ret = await (await proxyModuleAuth.executeAccountTx(sig)).wait();
+        expect(ret.status).to.equal(1);
+        expect(await proxyModuleAuth.getKeysetHash()).to.equals(newKeysetHash);
+        metaNonce++;
+      });
+
+      it(`Cancel KeysetHash TimeLock For ${module}`, async function () {
+        await init();
+        const newKeysetHash = hexlify(randomBytes(32));
+        let sig = await generateAccountLayerSignature(
+          proxyModuleAuth.address,
+          ActionType.UpdateKeysetHash,
+          metaNonce,
+          undefined,
+          newKeysetHash,
+          undefined,
+          masterKey,
+          threshold,
+          recoveryEmails,
+          SigType.SigRecoveryEmail
+        );
+        let ret = await (await proxyModuleAuth.executeAccountTx(sig)).wait();
+        expect(ret.status).to.equal(1);
+        expect(await proxyModuleAuth.isLocked()).to.true;
+        expect(await proxyModuleAuth.lockedKeysetHash()).to.equal(
+          newKeysetHash
+        );
+        expect(await proxyModuleAuth.getKeysetHash()).not.to.equal(
+          newKeysetHash
+        );
+        metaNonce++;
+
+        sig = await generateAccountLayerSignature(
+          proxyModuleAuth.address,
+          ActionType.CancelLockKeysetHash,
+          metaNonce,
+          undefined,
+          undefined,
+          undefined,
+          masterKey,
+          threshold,
+          recoveryEmails,
+          SigType.SigMasterKey
+        );
+        ret = await (await proxyModuleAuth.executeAccountTx(sig)).wait();
+        expect(ret.status).to.equal(1);
+        expect(await proxyModuleAuth.isLocked()).to.false;
+        expect(await proxyModuleAuth.getMetaNonce()).to.equals(metaNonce);
+        metaNonce++;
+      });
+      it(`Update TimeLock LockDuring For ${module}`, async function () {
+        await init();
+        const newDelay = 2;
+
+        const sig = await generateAccountLayerSignature(
+          proxyModuleAuth.address,
+          ActionType.UpdateTimeLockDuring,
+          metaNonce,
+          newDelay,
+          undefined,
+          undefined,
+          masterKey,
+          threshold,
+          recoveryEmails,
+          SigType.SigMasterKey
         );
         const ret = await (await proxyModuleAuth.executeAccountTx(sig)).wait();
         expect(ret.status).to.equal(1);
-        expect(await proxyModuleAuth.isPending()).to.false;
-        expect(await proxyModuleAuth.delay()).to.equal(newDelay);
+        expect(await proxyModuleAuth.isLocked()).to.false;
+        expect(await proxyModuleAuth.getLockDuring()).to.equal(newDelay);
         metaNonce++;
-        nonce++;
       });
       it(`Update Implementation For ${module}`, async function () {
-        const newDelay = 2;
+        await init();
         const Greeter = await ethers.getContractFactory("Greeter");
         const greeter = await Greeter.deploy();
 
@@ -213,14 +318,10 @@ describe("ModuleAuth", function () {
         );
         const ret = await (await proxyModuleAuth.executeAccountTx(sig)).wait();
         expect(ret.status).to.equal(1);
-        expect(await proxyModuleAuth.isPending()).to.false;
-        expect(await proxyModuleAuth.getImplementation()).to.equal(
-          greeter.address
-        );
-        expect(await proxyModuleAuth.ret()).to.equals(1);
+        proxyModuleAuth = Greeter.attach(proxyModuleAuth.address);
+        expect(await proxyModuleAuth.ret1()).to.equals(1);
         metaNonce++;
-        nonce++;
       });
-    }
+    });
   });
 });

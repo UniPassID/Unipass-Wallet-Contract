@@ -1,49 +1,62 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
+import "hardhat/console.sol";
 
 abstract contract ModuleTimeLock {
-    bytes32 public newKeysetHash;
-    bool public isPending;
-    uint256 public timestamp;
-    uint256 public delay;
+    bytes32 public lockedKeysetHash;
+    bool public isLocked;
+    uint256 public unLockAfter;
+    uint256 public constant INIT_LOCK_DURING = 1800;
 
-    constructor() {
-        // 48 hours
-        delay = 0;
+    /**
+     * lockDuring:
+     *      0           Uninitialized Value, Like NULL Or None
+     *      1 .. Max    Real LockDuring + 1, Real LockDuring = LockDuring - 1
+     */
+    uint256 private lockDuring;
+
+    constructor() {}
+
+    function getLockDuring() public view returns (uint256) {
+        if (lockDuring == 0) {
+            return INIT_LOCK_DURING;
+        } else {
+            return lockDuring - 1;
+        }
     }
 
-    function _requirePending() internal view {
-        require(isPending, "ModuleTimeLock#_requirePending: PENDING");
+    function _requireLocked() internal view {
+        require(isLocked, "ModuleTimeLock#_requireLocked: UNLOCKED");
     }
 
-    function _requireUnPending() internal view {
+    function _requireUnLocked() internal view {
+        require(!isLocked, "ModuleTimeLock#_requireUnLocked: IS_LOCKED");
+    }
+
+    function _requireToUnLock() internal view {
+        require(isLocked, "ModuleTimeLock#requireUnLocked: UNLOCKED");
         require(
-            isPending == false,
-            "ModuleTimeLock#_requireUnPending: PENDING"
+            block.timestamp > unLockAfter,
+            "ModuleTimeLock#requireUnLocked: UNLOCK_AFTER"
         );
     }
 
-    function requireComplete() internal view {
-        require(isPending, "ModuleTimeLock#requireComplete: PENDING");
-        require(
-            block.timestamp > timestamp,
-            "ModuleTimeLock#requireComplete: INVLIAD_TIMESTAMP"
-        );
+    function _lockKeysetHash(bytes32 _toLockKeysetHash) internal {
+        lockedKeysetHash = _toLockKeysetHash;
+        unLockAfter = block.timestamp + getLockDuring();
+        isLocked = true;
     }
 
-    function _pendNewKeysetHash(bytes32 _newKeysetHash) internal {
-        require(!isPending, "ModuleTimeLock#_setNewKeysetHash: IS_PENDING");
-        require(
-            _newKeysetHash != bytes32(0),
-            "ModuleTimeLock#_setNewKeysetHash: INVALID_KEYSET"
-        );
-        newKeysetHash = _newKeysetHash;
-        timestamp = block.timestamp + delay;
-        isPending = true;
+    function _unlockKeysetHash() internal {
+        isLocked = false;
     }
 
-    function _setDelay(uint256 _delay) internal {
-        delay = _delay;
+    function _setLockDuring(uint256 _lockDuring) internal {
+        lockDuring = _lockDuring + 1;
+    }
+
+    function _setUnLock() internal {
+        isLocked = false;
     }
 
     function getPendingStatus()
@@ -55,13 +68,6 @@ abstract contract ModuleTimeLock {
             uint256
         )
     {
-        return (isPending, newKeysetHash, timestamp);
-    }
-
-    function lock(bytes32 _keysetHash) external {
-        require(isPending == false, "ModuleTimeLock#lock: IS_PENDING");
-        newKeysetHash = _keysetHash;
-        isPending = true;
-        timestamp = block.timestamp + delay;
+        return (isLocked, lockedKeysetHash, unLockAfter);
     }
 }

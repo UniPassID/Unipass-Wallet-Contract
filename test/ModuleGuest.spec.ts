@@ -26,8 +26,7 @@ describe("ModuleGuest", function () {
   let txParams: Overrides;
   this.beforeAll(async function () {
     const [signer] = await ethers.getSigners();
-    deployer = new Deployer(signer);
-    await deployer.deployEip2470();
+    deployer = await new Deployer(signer).init();
     txParams = {
       gasLimit: 6000000,
       gasPrice: (await signer.provider?.getGasPrice())?.mul(12).div(10),
