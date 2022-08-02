@@ -11,10 +11,7 @@ abstract contract ModuleAdminAuth {
     }
 
     modifier onlyAdmin() {
-        require(
-            msg.sender == admin,
-            "ModuleAdminAuth#onlyAdmin: NOT_AUTHORIZED"
-        );
+        require(msg.sender == admin, "NOT_AUTHORIZED");
         _;
     }
 

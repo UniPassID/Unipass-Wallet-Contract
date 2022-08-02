@@ -1,34 +1,37 @@
 import { expect } from "chai";
 import {
   BigNumber,
+  constants,
   Contract,
   ContractFactory,
   Overrides,
+  utils,
   Wallet,
 } from "ethers";
-import { randomBytes } from "ethers/lib/utils";
+import { hexlify, randomBytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import {
   generateRecoveryEmails,
   getKeysetHash,
-  getProxyAddress,
   optimalGasLimit,
+  PAYMASTER_STAKE,
+  transferEth,
+  UNSTAKE_DELAY_SEC,
 } from "./utils/common";
 import { Deployer } from "./utils/deployer";
 import {
-  ActionType,
-  CallType,
   executeCall,
-  generateAccountLayerSignature,
-  generateTransactionSig,
+  generateSignature,
   generateTransferTx,
   generateUpdateKeysetHashTx,
   SigType,
 } from "./utils/sigPart";
+import { DefaultsForUserOp, UserOperation } from "./utils/userOperation";
 
 describe("ModuleCall", function () {
   let testModuleCall: Contract;
   let TestModuleCall: ContractFactory;
+  let entryPoint: Wallet;
   let proxyTestModuleCall: Contract;
   let deployer: Deployer;
   let dkimKeys: Contract;
@@ -39,6 +42,7 @@ describe("ModuleCall", function () {
   let wallet: Wallet;
   let chainId: number;
   let txParams: Overrides;
+  let recoveryEmailsIndexes: number[];
   this.beforeAll(async function () {
     const [signer] = await ethers.getSigners();
     deployer = await new Deployer(signer).init();
@@ -57,6 +61,9 @@ describe("ModuleCall", function () {
       wallet.address
     );
 
+    entryPoint = Wallet.createRandom().connect(dkimKeys.provider);
+    await transferEth(entryPoint.address, 10);
+
     const ModuleMainUpgradable = await ethers.getContractFactory(
       "ModuleMainUpgradable"
     );
@@ -64,7 +71,8 @@ describe("ModuleCall", function () {
       ModuleMainUpgradable,
       0,
       txParams,
-      dkimKeys.address
+      dkimKeys.address,
+      entryPoint.address
     );
 
     TestModuleCall = await ethers.getContractFactory("TestModuleCall");
@@ -74,7 +82,8 @@ describe("ModuleCall", function () {
       txParams,
       deployer.singleFactoryContract.address,
       moduleMainUpgradable.address,
-      dkimKeys.address
+      dkimKeys.address,
+      entryPoint.address
     );
 
     chainId = (await dkimKeys.provider.getNetwork()).chainId;
@@ -83,6 +92,7 @@ describe("ModuleCall", function () {
     threshold = 4;
     masterKey = Wallet.createRandom();
 
+    recoveryEmailsIndexes = [...Array(threshold).keys()].map((v) => v + 1);
     recoveryEmails = generateRecoveryEmails(10);
     keysetHash = getKeysetHash(masterKey.address, threshold, recoveryEmails);
 
@@ -191,5 +201,50 @@ describe("ModuleCall", function () {
     expect(await proxyTestModuleCall.lockedKeysetHash()).to.equal(
       newKeysetHash
     );
+  });
+  it("Execute From EntryPoint Should Success", async function () {
+    const to = Wallet.createRandom();
+    const value = ethers.utils.parseEther("10");
+    let tx = await generateTransferTx(to.address, optimalGasLimit, value);
+    const ret = await (
+      await proxyTestModuleCall.connect(entryPoint).execFromEntryPoint(tx, 1)
+    ).wait();
+    expect(ret.status).to.equals(1);
+    expect(await proxyTestModuleCall.provider.getBalance(to.address)).to.equals(
+      ethers.utils.parseEther("10")
+    );
+    expect(await proxyTestModuleCall.getNonce()).to.equals(0);
+  });
+  it("Validate User Op Should Success", async function () {
+    const to = Wallet.createRandom();
+    const value = ethers.utils.parseEther("10");
+    let op: UserOperation = DefaultsForUserOp;
+    let tx = await generateTransferTx(to.address, optimalGasLimit, value);
+    const requestId = hexlify(randomBytes(32));
+    const sessionKey = Wallet.createRandom();
+    const expired = Math.ceil(Date.now() / 1000) + 300;
+    op.callData = proxyTestModuleCall.interface.encodeFunctionData(
+      "execFromEntryPoint",
+      [tx, 1]
+    );
+    op.sender = proxyTestModuleCall.address;
+    op.signature = await generateSignature(
+      SigType.SigSessionKey,
+      requestId,
+      sessionKey,
+      expired,
+      masterKey,
+      threshold,
+      recoveryEmailsIndexes,
+      recoveryEmails
+    );
+    op.nonce = 1;
+    const ret = await (
+      await proxyTestModuleCall
+        .connect(entryPoint)
+        .validateUserOp(op, requestId, 0)
+    ).wait();
+    expect(ret.status).to.equals(1);
+    expect(await proxyTestModuleCall.getNonce()).to.equals(1);
   });
 });

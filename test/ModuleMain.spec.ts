@@ -12,6 +12,8 @@ import {
   generateRecoveryEmails,
   getKeysetHash,
   optimalGasLimit,
+  PAYMASTER_STAKE,
+  UNSTAKE_DELAY_SEC,
 } from "./utils/common";
 import { Deployer } from "./utils/deployer";
 import {
@@ -29,6 +31,7 @@ describe("ModuleMain", function () {
   let proxyModuleMain: Contract;
   let deployer: Deployer;
   let dkimKeys: Contract;
+  let entryPoint: Contract;
   let masterKey: Wallet;
   let keysetHash: string;
   let threshold: number;
@@ -41,6 +44,7 @@ describe("ModuleMain", function () {
   let ERC721TokenId: string;
   let ERC1155TokenId: string;
   let txParams: Overrides;
+  let recoveryEmailsIndexes: number[];
   this.beforeAll(async function () {
     const [signer] = await ethers.getSigners();
     deployer = await new Deployer(signer).init();
@@ -58,6 +62,16 @@ describe("ModuleMain", function () {
       dkimKeysAdmin.address
     );
 
+    const EntryPoint = await ethers.getContractFactory("EntryPoint");
+    entryPoint = await deployer.deployContract(
+      EntryPoint,
+      0,
+      txParams,
+      deployer.singleFactoryContract.address,
+      PAYMASTER_STAKE,
+      UNSTAKE_DELAY_SEC
+    );
+
     const ModuleMainUpgradable = await ethers.getContractFactory(
       "ModuleMainUpgradable"
     );
@@ -65,7 +79,8 @@ describe("ModuleMain", function () {
       ModuleMainUpgradable,
       0,
       txParams,
-      dkimKeys.address
+      dkimKeys.address,
+      entryPoint.address
     );
     ModuleMain = await ethers.getContractFactory("ModuleMain");
     moduleMain = await deployer.deployContract(
@@ -74,7 +89,8 @@ describe("ModuleMain", function () {
       txParams,
       deployer.singleFactoryContract.address,
       moduleMainUpgradable.address,
-      dkimKeys.address
+      dkimKeys.address,
+      entryPoint.address
     );
 
     const TestErc20Token = await ethers.getContractFactory("TestERC20");
@@ -91,6 +107,7 @@ describe("ModuleMain", function () {
     threshold = 4;
     masterKey = Wallet.createRandom();
 
+    recoveryEmailsIndexes = [...Array(threshold).keys()].map((v) => v + 1);
     recoveryEmails = generateRecoveryEmails(10);
     keysetHash = getKeysetHash(masterKey.address, threshold, recoveryEmails);
 
@@ -177,7 +194,7 @@ describe("ModuleMain", function () {
   it("Test Validating Permit", async () => {
     const sessionKey = Wallet.createRandom();
     const expired = Math.ceil(Date.now() / 1000 + 300);
-    const digestHash = Wallet.createRandom().privateKey;
+    const digestHash = ethers.utils.hexlify(randomBytes(32));
     const permit = await generateSessionKey(
       masterKey,
       threshold,
@@ -206,6 +223,7 @@ describe("ModuleMain", function () {
       undefined,
       masterKey,
       threshold,
+      recoveryEmailsIndexes,
       recoveryEmails,
       SigType.SigRecoveryEmail
     );
