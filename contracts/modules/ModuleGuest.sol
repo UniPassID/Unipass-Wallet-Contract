@@ -21,8 +21,8 @@ contract ModuleGuest {
         CallHooks
     }
 
-    error txFailed(Transaction, bytes32, bytes);
-    error invalidCallType(CallType);
+    error TxFailed(Transaction, bytes32, bytes);
+    error InvalidCallType(CallType);
 
     event TxExecuted(bytes32 txHash);
 
@@ -68,7 +68,7 @@ contract ModuleGuest {
 
             require(
                 gasleft() >= transaction.gasLimit,
-                "ModuleCall#_execute: NOT_ENOUGH_GAS"
+                "_execute: NOT_ENOUGH_GAS"
             );
 
             bool success;
@@ -82,12 +82,12 @@ contract ModuleGuest {
                         : transaction.gasLimit
                 }(transaction.data);
             } else {
-                revert invalidCallType(transaction.callType);
+                revert InvalidCallType(transaction.callType);
             }
             if (success) {
                 emit TxExecuted(_txHash);
             } else {
-                revert txFailed(transaction, _txHash, result);
+                revert TxFailed(transaction, _txHash, result);
             }
         }
     }

@@ -17,6 +17,7 @@ abstract contract ModuleDkimAuth {
     IDkimKeys public immutable dkimKeys;
 
     constructor(IDkimKeys _dkimKeys) {
+        require(address(_dkimKeys) != address(0), "constructor: ZERO");
         dkimKeys = _dkimKeys;
     }
 
@@ -34,10 +35,7 @@ abstract contract ModuleDkimAuth {
         bytes memory emailFrom;
         (emailFrom, sigHashHex, sdid, selector) = params._parseHeader();
 
-        require(
-            sigHashHex.length == 66,
-            "ModuleDkimAuth#dkimVerify: INVALID_SIGHASHHEX"
-        );
+        require(sigHashHex.length == 66, "dkimVerify: INVALID_SIGHASHHEX");
 
         Slice memory sdidSlice = LibSlice.toSlice(sdid);
         emailFrom = LibDkimValidator.checkEmailFrom(emailFrom, sdidSlice);
@@ -47,7 +45,7 @@ abstract contract ModuleDkimAuth {
         );
         require(
             keccak256(emailFrom) == keccak256(inputEmailFromRet),
-            "ModuleDkimAuth#dkimVerify: INVALID_EMAIL_FROM"
+            "dkimVerify: INVALID_EMAIL_FROM"
         );
         emailHash = LibDkimValidator.emailAddressHash(inputEmailFrom);
 

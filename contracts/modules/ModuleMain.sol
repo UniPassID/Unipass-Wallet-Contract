@@ -9,6 +9,9 @@ contract ModuleMain is ModuleCall, ModuleAuthFixed, ModuleHooks {
     constructor(
         address _factory,
         address _moduleMainUpgradable,
-        IDkimKeys _dkimKeys
-    ) ModuleAuthFixed(_factory, _moduleMainUpgradable, _dkimKeys) {}
+        IDkimKeys _dkimKeys,
+        address _entryPoint
+    )
+        ModuleAuthFixed(_factory, _moduleMainUpgradable, _dkimKeys, _entryPoint)
+    {}
 }

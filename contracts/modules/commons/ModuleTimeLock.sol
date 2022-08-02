@@ -26,18 +26,18 @@ abstract contract ModuleTimeLock {
     }
 
     function _requireLocked() internal view {
-        require(isLocked, "ModuleTimeLock#_requireLocked: UNLOCKED");
+        require(isLocked, "_requireLocked: UNLOCKED");
     }
 
     function _requireUnLocked() internal view {
-        require(!isLocked, "ModuleTimeLock#_requireUnLocked: IS_LOCKED");
+        require(!isLocked, "_requireUnLocked: IS_LOCKED");
     }
 
     function _requireToUnLock() internal view {
-        require(isLocked, "ModuleTimeLock#requireUnLocked: UNLOCKED");
+        require(isLocked, "_requireToUnLock: UNLOCKED");
         require(
             block.timestamp > unLockAfter,
-            "ModuleTimeLock#requireUnLocked: UNLOCK_AFTER"
+            "_requireToUnLock: UNLOCK_AFTER"
         );
     }
 
@@ -63,11 +63,13 @@ abstract contract ModuleTimeLock {
         external
         view
         returns (
-            bool,
-            bytes32,
-            uint256
+            bool _isLocked,
+            bytes32 _lockedKeysetHash,
+            uint256 _unLockAfter
         )
     {
-        return (isLocked, lockedKeysetHash, unLockAfter);
+        _isLocked = isLocked;
+        _lockedKeysetHash = lockedKeysetHash;
+        _unLockAfter = unLockAfter;
     }
 }

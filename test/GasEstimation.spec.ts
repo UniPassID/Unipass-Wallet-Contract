@@ -1,25 +1,16 @@
 import { expect } from "chai";
-import {
-  BigNumber,
-  Contract,
-  ContractFactory,
-  Overrides,
-  Wallet,
-} from "ethers";
+import { Contract, ContractFactory, Overrides, Wallet } from "ethers";
 import { BytesLike, randomBytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import {
   generateRecoveryEmails,
   getKeysetHash,
-  getProxyAddress,
   optimalGasLimit,
 } from "./utils/common";
 import { Deployer } from "./utils/deployer";
 import {
-  ActionType,
   CallType,
   executeCall,
-  generateAccountLayerSignature,
   generateTransactionSig,
   generateTransferTx,
   generateUpdateKeysetHashTx,
@@ -37,6 +28,7 @@ function txBaseCost(data: BytesLike): number {
 describe("GasEstimation", function () {
   let moduleMain: Contract;
   let ModuleMain: ContractFactory;
+  let entryPoint: Contract;
   let moduleGuest: Contract;
   let proxyModuleMain: Contract;
   let gasEstimation: Contract;
@@ -66,6 +58,16 @@ describe("GasEstimation", function () {
       dkimKeysAdmin.address
     );
 
+    const EntryPoint = await ethers.getContractFactory("EntryPoint");
+    entryPoint = await deployer.deployContract(
+      EntryPoint,
+      0,
+      txParams,
+      deployer.singleFactoryContract.address,
+      10,
+      10
+    );
+
     const ModuleMainUpgradable = await ethers.getContractFactory(
       "ModuleMainUpgradable"
     );
@@ -73,7 +75,8 @@ describe("GasEstimation", function () {
       ModuleMainUpgradable,
       0,
       txParams,
-      dkimKeys.address
+      dkimKeys.address,
+      entryPoint.address
     );
 
     ModuleMain = await ethers.getContractFactory("ModuleMain");
@@ -83,7 +86,8 @@ describe("GasEstimation", function () {
       txParams,
       deployer.singleFactoryContract.address,
       moduleMainUpgradable.address,
-      dkimKeys.address
+      dkimKeys.address,
+      entryPoint.address
     );
 
     const GasEstimation = await ethers.getContractFactory("GasEstimator");
@@ -141,7 +145,7 @@ describe("GasEstimation", function () {
     );
   });
   it("Should estimate account transaction", async function () {
-    const newKeysetHash = ethers.utils.hexValue(randomBytes(32));
+    const newKeysetHash = ethers.utils.hexlify(randomBytes(32));
     const tx = await generateUpdateKeysetHashTx(
       proxyModuleMain.address,
       newKeysetHash,

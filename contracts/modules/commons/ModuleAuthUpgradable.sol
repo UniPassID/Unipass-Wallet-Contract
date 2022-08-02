@@ -5,7 +5,9 @@ import "./ModuleAuthBase.sol";
 import "../../Wallet.sol";
 
 contract ModuleAuthUpgradable is ModuleAuthBase {
-    constructor(IDkimKeys _dkimKeys) ModuleAuthBase(_dkimKeys) {}
+    constructor(IDkimKeys _dkimKeys, address _entryPoint)
+        ModuleAuthBase(_dkimKeys, _entryPoint)
+    {}
 
     /**
      * @notice Updates the signers configuration of the wallet
@@ -15,10 +17,7 @@ contract ModuleAuthUpgradable is ModuleAuthBase {
      *      passed for each transaction.
      */
     function _updateKeysetHash(bytes32 _keysetHash) internal override {
-        require(
-            _keysetHash != bytes32(0),
-            "ModuleAuth#updateKeysetHash INVALID_KEYSET"
-        );
+        require(_keysetHash != bytes32(0), "updateKeysetHash INVALID_KEYSET");
         _writeKeysetHash(_keysetHash);
         emit KeysetHashUpdated(_keysetHash);
     }

@@ -101,7 +101,7 @@ describe("ModuleGuest", function () {
       "0x"
     );
     await expect(ret).to.be.revertedWith(
-      `VM Exception while processing transaction: reverted with custom error 'invalidCallType(1)'`
+      `VM Exception while processing transaction: reverted with custom error 'InvalidCallType(1)'`
     );
   });
   it("A CallAccountLayer Should Revert", async function () {
@@ -123,7 +123,7 @@ describe("ModuleGuest", function () {
       sig
     );
     await expect(ret).to.be.revertedWith(
-      `VM Exception while processing transaction: reverted with custom error 'invalidCallType(2)'`
+      `VM Exception while processing transaction: reverted with custom error 'InvalidCallType(2)'`
     );
   });
   it("A CallHooks Should Revert", async function () {
@@ -145,7 +145,7 @@ describe("ModuleGuest", function () {
       sig
     );
     await expect(ret).to.be.revertedWith(
-      `VM Exception while processing transaction: reverted with custom error 'invalidCallType(3)'`
+      `VM Exception while processing transaction: reverted with custom error 'InvalidCallType(3)'`
     );
   });
   it("A Reverted Tx Should Revert", async function () {
