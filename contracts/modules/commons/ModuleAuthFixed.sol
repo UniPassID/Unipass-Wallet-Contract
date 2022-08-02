@@ -12,8 +12,9 @@ contract ModuleAuthFixed is ModuleAuthBase {
     constructor(
         address _factory,
         address _moduleMainUpgradable,
-        IDkimKeys _dkimKeys
-    ) ModuleAuthBase(_dkimKeys) {
+        IDkimKeys _dkimKeys,
+        address _entryPoint
+    ) ModuleAuthBase(_dkimKeys, _entryPoint) {
         FACTORY = _factory;
         MODULE_MAIN_UPGRADABLE = _moduleMainUpgradable;
         INIT_CODE_HASH = keccak256(
@@ -32,10 +33,7 @@ contract ModuleAuthFixed is ModuleAuthBase {
      *      passed for each transaction.
      */
     function _updateKeysetHash(bytes32 _keysetHash) internal override {
-        require(
-            _keysetHash != bytes32(0),
-            "ModuleAuth#updateKeysetHash INVALID_KEYSET"
-        );
+        require(_keysetHash != bytes32(0), "updateKeysetHash INVALID_KEYSET");
         _writeKeysetHash(_keysetHash);
         emit KeysetHashUpdated(_keysetHash);
 

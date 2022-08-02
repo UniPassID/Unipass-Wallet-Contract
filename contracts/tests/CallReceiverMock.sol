@@ -14,7 +14,7 @@ contract CallReceiverMock {
     }
 
     function testCall(uint256 _valA, bytes calldata _valB) external payable {
-        require(!revertFlag, "CallReceiverMock#testCall: REVERT_FLAG");
+        require(!revertFlag, "testCall: REVERT_FLAG");
 
         lastValA = _valA;
         lastValB = _valB;

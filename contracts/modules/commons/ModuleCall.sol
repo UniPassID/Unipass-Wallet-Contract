@@ -1,15 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
+/* solhint-disable no-unused-vars */
+
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./ModuleStorage.sol";
 import "./ModuleAuthBase.sol";
+import "./ModuleEIP4337WalletCall.sol";
 import "../../utils/LibBytes.sol";
 import "../../interfaces/IModuleHooks.sol";
 import "../../interfaces/ITransaction.sol";
+import "../../interfaces/IEIP4337Wallet.sol";
 
-abstract contract ModuleCall is ITransaction, ModuleAuthBase, IModuleHooks {
+abstract contract ModuleCall is
+    ITransaction,
+    ModuleAuthBase,
+    ModuleEIP4337WalletCall,
+    IModuleHooks
+{
     using LibBytes for bytes;
     using SafeERC20 for IERC20;
 
@@ -20,11 +29,19 @@ abstract contract ModuleCall is ITransaction, ModuleAuthBase, IModuleHooks {
         bytes32(
             0x93ed8d86f5d7fd79ac84d87731132a08aec6fc45dd823a5af26bb3e79833c46b
         );
+    // ENTRY_POINT_TX_HASH = kecaak256("unipass-wallet:module-call:entry-point-tx-hash");
+    bytes32 private constant ENTRY_POINT_TX_HASH =
+        bytes32(
+            0x82e89ea2a1a08573067052ff1c50c3ae43b21ade8989601ca39247c0c34b2e5a
+        );
 
     uint256 private constant SIG_MASTER_KEY = 0;
     uint256 private constant SIG_MASTER_KEY_WITH_RECOVERY_EMAILS = 2;
     uint256 private constant SIG_SESSION_KEY = 3;
     uint256 private constant SIG_NONE = 4;
+
+    uint256 public constant EXPECTED_CALL_SIG_WEIGHT = 1;
+    uint256 public constant EXPECTED_CALL_HOOKS_SIG_WEIGHT = 3;
 
     function getNonce() public view returns (uint256) {
         return uint256(ModuleStorage.readBytes32(NONCE_KEY));
@@ -32,6 +49,48 @@ abstract contract ModuleCall is ITransaction, ModuleAuthBase, IModuleHooks {
 
     function _writeNonce(uint256 _nonce) internal {
         ModuleStorage.writeBytes32(NONCE_KEY, bytes32(_nonce));
+    }
+
+    function _validateNonceForUserOp(UserOperation calldata userOp)
+        internal
+        override
+    {
+        _validateNonce(userOp.nonce);
+    }
+
+    function _validateUserOp(UserOperation calldata userOp, bytes32 requestId)
+        internal
+        view
+        override
+    {
+        bytes calldata callData = userOp.callData;
+        (bytes4 selector, ) = callData.cReadBytes4(0);
+
+        require(
+            selector == ModuleCall.execFromEntryPoint.selector,
+            "_validateUserOp: INVALID_SELECTOR"
+        );
+
+        (, uint256 expectedSigWeight) = abi.decode(
+            callData[4:],
+            (Transaction, uint256)
+        );
+        (bool success, ) = _validateSignatureWeight(
+            expectedSigWeight,
+            requestId,
+            userOp.signature,
+            0
+        );
+        require(success, "_validateSignature: INVALID_SIGNATURE");
+    }
+
+    // called by entryPoint, only after validateUserOp succeeded.
+    function execFromEntryPoint(
+        Transaction calldata _transaction,
+        uint256 _sigWeight
+    ) external {
+        _requireFromEntryPoint();
+        _executeOnce(ENTRY_POINT_TX_HASH, _transaction, _sigWeight);
     }
 
     function execute(
@@ -58,22 +117,15 @@ abstract contract ModuleCall is ITransaction, ModuleAuthBase, IModuleHooks {
             )
         );
 
-        uint8 _sigType;
-        uint256 index;
-        (_sigType, index) = _signature.readFirstUint8();
-        SigType sigType = SigType(_sigType);
-        require(
-            sigType == SigType.SigMasterKey ||
-                sigType == SigType.SigSessionKey ||
-                sigType == SigType.SigNone,
-            "ModuleCall#execute: INVALID_SIG_TYPE"
+        (bool success, uint256 sigWeight) = _validateSignatureWeight(
+            0,
+            txhash,
+            _signature,
+            0
         );
-        require(
-            isValidSignature(sigType, txhash, _signature, index),
-            "ModuleCall#execute: INVALID_SIGNATURE"
-        );
+        require(success, "execute: INVALID_SIG_WEIGHT");
 
-        _execute(txhash, _txs, _sigType);
+        _execute(txhash, _txs, sigWeight);
         if (feeAmount != 0) {
             _payFee(feeToken, feeReceiver, feeAmount);
         }
@@ -81,68 +133,69 @@ abstract contract ModuleCall is ITransaction, ModuleAuthBase, IModuleHooks {
 
     function _validateNonce(uint256 _nonce) internal virtual {
         uint256 currentNonce = getNonce();
-        require(
-            _nonce == currentNonce + 1,
-            "ModuleCall#_validateNonce: INVALID_NONCE"
-        );
+        require(_nonce == currentNonce + 1, "_validateNonce: INVALID_NONCE");
         _writeNonce(_nonce);
     }
 
     function _execute(
         bytes32 _txHash,
         Transaction[] calldata _txs,
-        uint256 _sigType
+        uint256 _sigWeight
     ) internal {
         for (uint256 i = 0; i < _txs.length; i++) {
             Transaction calldata transaction = _txs[i];
+            _executeOnce(_txHash, transaction, _sigWeight);
+        }
+    }
 
+    function _executeOnce(
+        bytes32 _txHash,
+        Transaction calldata _transaction,
+        uint256 _sigWeight
+    ) internal {
+        require(gasleft() >= _transaction.gasLimit, "_execute: NOT_ENOUGH_GAS");
+
+        bool success;
+        bytes memory result;
+
+        if (_transaction.callType == CallType.Call) {
             require(
-                gasleft() >= transaction.gasLimit,
-                "ModuleCall#_execute: NOT_ENOUGH_GAS"
+                _sigWeight >= EXPECTED_CALL_SIG_WEIGHT,
+                "_execute: INVALID_Call_TYPE"
             );
-
-            bool success;
-            bytes memory result;
-
-            if (transaction.callType == CallType.Call) {
-                require(
-                    _sigType != SIG_NONE,
-                    "ModuleCall#_execute: INVALID_Call_TYPE"
-                );
-                (success, result) = transaction.target.call{
-                    value: transaction.value,
-                    gas: transaction.gasLimit == 0
-                        ? gasleft()
-                        : transaction.gasLimit
-                }(transaction.data);
-            } else if (transaction.callType == CallType.DelegateCall) {
-                require(
-                    _sigType != SIG_NONE,
-                    "ModuleCall#_execute: INVALID_CALL_TYPE"
-                );
-                (success, result) = transaction.target.delegatecall{
-                    gas: transaction.gasLimit == 0
-                        ? gasleft()
-                        : transaction.gasLimit
-                }(transaction.data);
-            } else if (transaction.callType == CallType.CallAccountLayer) {
-                _executeAccountTx(transaction.data, SigType(_sigType));
-                success = true;
-            } else if (transaction.callType == CallType.CallHooks) {
-                require(
-                    _sigType == SIG_MASTER_KEY_WITH_RECOVERY_EMAILS,
-                    "ModuleCall#_execute: INVALID_CALL_TYPE"
-                );
-                _executeHooksTx(transaction.data);
-                success = true;
-            } else {
-                revert invalidCallType(transaction.callType);
-            }
-            if (success) {
-                emit TxExecuted(_txHash);
-            } else {
-                revert txFailed(transaction, _txHash, result);
-            }
+            (success, result) = _transaction.target.call{
+                value: _transaction.value,
+                gas: _transaction.gasLimit == 0
+                    ? gasleft()
+                    : _transaction.gasLimit
+            }(_transaction.data);
+        } else if (_transaction.callType == CallType.DelegateCall) {
+            require(
+                _sigWeight >= EXPECTED_CALL_SIG_WEIGHT,
+                "_execute: INVALID_CALL_TYPE"
+            );
+            (success, result) = _transaction.target.delegatecall{
+                gas: _transaction.gasLimit == 0
+                    ? gasleft()
+                    : _transaction.gasLimit
+            }(_transaction.data);
+        } else if (_transaction.callType == CallType.CallAccountLayer) {
+            executeAccountTx(_transaction.data);
+            success = true;
+        } else if (_transaction.callType == CallType.CallHooks) {
+            require(
+                _sigWeight >= EXPECTED_CALL_HOOKS_SIG_WEIGHT,
+                "_execute: INVALID_CALL_TYPE"
+            );
+            _executeHooksTx(_transaction.data);
+            success = true;
+        } else {
+            revert invalidCallType(_transaction.callType);
+        }
+        if (success) {
+            emit TxExecuted(_txHash);
+        } else {
+            revert txFailed(_transaction, _txHash, result);
         }
     }
 

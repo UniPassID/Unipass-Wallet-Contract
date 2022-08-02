@@ -35,6 +35,7 @@ function report(test: string, values: number[]) {
 describe("ModuleMain Benchmark", function () {
   let deployer: Deployer;
   let dkimKeys: Contract;
+  let entryPoint: Contract;
   let moduleMain: Contract;
   let ModuleMain: ContractFactory;
   let chainId: number;
@@ -58,6 +59,16 @@ describe("ModuleMain Benchmark", function () {
       dkimKeysAdmin.address
     );
 
+    const EntryPoint = await ethers.getContractFactory("EntryPoint");
+    entryPoint = await deployer.deployContract(
+      EntryPoint,
+      0,
+      txParams,
+      deployer.singleFactoryContract.address,
+      10,
+      0
+    );
+
     const ModuleMainUpgradable = await ethers.getContractFactory(
       "ModuleMainUpgradable"
     );
@@ -65,7 +76,8 @@ describe("ModuleMain Benchmark", function () {
       ModuleMainUpgradable,
       instance,
       txParams,
-      dkimKeys.address
+      dkimKeys.address,
+      entryPoint.address
     );
 
     ModuleMain = await ethers.getContractFactory("ModuleMain");

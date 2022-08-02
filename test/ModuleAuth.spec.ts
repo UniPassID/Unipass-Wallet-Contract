@@ -6,11 +6,17 @@ import {
   generateAccountLayerSignature,
   SigType,
 } from "./utils/sigPart";
-import { generateRecoveryEmails, getKeysetHash } from "./utils/common";
+import {
+  generateRecoveryEmails,
+  getKeysetHash,
+  PAYMASTER_STAKE,
+  UNSTAKE_DELAY_SEC,
+} from "./utils/common";
 import { Deployer } from "./utils/deployer";
 import { hexlify, randomBytes } from "ethers/lib/utils";
 
 describe("ModuleAuth", function () {
+  let entryPoint: Contract;
   let moduleAuthFixed: Contract;
   let moduleAuthUpgradable: Contract;
   let proxyModuleAuth: Contract;
@@ -22,6 +28,7 @@ describe("ModuleAuth", function () {
   let metaNonce: number;
   let txParams: Overrides;
   let dkimKeysAdmin: Wallet;
+  let recoveryEmailsIndexes: number[];
 
   this.beforeEach(async function () {
     const [signer] = await ethers.getSigners();
@@ -42,10 +49,26 @@ describe("ModuleAuth", function () {
       dkimKeysAdmin.address
     );
 
+    const EntryPoint = await ethers.getContractFactory("EntryPoint");
+    entryPoint = await deployer.deployContract(
+      EntryPoint,
+      0,
+      txParams,
+      deployer.singleFactoryContract.address,
+      PAYMASTER_STAKE,
+      UNSTAKE_DELAY_SEC
+    );
+
     const ModuleAuthUpgradable = await ethers.getContractFactory(
       "ModuleAuthUpgradable"
     );
-    moduleAuthUpgradable = await ModuleAuthUpgradable.deploy(dkimKeys.address);
+    moduleAuthUpgradable = await deployer.deployContract(
+      ModuleAuthUpgradable,
+      0,
+      txParams,
+      dkimKeys.address,
+      entryPoint.address
+    );
 
     const ModuleAuthFixed = await ethers.getContractFactory("ModuleAuthFixed");
     moduleAuthFixed = await deployer.deployContract(
@@ -54,10 +77,12 @@ describe("ModuleAuth", function () {
       txParams,
       deployer.singleFactoryContract.address,
       moduleAuthUpgradable.address,
-      dkimKeys.address
+      dkimKeys.address,
+      entryPoint.address
     );
     threshold = 4;
 
+    recoveryEmailsIndexes = [...Array(threshold).keys()].map((v) => v + 1);
     recoveryEmails = generateRecoveryEmails(10);
     keysetHash = getKeysetHash(masterKey.address, threshold, recoveryEmails);
 
@@ -89,6 +114,7 @@ describe("ModuleAuth", function () {
             undefined,
             masterKey,
             threshold,
+            recoveryEmailsIndexes,
             recoveryEmails,
             SigType.SigMasterKeyWithRecoveryEmail
           );
@@ -115,6 +141,7 @@ describe("ModuleAuth", function () {
           undefined,
           masterKey,
           threshold,
+          recoveryEmailsIndexes,
           recoveryEmails,
           SigType.SigMasterKey
         );
@@ -136,6 +163,7 @@ describe("ModuleAuth", function () {
           undefined,
           masterKey,
           threshold,
+          recoveryEmailsIndexes,
           recoveryEmails,
           SigType.SigRecoveryEmail
         );
@@ -157,6 +185,7 @@ describe("ModuleAuth", function () {
           undefined,
           masterKey,
           threshold,
+          recoveryEmailsIndexes,
           recoveryEmails,
           SigType.SigMasterKeyWithRecoveryEmail
         );
@@ -179,6 +208,7 @@ describe("ModuleAuth", function () {
           undefined,
           masterKey,
           threshold,
+          recoveryEmailsIndexes,
           recoveryEmails,
           SigType.SigMasterKey
         );
@@ -198,6 +228,7 @@ describe("ModuleAuth", function () {
           undefined,
           masterKey,
           threshold,
+          recoveryEmailsIndexes,
           recoveryEmails,
           SigType.SigRecoveryEmail
         );
@@ -224,6 +255,7 @@ describe("ModuleAuth", function () {
           undefined,
           masterKey,
           threshold,
+          recoveryEmailsIndexes,
           recoveryEmails,
           SigType.SigRecoveryEmail
         );
@@ -245,6 +277,7 @@ describe("ModuleAuth", function () {
           undefined,
           masterKey,
           threshold,
+          recoveryEmailsIndexes,
           recoveryEmails,
           SigType.SigRecoveryEmail
         );
@@ -268,6 +301,7 @@ describe("ModuleAuth", function () {
           undefined,
           masterKey,
           threshold,
+          recoveryEmailsIndexes,
           recoveryEmails,
           SigType.SigMasterKey
         );
@@ -290,6 +324,7 @@ describe("ModuleAuth", function () {
           undefined,
           masterKey,
           threshold,
+          recoveryEmailsIndexes,
           recoveryEmails,
           SigType.SigMasterKey
         );
@@ -313,6 +348,7 @@ describe("ModuleAuth", function () {
           greeter.address,
           masterKey,
           threshold,
+          recoveryEmailsIndexes,
           recoveryEmails,
           undefined
         );
@@ -320,6 +356,58 @@ describe("ModuleAuth", function () {
         expect(ret.status).to.equal(1);
         proxyModuleAuth = Greeter.attach(proxyModuleAuth.address);
         expect(await proxyModuleAuth.ret1()).to.equals(1);
+        metaNonce++;
+      });
+
+      it(`Update EntryPoint For ${module}`, async function () {
+        await init();
+        const Greeter = await ethers.getContractFactory("Greeter");
+        const greeter = await Greeter.deploy();
+
+        const sig = await generateAccountLayerSignature(
+          proxyModuleAuth.address,
+          ActionType.UpdateEntryPoint,
+          metaNonce,
+          undefined,
+          undefined,
+          greeter.address,
+          masterKey,
+          threshold,
+          recoveryEmailsIndexes,
+          recoveryEmails,
+          undefined
+        );
+        const ret = await (await proxyModuleAuth.executeAccountTx(sig)).wait();
+        expect(ret.status).to.equal(1);
+        expect(await proxyModuleAuth.getEntryPoint()).to.equals(
+          greeter.address
+        );
+        metaNonce++;
+      });
+
+      it(`Update EntryPoint For ${module}`, async function () {
+        await init();
+        const Greeter = await ethers.getContractFactory("Greeter");
+        const greeter = await Greeter.deploy();
+
+        const sig = await generateAccountLayerSignature(
+          proxyModuleAuth.address,
+          ActionType.UpdateEntryPoint,
+          metaNonce,
+          undefined,
+          undefined,
+          greeter.address,
+          masterKey,
+          threshold,
+          recoveryEmailsIndexes,
+          recoveryEmails,
+          undefined
+        );
+        const ret = await (await proxyModuleAuth.executeAccountTx(sig)).wait();
+        expect(ret.status).to.equal(1);
+        expect(await proxyModuleAuth.getEntryPoint()).to.equals(
+          greeter.address
+        );
         metaNonce++;
       });
     });
