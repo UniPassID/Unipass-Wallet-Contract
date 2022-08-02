@@ -3,6 +3,8 @@ import { ethers } from "hardhat";
 import { pureEmailHash } from "./email";
 
 export const optimalGasLimit = ethers.constants.Two.pow(21);
+export const UNSTAKE_DELAY_SEC = 100;
+export const PAYMASTER_STAKE = ethers.utils.parseEther("1");
 
 export function throwError(msg: string) {
   throw msg;

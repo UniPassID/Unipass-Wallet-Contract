@@ -4,7 +4,7 @@ import NodeRsa from "node-rsa";
 console.log(
   ethers.utils.solidityPack(
     ["bytes", "bytes"],
-    [Buffer.from("protonmail3"), Buffer.from("pm.me")]
+    [Buffer.from("1ca1ba"), Buffer.from("icloud.com")]
   )
 );
 

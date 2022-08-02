@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
+/* solhint-disable no-unused-vars */
+
 import "./ModuleDkimAuth.sol";
+import "./ModuleEIP4337WalletAuth.sol";
 import "./ModuleTimeLock.sol";
 import "./Implementation.sol";
 import "../../utils/SigPart.sol";
@@ -11,18 +14,25 @@ import "@openzeppelin/contracts/utils/Address.sol";
 
 import "hardhat/console.sol";
 
+/**
+ * @dev Account Layer Transactions Have To Be With Signature For
+ *      Multi-Chains Syncture.
+ */
 abstract contract ModuleAuthBase is
     ModuleDkimAuth,
+    ModuleEIP4337WalletAuth,
     Implementation,
     ModuleTimeLock,
     SignatureValidator
 {
     using LibBytes for bytes;
     using Address for address;
+    using LibSigType for SigType;
 
-    constructor(IDkimKeys _dkimKeys)
+    constructor(IDkimKeys _dkimKeys, address _entryPoint)
         ModuleTimeLock()
         ModuleDkimAuth(_dkimKeys)
+        ModuleEIP4337WalletAuth(_entryPoint)
     {}
 
     //                       META_NONCE_KEY = keccak256("unipass-wallet:module-auth:meta-nonce")
@@ -41,13 +51,20 @@ abstract contract ModuleAuthBase is
     uint256 private constant UNLOCK_KEYSET_HASH = 1;
     uint256 private constant CANCEL_LOCK_KEYSET_HASH = 2;
     uint256 private constant UPDATE_TIMELOCK_DURING = 3;
-    uint256 private constant UPDATE_IMPLEMENT = 4;
+    uint256 private constant UPDATE_IMPLEMENTATION = 4;
+    uint256 private constant UPDATE_ENTRY_POINT = 5;
+
+    uint256 public constant EXPECTED_UPDATE_KEYSET_HASH_SIG_WEIGHT = 2;
+    uint256 public constant EXPECTED_CANCEL_LOCK_KEYSET_HASH_SIG_WEIGHT = 2;
+    uint256 public constant EXPECTED_UPDATE_TIMELOCK_DURINT_SIG_WEIGHT = 2;
+    uint256 public constant EXPECTED_UPDATE_IMPLEMENTATION_SIG_WEIGHT = 3;
+    uint256 public constant EXPECTED_UPDATE_ENTRY_POINT_SIG_WEIGHT = 3;
 
     event KeysetHashUpdated(bytes32 newKeysetHash);
 
     error InvalidActionType(uint256 _actionType);
     error InvalidImplement(address _implemenation);
-    error InvalidSigType(SigType _sigType);
+    error InvalidEntryPoint(address _entryPoint);
 
     function _isValidKeysetHash(bytes32 _keysetHash)
         internal
@@ -93,22 +110,20 @@ abstract contract ModuleAuthBase is
         newIndex++;
         uint8 inputEmailFromLen = _signature.mcReadUint8(newIndex);
         newIndex++;
-        bytes memory inputEmailFrom;
-        (inputEmailFrom, newIndex) = _signature.readBytes(
-            newIndex,
-            inputEmailFromLen
-        );
+        bytes memory inputEmailFrom = _signature[newIndex:newIndex +
+            inputEmailFromLen];
+        newIndex += inputEmailFromLen;
         if (withDkimParams == 1) {
             DkimParams memory params;
             (params, newIndex) = _parseDkimParams(_signature, newIndex);
             bool succ;
             bytes memory sigHashHex;
             (succ, emailHash, sigHashHex) = dkimVerify(params, inputEmailFrom);
-            require(succ, "IModuleAuth#_parseRecoveryEmail: VALIDATE_FAILED");
+            require(succ, "_parseRecoveryEmail: VALIDATE_FAILED");
             require(
                 keccak256(LibBytes.toHex(uint256(_hash), 32)) ==
                     keccak256(sigHashHex),
-                "ModuleAuth#_parseRecoveryEmail: INVALID_SIG_HASH"
+                "_parseRecoveryEmail: INVALID_SIG_HASH"
             );
             validated = true;
         } else {
@@ -123,13 +138,12 @@ abstract contract ModuleAuthBase is
     {
         uint32 emailHeaderLen;
         (emailHeaderLen, newIndex) = _signature.cReadUint32(_index);
-        (params.emailHeader, newIndex) = _signature.readBytes(
-            newIndex,
-            emailHeaderLen
-        );
+        params.emailHeader = _signature[newIndex:newIndex + emailHeaderLen];
+        newIndex += emailHeaderLen;
         uint32 dkimSigLen;
         (dkimSigLen, newIndex) = _signature.cReadUint32(newIndex);
-        (params.dkimSig, newIndex) = _signature.readBytes(newIndex, dkimSigLen);
+        params.dkimSig = _signature[newIndex:newIndex + dkimSigLen];
+        newIndex += dkimSigLen;
         (params.fromIndex, newIndex) = _signature.cReadUint32(newIndex);
 
         (params.fromLeftIndex, newIndex) = _signature.cReadUint32(newIndex);
@@ -145,20 +159,17 @@ abstract contract ModuleAuthBase is
         }
         uint32 subjectPaddingLen;
         (subjectPaddingLen, newIndex) = _signature.cReadUint32(newIndex);
-        (params.subjectPadding, newIndex) = _signature.readBytes(
-            newIndex,
-            subjectPaddingLen
-        );
+        params.subjectPadding = _signature[newIndex:newIndex +
+            subjectPaddingLen];
+        newIndex += subjectPaddingLen;
         uint32 subjectLen;
         (subjectLen, newIndex) = _signature.cReadUint32(newIndex);
         params.subject = new bytes[](subjectLen);
         for (uint32 i = 0; i < subjectLen; i++) {
             uint32 partLen;
             (partLen, newIndex) = _signature.cReadUint32(newIndex);
-            (params.subject[i], newIndex) = _signature.readBytes(
-                newIndex,
-                partLen
-            );
+            params.subject[i] = _signature[newIndex:newIndex + partLen];
+            newIndex += partLen;
         }
         (params.dkimHeaderIndex, newIndex) = _signature.cReadUint32(newIndex);
         (params.selectorIndex, newIndex) = _signature.cReadUint32(newIndex);
@@ -183,7 +194,7 @@ abstract contract ModuleAuthBase is
         bytes32 _digestHash,
         bytes calldata _signature,
         uint256 _index
-    ) internal pure returns (bytes32 keysetHash) {
+    ) internal view returns (bool success) {
         address masterKey = recoverSigner(
             _digestHash,
             _signature[_index:_index + 66]
@@ -193,12 +204,14 @@ abstract contract ModuleAuthBase is
         bytes32 recoveryEmail;
         (threshold, _index) = _signature.cReadUint16(_index);
 
-        keysetHash = keccak256(abi.encodePacked(masterKey, threshold));
+        bytes32 keysetHash = keccak256(abi.encodePacked(masterKey, threshold));
         while (_index < _signature.length - 1) {
             recoveryEmail = _signature.mcReadBytes32(_index);
             _index += 32;
             keysetHash = keccak256(abi.encodePacked(keysetHash, recoveryEmail));
         }
+
+        success = _isValidKeysetHash(keysetHash);
     }
 
     function _toLockKeysetHash(bytes32 _keysetHash, uint256 _lockDuring)
@@ -215,14 +228,14 @@ abstract contract ModuleAuthBase is
         bytes32 _digestHash,
         bytes calldata _signature,
         uint256 _index
-    ) internal view returns (bytes32 keysetHash) {
+    ) internal view returns (bool success) {
         address masterKey;
         (masterKey, _index) = _signature.cReadAddress(_index);
         uint16 threshold;
         bytes32 recoveryEmail;
         (threshold, _index) = _signature.cReadUint16(_index);
 
-        keysetHash = keccak256(abi.encodePacked(masterKey, threshold));
+        bytes32 keysetHash = keccak256(abi.encodePacked(masterKey, threshold));
         bool validated;
         uint256 counts = 0;
         while (_index < _signature.length - 1) {
@@ -239,15 +252,16 @@ abstract contract ModuleAuthBase is
 
         require(
             threshold <= counts,
-            "ModuleAuth#_validateSigRecoveryEmail: NOT_ENOUGH_RECOVERY_EMAIL"
+            "_validateSigRecoveryEmail: NOT_ENOUGH_RECOVERY_EMAIL"
         );
+        success = _isValidKeysetHash(keysetHash);
     }
 
     function _validateSigMasterKeyWithRecoveryEmail(
         bytes32 _digestHash,
         bytes calldata _signature,
         uint256 _index
-    ) internal view returns (bytes32 keysetHash) {
+    ) internal view returns (bool success) {
         address masterKey = recoverSigner(
             _digestHash,
             _signature[_index:_index + 66]
@@ -257,7 +271,7 @@ abstract contract ModuleAuthBase is
         bytes32 recoveryEmail;
         (threshold, _index) = _signature.cReadUint16(_index);
 
-        keysetHash = keccak256(abi.encodePacked(masterKey, threshold));
+        bytes32 keysetHash = keccak256(abi.encodePacked(masterKey, threshold));
         bool validated;
         uint256 counts = 0;
         while (_index < _signature.length - 1) {
@@ -274,25 +288,17 @@ abstract contract ModuleAuthBase is
 
         require(
             threshold <= counts,
-            "ModuleAuth#_validateSigRecoveryEmail: NOT_ENOUGH_RECOVERY_EMAIL"
+            "_validateSigMasterKeyWithRecoveryEmail: NOT_ENOUGH_RECOVERY_EMAIL"
         );
+
+        success = _isValidKeysetHash(keysetHash);
     }
 
-    function executeAccountTx(bytes calldata _input) external {
-        _executeAccountTx(_input, SigType.SigNone);
-    }
-
-    function _executeAccountTx(
-        bytes calldata _input,
-        SigType _executeCallSigType
-    ) internal {
+    function executeAccountTx(bytes calldata _input) public {
         uint32 metaNonce;
         (uint8 actionType, uint256 leftIndex) = _input.readFirstUint8();
         (metaNonce, leftIndex) = _input.cReadUint32(leftIndex);
-        require(
-            _isValidNonce(metaNonce),
-            "ModuleAuth#executeAccountTx: INVALID_NONCE"
-        );
+        require(_isValidNonce(metaNonce), "executeAccountTx: INVALID_NONCE");
 
         if (actionType == UPDATE_KEYSET_HASH) {
             _executeUpdateKeysetHash(_input, leftIndex, metaNonce);
@@ -302,8 +308,10 @@ abstract contract ModuleAuthBase is
             _executeCancelLockKeysetHsah(_input, leftIndex, metaNonce);
         } else if (actionType == UPDATE_TIMELOCK_DURING) {
             _executeUpdateTimeLockDuring(_input, leftIndex, metaNonce);
-        } else if (actionType == UPDATE_IMPLEMENT) {
+        } else if (actionType == UPDATE_IMPLEMENTATION) {
             _executeUpdateImplement(_input, leftIndex, metaNonce);
+        } else if (actionType == UPDATE_ENTRY_POINT) {
+            _executeUpdateEntryPoint(_input, leftIndex, metaNonce);
         } else {
             revert InvalidActionType(actionType);
         }
@@ -314,6 +322,7 @@ abstract contract ModuleAuthBase is
         uint256 _index,
         uint32 _metaNonce
     ) private {
+        _requireUnLocked();
         bytes32 newKeysetHash = _input.mcReadBytes32(_index);
         _index += 32;
         bytes32 digestHash = keccak256(
@@ -324,35 +333,18 @@ abstract contract ModuleAuthBase is
                 newKeysetHash
             )
         );
-        SigType sigType = SigType(_input.mcReadUint8(_index));
-        _index++;
 
-        bytes32 keysetHash;
-        _requireUnLocked();
-        if (sigType == SigType.SigMasterKey) {
-            keysetHash = _validateSigMasterKey(digestHash, _input, _index);
-            require(
-                _isValidKeysetHash(keysetHash),
-                "ModuleAuth#_executeUpdateKeysetHash: INVALID_KEYSET_HASH"
-            );
+        (bool success, uint256 sigWeight) = _validateSignatureWeight(
+            EXPECTED_UPDATE_KEYSET_HASH_SIG_WEIGHT,
+            digestHash,
+            _input,
+            _index
+        );
+        require(success, "_executeUpdateKeysetHash: INVALID_SIG_WEIGHT");
+
+        if (sigWeight == EXPECTED_UPDATE_KEYSET_HASH_SIG_WEIGHT) {
             _toLockKeysetHash(newKeysetHash, getLockDuring());
-        } else if (sigType == SigType.SigRecoveryEmail) {
-            keysetHash = _validateSigRecoveryEmail(digestHash, _input, _index);
-            require(
-                _isValidKeysetHash(keysetHash),
-                "ModuleAuth#_executeUpdateKeysetHash: INVALID_KEYSET_HASH"
-            );
-            _toLockKeysetHash(newKeysetHash, getLockDuring());
-        } else if (sigType == SigType.SigMasterKeyWithRecoveryEmail) {
-            keysetHash = _validateSigMasterKeyWithRecoveryEmail(
-                digestHash,
-                _input,
-                _index
-            );
-            require(
-                _isValidKeysetHash(keysetHash),
-                "ModuleAuth#_executeUpdateKeysetHash: INVALID_KEYSET"
-            );
+        } else {
             _updateKeysetHash(newKeysetHash);
         }
         _writeMetaNonce(_metaNonce);
@@ -378,27 +370,15 @@ abstract contract ModuleAuthBase is
                 uint8(CANCEL_LOCK_KEYSET_HASH)
             )
         );
-        SigType sigType = SigType(_input.mcReadUint8(_index));
-        _index++;
 
-        bytes32 keysetHash;
-        if (sigType == SigType.SigMasterKey) {
-            keysetHash = _validateSigMasterKey(digestHash, _input, _index);
-        } else if (sigType == SigType.SigRecoveryEmail) {
-            keysetHash = _validateSigRecoveryEmail(digestHash, _input, _index);
-        } else if (sigType == SigType.SigMasterKeyWithRecoveryEmail) {
-            keysetHash = _validateSigMasterKeyWithRecoveryEmail(
-                digestHash,
-                _input,
-                _index
-            );
-        } else {
-            revert InvalidSigType(sigType);
-        }
-        require(
-            _isValidKeysetHash(keysetHash),
-            "ModuleAuth#_executeCancelLockKeysetHsah: INVALID_KEYSET_HASH"
+        (bool success, ) = _validateSignatureWeight(
+            EXPECTED_CANCEL_LOCK_KEYSET_HASH_SIG_WEIGHT,
+            digestHash,
+            _input,
+            _index
         );
+        require(success, "_executeCancelLockKeysetHsah: INVALID_SIG_WEIGHT");
+
         _unlockKeysetHash();
         _writeMetaNonce(_metaNonce);
     }
@@ -421,27 +401,13 @@ abstract contract ModuleAuthBase is
                 newLockDuring
             )
         );
-        SigType sigType = SigType(_input.mcReadUint8(_index));
-        _index++;
-
-        bytes32 keysetHash;
-        if (sigType == SigType.SigMasterKey) {
-            keysetHash = _validateSigMasterKey(digestHash, _input, _index);
-        } else if (sigType == SigType.SigRecoveryEmail) {
-            keysetHash = _validateSigRecoveryEmail(digestHash, _input, _index);
-        } else if (sigType == SigType.SigMasterKeyWithRecoveryEmail) {
-            keysetHash = _validateSigMasterKeyWithRecoveryEmail(
-                digestHash,
-                _input,
-                _index
-            );
-        } else {
-            revert InvalidSigType(sigType);
-        }
-        require(
-            _isValidKeysetHash(keysetHash),
-            "ModuleAuth#_executeUpdateTimeLockDuring: INVALID_KEYSET"
+        (bool success, ) = _validateSignatureWeight(
+            EXPECTED_UPDATE_TIMELOCK_DURINT_SIG_WEIGHT,
+            digestHash,
+            _input,
+            _index
         );
+        require(success, "_executeUpdateTimeLockDuring: INVALID_SIG_WEIGHT");
         _setLockDuring(newLockDuring);
         _writeMetaNonce(_metaNonce);
     }
@@ -460,20 +426,47 @@ abstract contract ModuleAuthBase is
             abi.encodePacked(
                 _metaNonce,
                 address(this),
-                uint8(UPDATE_IMPLEMENT),
+                uint8(UPDATE_IMPLEMENTATION),
                 newImplement
             )
         );
-        bytes32 keysetHash = _validateSigMasterKeyWithRecoveryEmail(
+        (bool success, ) = _validateSignatureWeight(
+            EXPECTED_UPDATE_IMPLEMENTATION_SIG_WEIGHT,
             digestHash,
             _input,
             _index
         );
-        require(
-            _isValidKeysetHash(keysetHash),
-            "ModuleAuth#_executeUpdateImplement: INVALID_KEYSET_HASH"
-        );
+        require(success, "_executeUpdateImplement: INVALID_SIG_WEIGHT");
         _setImplementation(newImplement);
+        _writeMetaNonce(_metaNonce);
+    }
+
+    function _executeUpdateEntryPoint(
+        bytes calldata _input,
+        uint256 _index,
+        uint32 _metaNonce
+    ) private {
+        address newEntryPoint;
+        (newEntryPoint, _index) = _input.cReadAddress(_index);
+        if (!newEntryPoint.isContract()) {
+            revert InvalidEntryPoint(newEntryPoint);
+        }
+        bytes32 digestHash = keccak256(
+            abi.encodePacked(
+                _metaNonce,
+                address(this),
+                uint8(UPDATE_ENTRY_POINT),
+                newEntryPoint
+            )
+        );
+        (bool success, ) = _validateSignatureWeight(
+            EXPECTED_UPDATE_ENTRY_POINT_SIG_WEIGHT,
+            digestHash,
+            _input,
+            _index
+        );
+        require(success, "_executeUpdateEntryPoint: INVALID_SIG_WEIGHT");
+        _writeEntryPoint(newEntryPoint);
         _writeMetaNonce(_metaNonce);
     }
 
@@ -483,20 +476,16 @@ abstract contract ModuleAuthBase is
         bytes calldata _signature,
         uint256 _index
     ) public view returns (bool success) {
-        bytes32 keysetHash;
         if (_sigType == SigType.SigMasterKey) {
-            keysetHash = _validateSigMasterKey(_hash, _signature, _index);
-            success = _isValidKeysetHash(keysetHash);
+            success = _validateSigMasterKey(_hash, _signature, _index);
         } else if (_sigType == SigType.SigRecoveryEmail) {
-            keysetHash = _validateSigRecoveryEmail(_hash, _signature, _index);
-            success = _isValidKeysetHash(keysetHash);
+            success = _validateSigRecoveryEmail(_hash, _signature, _index);
         } else if (_sigType == SigType.SigMasterKeyWithRecoveryEmail) {
-            keysetHash = _validateSigMasterKeyWithRecoveryEmail(
+            success = _validateSigMasterKeyWithRecoveryEmail(
                 _hash,
                 _signature,
                 _index
             );
-            success = _isValidKeysetHash(keysetHash);
         } else if (_sigType == SigType.SigSessionKey) {
             success = _validateSigSessionKey(_hash, _signature, _index);
         } else if (_sigType == SigType.SigNone) {
@@ -504,18 +493,34 @@ abstract contract ModuleAuthBase is
         }
     }
 
+    function _validateSignatureWeight(
+        uint256 _expectedSigWeight,
+        bytes32 _hash,
+        bytes calldata _signature,
+        uint256 _index
+    ) internal view returns (bool success, uint256 sigWeight) {
+        SigType sigType = SigType(_signature.mcReadUint8(_index));
+        sigWeight = sigType._toSignatureWeight();
+        require(
+            sigWeight >= _expectedSigWeight,
+            "_validateSignatureWeight: INVALID_SIG_WEIGHT"
+        );
+        _index++;
+        success = isValidSignature(sigType, _hash, _signature, _index);
+    }
+
     function _validateSigSessionKey(
         bytes32 _hash,
         bytes calldata _signature,
         uint256 _index
-    ) internal view returns (bool) {
+    ) internal view returns (bool success) {
         address sessionKey;
         (sessionKey, _index) = _signature.readAddress(_index);
         uint256 timestamp = uint256(_signature.mcReadBytes32(_index));
         _index += 32;
         require(
             block.timestamp < timestamp,
-            "ModuleAuth#_validateSigSessionKey: INVALID_TIMESTAMP"
+            "_validateSigSessionKey: INVALID_TIMESTAMP"
         );
         address recoverySessionKey = recoverSigner(
             _hash,
@@ -524,15 +529,10 @@ abstract contract ModuleAuthBase is
         _index += 66;
         require(
             sessionKey == recoverySessionKey,
-            "ModuleAuth#_validateSigSessionKey: INVALID_SESSIONKEY"
+            "_validateSigSessionKey: INVALID_SESSIONKEY"
         );
 
         bytes32 digestHash = keccak256(abi.encodePacked(sessionKey, timestamp));
-        bytes32 keysetHash = _validateSigMasterKey(
-            digestHash,
-            _signature,
-            _index
-        );
-        return _isValidKeysetHash(keysetHash);
+        success = _validateSigMasterKey(digestHash, _signature, _index);
     }
 }
