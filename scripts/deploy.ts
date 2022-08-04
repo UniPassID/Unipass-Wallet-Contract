@@ -73,7 +73,7 @@ async function main() {
     ModuleMainUpgradable,
     0,
     txParams,
-    deployer.singleFactoryContract.address
+    dkimKeys.address
   );
 
   const ModuleMain = await ethers.getContractFactory("ModuleMain");
@@ -95,6 +95,7 @@ async function main() {
     JSON.stringify(
       buildNetworkJson(
         { name: "ModuleMain", address: moduleMain.address },
+        { name: "ModuleMainUpgradable", address: moduleMainUpgradable.address },
         {
           name: "DkimKeys",
           address: dkimKeys.address,

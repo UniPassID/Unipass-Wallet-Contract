@@ -12,7 +12,6 @@ import {
 import { getCreate2Address, Interface, keccak256 } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import { Transaction } from "ethereumjs-tx";
-import { optimalGasLimit } from "./common";
 
 const CreationCode: string =
   "0x603a600e3d39601a805130553df3363d3d373d3d3d363d30545af43d82803e903d91601857fd5bf3";
