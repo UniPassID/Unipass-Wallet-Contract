@@ -6,7 +6,5 @@ import "../modules/commons/ModuleAuthUpgradable.sol";
 import "../modules/commons/ModuleHooks.sol";
 
 contract ModuleMainUpgradable is ModuleCall, ModuleAuthUpgradable, ModuleHooks {
-    constructor(IDkimKeys _dkimKeys, address _entryPoint)
-        ModuleAuthUpgradable(_dkimKeys, _entryPoint)
-    {}
+    constructor(IDkimKeys _dkimKeys) ModuleAuthUpgradable(_dkimKeys) {}
 }

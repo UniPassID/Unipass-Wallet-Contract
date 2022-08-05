@@ -14,6 +14,7 @@ import {
   pureEmailHash,
   SerializeDkimParams,
 } from "./email";
+import { UserOperation } from "./userOperation";
 
 export enum ActionType {
   UpdateKeysetHash = 0,
@@ -414,35 +415,51 @@ export async function generateUpdateImplementationTx(
   return tx;
 }
 
-export async function generateUpdateEntryPointTx(
+export function generateUpdateEntryPointTx(
   contract: Contract,
-  metaNonce: number,
-  newEntryPoint: string,
-  masterKey: Wallet,
-  threshold: number,
-  recoveryEmailsIndexes: number[],
-  recoveryEmails: string[]
+  eip4337WalletNonce: number,
+  newEntryPoint: string
 ) {
-  const digestHash = keccak256(
-    solidityPack(
-      ["uint32", "address", "uint8", "address"],
-      [metaNonce, contract.address, ActionType.UpdateEntryPoint, newEntryPoint]
-    )
-  );
-
   const data = contract.interface.encodeFunctionData("updateEntryPoint", [
-    metaNonce,
+    eip4337WalletNonce,
     newEntryPoint,
-    await generateSignature(
-      SigType.SigMasterKeyWithRecoveryEmail,
-      digestHash,
-      undefined,
-      undefined,
-      masterKey,
-      threshold,
-      recoveryEmailsIndexes,
-      recoveryEmails
-    ),
+  ]);
+  let tx = {
+    callType: CallType.Call,
+    gasLimit: ethers.constants.Zero,
+    target: contract.address,
+    value: ethers.constants.Zero,
+    data,
+  };
+  return tx;
+}
+
+export function generateRemoveSigWeightOfSelector(
+  contract: Contract,
+  selector: BytesLike
+) {
+  const data = contract.interface.encodeFunctionData(
+    "removeSigWeightOfSelector",
+    [selector]
+  );
+  let tx = {
+    callType: CallType.Call,
+    gasLimit: ethers.constants.Zero,
+    target: contract.address,
+    value: ethers.constants.Zero,
+    data,
+  };
+  return tx;
+}
+
+export function generateAddSigWeightOfSelector(
+  contract: Contract,
+  selector: BytesLike,
+  sigWeight: number
+) {
+  const data = contract.interface.encodeFunctionData("addSigWeightOfSelector", [
+    selector,
+    sigWeight,
   ]);
   let tx = {
     callType: CallType.Call,

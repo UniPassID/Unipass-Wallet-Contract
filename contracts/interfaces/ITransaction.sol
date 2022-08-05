@@ -14,8 +14,6 @@ abstract contract ITransaction {
         Call,
         DelegateCall
     }
-    event TxExecuted(bytes32 txHash);
 
-    error TxFailed(bytes32, bytes);
     error InvalidCallType(CallType);
 }

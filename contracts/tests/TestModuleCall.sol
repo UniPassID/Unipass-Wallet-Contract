@@ -9,9 +9,6 @@ contract TestModuleCall is ModuleCall, ModuleAuthFixed, ModuleHooks {
     constructor(
         address _factory,
         address _moduleMainUpgradable,
-        IDkimKeys _dkimKeys,
-        address _entryPoint
-    )
-        ModuleAuthFixed(_factory, _moduleMainUpgradable, _dkimKeys, _entryPoint)
-    {}
+        IDkimKeys _dkimKeys
+    ) ModuleAuthFixed(_factory, _moduleMainUpgradable, _dkimKeys) {}
 }
