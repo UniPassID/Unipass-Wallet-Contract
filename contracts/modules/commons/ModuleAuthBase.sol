@@ -4,12 +4,12 @@ pragma solidity ^0.8.0;
 /* solhint-disable no-unused-vars */
 
 import "./ModuleDkimAuth.sol";
-import "./ModuleEIP4337WalletAuth.sol";
 import "./ModuleTimeLock.sol";
 import "./ModuleSelfAuth.sol";
 import "./Implementation.sol";
 import "../../utils/SigPart.sol";
 import "../../utils/SignatureValidator.sol";
+import "../../interfaces/IModuleAuth.sol";
 
 import "@openzeppelin/contracts/utils/Address.sol";
 
@@ -21,8 +21,8 @@ import "hardhat/console.sol";
  */
 abstract contract ModuleAuthBase is
     ModuleSelfAuth,
+    IModuleAuth,
     ModuleDkimAuth,
-    ModuleEIP4337WalletAuth,
     Implementation,
     ModuleTimeLock,
     SignatureValidator
@@ -31,10 +31,9 @@ abstract contract ModuleAuthBase is
     using Address for address;
     using LibSigType for SigType;
 
-    constructor(IDkimKeys _dkimKeys, address _entryPoint)
+    constructor(IDkimKeys _dkimKeys)
         ModuleTimeLock()
         ModuleDkimAuth(_dkimKeys)
-        ModuleEIP4337WalletAuth(_entryPoint)
     {}
 
     //                       META_NONCE_KEY = keccak256("unipass-wallet:module-auth:meta-nonce")
@@ -66,7 +65,6 @@ abstract contract ModuleAuthBase is
 
     error InvalidActionType(uint256 _actionType);
     error InvalidImplementation(address _implementation);
-    error InvalidEntryPoint(address _entryPoint);
 
     function _isValidKeysetHash(bytes32 _keysetHash)
         internal
@@ -316,7 +314,7 @@ abstract contract ModuleAuthBase is
             )
         );
 
-        (bool success, uint256 sigWeight) = _validateSignatureWeight(
+        (bool success, uint256 sigWeight) = validateSignatureWeight(
             EXPECTED_UPDATE_KEYSET_HASH_SIG_WEIGHT,
             digestHash,
             _signature
@@ -353,7 +351,7 @@ abstract contract ModuleAuthBase is
             )
         );
 
-        (bool success, ) = _validateSignatureWeight(
+        (bool success, ) = validateSignatureWeight(
             EXPECTED_CANCEL_LOCK_KEYSET_HASH_SIG_WEIGHT,
             digestHash,
             _signature
@@ -380,7 +378,7 @@ abstract contract ModuleAuthBase is
                 _newTimeLockDuring
             )
         );
-        (bool success, ) = _validateSignatureWeight(
+        (bool success, ) = validateSignatureWeight(
             EXPECTED_UPDATE_TIMELOCK_DURINT_SIG_WEIGHT,
             digestHash,
             _signature
@@ -407,40 +405,13 @@ abstract contract ModuleAuthBase is
                 _newImplementation
             )
         );
-        (bool success, ) = _validateSignatureWeight(
+        (bool success, ) = validateSignatureWeight(
             EXPECTED_UPDATE_IMPLEMENTATION_SIG_WEIGHT,
             digestHash,
             _signature
         );
         require(success, "_executeUpdateImplement: INVALID_SIG_WEIGHT");
         _setImplementation(_newImplementation);
-        _writeMetaNonce(_metaNonce);
-    }
-
-    function updateEntryPoint(
-        uint32 _metaNonce,
-        address _newEntryPoint,
-        bytes calldata _signature
-    ) external onlySelf {
-        _requireMetaNonce(_metaNonce);
-        if (!_newEntryPoint.isContract()) {
-            revert InvalidEntryPoint(_newEntryPoint);
-        }
-        bytes32 digestHash = keccak256(
-            abi.encodePacked(
-                _metaNonce,
-                address(this),
-                uint8(UPDATE_ENTRY_POINT),
-                _newEntryPoint
-            )
-        );
-        (bool success, ) = _validateSignatureWeight(
-            EXPECTED_UPDATE_ENTRY_POINT_SIG_WEIGHT,
-            digestHash,
-            _signature
-        );
-        require(success, "_executeUpdateEntryPoint: INVALID_SIG_WEIGHT");
-        _writeEntryPoint(_newEntryPoint);
         _writeMetaNonce(_metaNonce);
     }
 
@@ -467,17 +438,17 @@ abstract contract ModuleAuthBase is
         }
     }
 
-    function _validateSignatureWeight(
+    function validateSignatureWeight(
         uint256 _expectedSigWeight,
         bytes32 _hash,
         bytes calldata _signature
-    ) internal view returns (bool success, uint256 sigWeight) {
+    ) public view returns (bool success, uint256 sigWeight) {
         uint256 index = 0;
         SigType sigType = SigType(_signature.mcReadUint8(index));
         sigWeight = sigType._toSignatureWeight();
         require(
             sigWeight >= _expectedSigWeight,
-            "_validateSignatureWeight: INVALID_SIG_WEIGHT"
+            "validateSignatureWeight: INVALID_SIG_WEIGHT"
         );
         index++;
         success = _validateSignature(sigType, _hash, _signature, index);

@@ -12,9 +12,8 @@ contract ModuleAuthFixed is ModuleAuthBase {
     constructor(
         address _factory,
         address _moduleMainUpgradable,
-        IDkimKeys _dkimKeys,
-        address _entryPoint
-    ) ModuleAuthBase(_dkimKeys, _entryPoint) {
+        IDkimKeys _dkimKeys
+    ) ModuleAuthBase(_dkimKeys) {
         FACTORY = _factory;
         MODULE_MAIN_UPGRADABLE = _moduleMainUpgradable;
         INIT_CODE_HASH = keccak256(

@@ -5,13 +5,13 @@ import { ethers } from "hardhat";
 import {
   generateRecoveryEmails,
   getKeysetHash,
-  optimalGasLimit,
   transferEth,
 } from "./utils/common";
 import { Deployer } from "./utils/deployer";
 import { generateAddHookTx, generateRemoveHookTx } from "./utils/hook";
 import {
   executeCall,
+  generateAddSigWeightOfSelector,
   generateCancelLockKeysetHashTx,
   generateSignature,
   generateTransferTx,
@@ -22,12 +22,11 @@ import {
   generateUpdateTimeLockDuringTx,
   SigType,
 } from "./utils/sigPart";
-import { DefaultsForUserOp, UserOperation } from "./utils/userOperation";
+import { DefaultsForUserOp } from "./utils/userOperation";
 
 describe("ModuleCall", function () {
   let testModuleCall: Contract;
   let TestModuleCall: ContractFactory;
-  let entryPoint: Wallet;
   let proxyTestModuleCall: Contract;
   let deployer: Deployer;
   let dkimKeys: Contract;
@@ -59,9 +58,6 @@ describe("ModuleCall", function () {
       wallet.address
     );
 
-    entryPoint = Wallet.createRandom().connect(dkimKeys.provider);
-    await transferEth(entryPoint.address, 10);
-
     const ModuleMainUpgradable = await ethers.getContractFactory(
       "ModuleMainUpgradable"
     );
@@ -69,8 +65,7 @@ describe("ModuleCall", function () {
       ModuleMainUpgradable,
       0,
       txParams,
-      dkimKeys.address,
-      entryPoint.address
+      dkimKeys.address
     );
 
     TestModuleCall = await ethers.getContractFactory("TestModuleCall");
@@ -80,8 +75,7 @@ describe("ModuleCall", function () {
       txParams,
       deployer.singleFactoryContract.address,
       moduleMainUpgradable.address,
-      dkimKeys.address,
-      entryPoint.address
+      dkimKeys.address
     );
 
     chainId = (await dkimKeys.provider.getNetwork()).chainId;
@@ -488,43 +482,6 @@ describe("ModuleCall", function () {
         proxyTestModuleCall = Greeter.attach(proxyTestModuleCall.address);
         expect(await proxyTestModuleCall.ret1()).to.equals(1);
       });
-
-      it(`Update EntryPoint For ${module}`, async function () {
-        await init();
-        const newEntryPoint = await (
-          await ethers.getContractFactory("Greeter")
-        ).deploy();
-
-        const tx = await generateUpdateEntryPointTx(
-          proxyTestModuleCall,
-          metaNonce,
-          newEntryPoint.address,
-          masterKey,
-          threshold,
-          recoveryEmailsIndexes,
-          recoveryEmails
-        );
-        let ret = await executeCall(
-          [tx],
-          chainId,
-          nonce,
-          masterKey,
-          threshold,
-          recoveryEmails,
-          Wallet.createRandom(),
-          Math.ceil(Date.now() / 1000) + 500,
-          proxyTestModuleCall,
-          SigType.SigNone
-        );
-        expect(ret.status).to.equal(1);
-        expect(await proxyTestModuleCall.getEntryPoint()).to.equals(
-          newEntryPoint.address
-        );
-        expect(await proxyTestModuleCall.getNonce()).to.equals(nonce);
-        expect(await proxyTestModuleCall.getMetaNonce()).to.equals(metaNonce);
-        nonce++;
-        metaNonce++;
-      });
     });
   });
 
@@ -703,6 +660,165 @@ describe("ModuleCall", function () {
     });
   });
 
+  describe("Test EIP4337 Wallet Hook", () => {
+    let EIP4337Wallet: ContractFactory;
+    let eip4337Wallet: Contract;
+    let entryPoint: Wallet;
+    let eip4337WalletNonce: number;
+    this.beforeAll(async () => {
+      entryPoint = Wallet.createRandom();
+      await transferEth(entryPoint.address, 10);
+
+      EIP4337Wallet = await ethers.getContractFactory(
+        "ModuleHookEIP4337Wallet"
+      );
+      eip4337Wallet = await EIP4337Wallet.deploy(entryPoint.address);
+      entryPoint = entryPoint.connect(eip4337Wallet.provider);
+    });
+    this.beforeEach(async () => {
+      const tx1 = generateAddHookTx(
+        proxyTestModuleCall,
+        EIP4337Wallet.interface.getSighash("updateEntryPoint"),
+        eip4337Wallet.address
+      );
+      const tx2 = generateAddHookTx(
+        proxyTestModuleCall,
+        EIP4337Wallet.interface.getSighash("getEntryPoint"),
+        eip4337Wallet.address
+      );
+      const tx3 = generateAddHookTx(
+        proxyTestModuleCall,
+        EIP4337Wallet.interface.getSighash("getEIP4337WalletNonce"),
+        eip4337Wallet.address
+      );
+      const tx4 = generateAddHookTx(
+        proxyTestModuleCall,
+        EIP4337Wallet.interface.getSighash("validateUserOp"),
+        eip4337Wallet.address
+      );
+      const tx5 = generateAddHookTx(
+        proxyTestModuleCall,
+        EIP4337Wallet.interface.getSighash("execFromEntryPoint"),
+        eip4337Wallet.address
+      );
+      const tx6 = generateAddSigWeightOfSelector(
+        proxyTestModuleCall,
+        EIP4337Wallet.interface.getSighash("updateEntryPoint"),
+        3
+      );
+      const tx7 = generateAddSigWeightOfSelector(
+        proxyTestModuleCall,
+        EIP4337Wallet.interface.getSighash("validateUserOp"),
+        0
+      );
+      const tx8 = generateAddSigWeightOfSelector(
+        proxyTestModuleCall,
+        EIP4337Wallet.interface.getSighash("execFromEntryPoint"),
+        0
+      );
+      const ret = await executeCall(
+        [tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8],
+        chainId,
+        nonce,
+        masterKey,
+        threshold,
+        recoveryEmails,
+        Wallet.createRandom(),
+        Math.ceil(Date.now() / 1000) + 500,
+        proxyTestModuleCall,
+        SigType.SigMasterKeyWithRecoveryEmail
+      );
+      expect(ret.status).to.equals(1);
+      eip4337WalletNonce = 1;
+      nonce++;
+    });
+    it("Test Update Entry Point", async () => {
+      proxyTestModuleCall = eip4337Wallet.attach(proxyTestModuleCall.address);
+      const newEntryPoint = await (
+        await ethers.getContractFactory("Greeter")
+      ).deploy();
+      const tx = generateUpdateEntryPointTx(
+        proxyTestModuleCall,
+        eip4337WalletNonce,
+        newEntryPoint.address
+      );
+      proxyTestModuleCall = testModuleCall.attach(proxyTestModuleCall.address);
+      const ret = await executeCall(
+        [tx],
+        chainId,
+        nonce,
+        masterKey,
+        threshold,
+        recoveryEmails,
+        Wallet.createRandom(),
+        Math.ceil(Date.now() / 1000) + 500,
+        proxyTestModuleCall,
+        SigType.SigMasterKeyWithRecoveryEmail
+      );
+      proxyTestModuleCall = eip4337Wallet.attach(proxyTestModuleCall.address);
+      expect(ret.status).to.equals(1);
+      expect(await proxyTestModuleCall.getEntryPoint()).to.equals(
+        newEntryPoint.address
+      );
+      expect(await proxyTestModuleCall.getEIP4337WalletNonce()).to.equals(
+        eip4337WalletNonce
+      );
+      eip4337WalletNonce++;
+    });
+    it("Test Validate User Op", async () => {
+      const newKeysetHash = hexlify(randomBytes(32));
+      const requestId = hexlify(randomBytes(32));
+      const tx = await generateUpdateKeysetHashTx(
+        proxyTestModuleCall,
+        metaNonce,
+        newKeysetHash,
+        masterKey,
+        threshold,
+        recoveryEmailsIndexes,
+        recoveryEmails,
+        SigType.SigMasterKeyWithRecoveryEmail
+      );
+      let op = DefaultsForUserOp;
+      op.sender = proxyTestModuleCall.address;
+      op.nonce = eip4337WalletNonce;
+      op.callData = EIP4337Wallet.interface.encodeFunctionData(
+        "execFromEntryPoint",
+        [tx]
+      );
+      op.signature = await generateSignature(
+        SigType.SigMasterKeyWithRecoveryEmail,
+        requestId,
+        Wallet.createRandom(),
+        Math.ceil(Date.now() / 1000) + 500,
+        masterKey,
+        threshold,
+        recoveryEmailsIndexes,
+        recoveryEmails
+      );
+      proxyTestModuleCall = eip4337Wallet.attach(proxyTestModuleCall.address);
+      let ret = await (
+        await proxyTestModuleCall
+          .connect(entryPoint)
+          .validateUserOp(op, requestId, 0)
+      ).wait();
+      expect(ret.status).to.equals(1);
+
+      expect(await proxyTestModuleCall.getEIP4337WalletNonce()).to.equals(
+        eip4337WalletNonce
+      );
+      eip4337WalletNonce++;
+
+      ret = await (
+        await proxyTestModuleCall.connect(entryPoint).execFromEntryPoint(tx)
+      ).wait();
+      expect(ret.status).to.equals(1);
+      proxyTestModuleCall = testModuleCall.attach(proxyTestModuleCall.address);
+      expect(await proxyTestModuleCall.getKeysetHash()).to.equals(
+        newKeysetHash
+      );
+    });
+  });
+
   it("Test Multiple Transactions", async function () {
     const to = Wallet.createRandom();
     const value = ethers.utils.parseEther("10");
@@ -722,8 +838,6 @@ describe("ModuleCall", function () {
       ethers.constants.Zero,
       value
     );
-
-    const nonce = 1;
     const sessionKey = Wallet.createRandom();
 
     const ret = await executeCall(
@@ -746,50 +860,5 @@ describe("ModuleCall", function () {
     expect(await proxyTestModuleCall.lockedKeysetHash()).to.equal(
       newKeysetHash
     );
-  });
-  it("Execute From EntryPoint Should Success", async function () {
-    const to = Wallet.createRandom();
-    const value = ethers.utils.parseEther("10");
-    let tx = await generateTransferTx(to.address, optimalGasLimit, value);
-    const ret = await (
-      await proxyTestModuleCall.connect(entryPoint).execFromEntryPoint(tx, 1)
-    ).wait();
-    expect(ret.status).to.equals(1);
-    expect(await proxyTestModuleCall.provider.getBalance(to.address)).to.equals(
-      ethers.utils.parseEther("10")
-    );
-    expect(await proxyTestModuleCall.getNonce()).to.equals(0);
-  });
-  it("Validate User Op Should Success", async function () {
-    const to = Wallet.createRandom();
-    const value = ethers.utils.parseEther("10");
-    let op: UserOperation = DefaultsForUserOp;
-    let tx = await generateTransferTx(to.address, optimalGasLimit, value);
-    const requestId = hexlify(randomBytes(32));
-    const sessionKey = Wallet.createRandom();
-    const expired = Math.ceil(Date.now() / 1000) + 300;
-    op.callData = proxyTestModuleCall.interface.encodeFunctionData(
-      "execFromEntryPoint",
-      [tx, 1]
-    );
-    op.sender = proxyTestModuleCall.address;
-    op.signature = await generateSignature(
-      SigType.SigSessionKey,
-      requestId,
-      sessionKey,
-      expired,
-      masterKey,
-      threshold,
-      recoveryEmailsIndexes,
-      recoveryEmails
-    );
-    op.nonce = 1;
-    const ret = await (
-      await proxyTestModuleCall
-        .connect(entryPoint)
-        .validateUserOp(op, requestId, 0)
-    ).wait();
-    expect(ret.status).to.equals(1);
-    expect(await proxyTestModuleCall.getNonce()).to.equals(1);
   });
 });
