@@ -6,6 +6,7 @@ pragma solidity ^0.8.0;
 import "./ModuleDkimAuth.sol";
 import "./ModuleEIP4337WalletAuth.sol";
 import "./ModuleTimeLock.sol";
+import "./ModuleSelfAuth.sol";
 import "./Implementation.sol";
 import "../../utils/SigPart.sol";
 import "../../utils/SignatureValidator.sol";
@@ -19,6 +20,7 @@ import "hardhat/console.sol";
  *      Multi-Chains Syncture.
  */
 abstract contract ModuleAuthBase is
+    ModuleSelfAuth,
     ModuleDkimAuth,
     ModuleEIP4337WalletAuth,
     Implementation,
@@ -63,7 +65,7 @@ abstract contract ModuleAuthBase is
     event KeysetHashUpdated(bytes32 newKeysetHash);
 
     error InvalidActionType(uint256 _actionType);
-    error InvalidImplement(address _implemenation);
+    error InvalidImplementation(address _implementation);
     error InvalidEntryPoint(address _entryPoint);
 
     function _isValidKeysetHash(bytes32 _keysetHash)
@@ -180,7 +182,11 @@ abstract contract ModuleAuthBase is
         (params.sdidRightIndex, newIndex) = _signature.cReadUint32(newIndex);
     }
 
-    function _isValidNonce(uint32 _nonce)
+    function _requireMetaNonce(uint256 _nonce) internal view {
+        require(_isValidNonce(_nonce), "_requireMetaNonce: INVALID_META_NONCE");
+    }
+
+    function _isValidNonce(uint256 _nonce)
         internal
         view
         virtual
@@ -294,74 +300,50 @@ abstract contract ModuleAuthBase is
         success = _isValidKeysetHash(keysetHash);
     }
 
-    function executeAccountTx(bytes calldata _input) public {
-        uint32 metaNonce;
-        (uint8 actionType, uint256 leftIndex) = _input.readFirstUint8();
-        (metaNonce, leftIndex) = _input.cReadUint32(leftIndex);
-        require(_isValidNonce(metaNonce), "executeAccountTx: INVALID_NONCE");
-
-        if (actionType == UPDATE_KEYSET_HASH) {
-            _executeUpdateKeysetHash(_input, leftIndex, metaNonce);
-        } else if (actionType == UNLOCK_KEYSET_HASH) {
-            _executeUnlockKeysetHash(metaNonce);
-        } else if (actionType == CANCEL_LOCK_KEYSET_HASH) {
-            _executeCancelLockKeysetHsah(_input, leftIndex, metaNonce);
-        } else if (actionType == UPDATE_TIMELOCK_DURING) {
-            _executeUpdateTimeLockDuring(_input, leftIndex, metaNonce);
-        } else if (actionType == UPDATE_IMPLEMENTATION) {
-            _executeUpdateImplement(_input, leftIndex, metaNonce);
-        } else if (actionType == UPDATE_ENTRY_POINT) {
-            _executeUpdateEntryPoint(_input, leftIndex, metaNonce);
-        } else {
-            revert InvalidActionType(actionType);
-        }
-    }
-
-    function _executeUpdateKeysetHash(
-        bytes calldata _input,
-        uint256 _index,
-        uint32 _metaNonce
-    ) private {
+    function updateKeysetHash(
+        uint32 _metaNonce,
+        bytes32 _newKeysetHash,
+        bytes calldata _signature
+    ) external onlySelf {
+        _requireMetaNonce(_metaNonce);
         _requireUnLocked();
-        bytes32 newKeysetHash = _input.mcReadBytes32(_index);
-        _index += 32;
         bytes32 digestHash = keccak256(
             abi.encodePacked(
                 _metaNonce,
                 address(this),
                 uint8(UPDATE_KEYSET_HASH),
-                newKeysetHash
+                _newKeysetHash
             )
         );
 
         (bool success, uint256 sigWeight) = _validateSignatureWeight(
             EXPECTED_UPDATE_KEYSET_HASH_SIG_WEIGHT,
             digestHash,
-            _input,
-            _index
+            _signature
         );
         require(success, "_executeUpdateKeysetHash: INVALID_SIG_WEIGHT");
 
         if (sigWeight == EXPECTED_UPDATE_KEYSET_HASH_SIG_WEIGHT) {
-            _toLockKeysetHash(newKeysetHash, getLockDuring());
+            _toLockKeysetHash(_newKeysetHash, getLockDuring());
         } else {
-            _updateKeysetHash(newKeysetHash);
+            _updateKeysetHash(_newKeysetHash);
         }
         _writeMetaNonce(_metaNonce);
     }
 
-    function _executeUnlockKeysetHash(uint256 _metaNonce) private {
+    function unlockKeysetHash(uint256 _metaNonce) external {
+        _requireMetaNonce(_metaNonce);
         _requireToUnLock();
         _updateKeysetHash(lockedKeysetHash);
         _unlockKeysetHash();
         _writeMetaNonce(_metaNonce);
     }
 
-    function _executeCancelLockKeysetHsah(
-        bytes calldata _input,
-        uint256 _index,
-        uint32 _metaNonce
-    ) private {
+    function cancelLockKeysetHsah(uint32 _metaNonce, bytes calldata _signature)
+        external
+        onlySelf
+    {
+        _requireMetaNonce(_metaNonce);
         _requireLocked();
         bytes32 digestHash = keccak256(
             abi.encodePacked(
@@ -374,8 +356,7 @@ abstract contract ModuleAuthBase is
         (bool success, ) = _validateSignatureWeight(
             EXPECTED_CANCEL_LOCK_KEYSET_HASH_SIG_WEIGHT,
             digestHash,
-            _input,
-            _index
+            _signature
         );
         require(success, "_executeCancelLockKeysetHsah: INVALID_SIG_WEIGHT");
 
@@ -383,99 +364,92 @@ abstract contract ModuleAuthBase is
         _writeMetaNonce(_metaNonce);
     }
 
-    function _executeUpdateTimeLockDuring(
-        bytes calldata _input,
-        uint256 _index,
-        uint32 _metaNonce
-    ) private {
+    function updateTimeLockDuring(
+        uint32 _metaNonce,
+        uint32 _newTimeLockDuring,
+        bytes calldata _signature
+    ) external onlySelf {
+        _requireMetaNonce(_metaNonce);
         _requireUnLocked();
-
-        uint32 newLockDuring;
-        (newLockDuring, _index) = _input.cReadUint32(_index);
 
         bytes32 digestHash = keccak256(
             abi.encodePacked(
                 _metaNonce,
                 address(this),
                 uint8(UPDATE_TIMELOCK_DURING),
-                newLockDuring
+                _newTimeLockDuring
             )
         );
         (bool success, ) = _validateSignatureWeight(
             EXPECTED_UPDATE_TIMELOCK_DURINT_SIG_WEIGHT,
             digestHash,
-            _input,
-            _index
+            _signature
         );
         require(success, "_executeUpdateTimeLockDuring: INVALID_SIG_WEIGHT");
-        _setLockDuring(newLockDuring);
+        _setLockDuring(_newTimeLockDuring);
         _writeMetaNonce(_metaNonce);
     }
 
-    function _executeUpdateImplement(
-        bytes calldata _input,
-        uint256 _index,
-        uint32 _metaNonce
-    ) private {
-        address newImplement;
-        (newImplement, _index) = _input.cReadAddress(_index);
-        if (!newImplement.isContract()) {
-            revert InvalidImplement(newImplement);
+    function updateImplementation(
+        uint32 _metaNonce,
+        address _newImplementation,
+        bytes calldata _signature
+    ) external onlySelf {
+        _requireMetaNonce(_metaNonce);
+        if (!_newImplementation.isContract()) {
+            revert InvalidImplementation(_newImplementation);
         }
         bytes32 digestHash = keccak256(
             abi.encodePacked(
                 _metaNonce,
                 address(this),
                 uint8(UPDATE_IMPLEMENTATION),
-                newImplement
+                _newImplementation
             )
         );
         (bool success, ) = _validateSignatureWeight(
             EXPECTED_UPDATE_IMPLEMENTATION_SIG_WEIGHT,
             digestHash,
-            _input,
-            _index
+            _signature
         );
         require(success, "_executeUpdateImplement: INVALID_SIG_WEIGHT");
-        _setImplementation(newImplement);
+        _setImplementation(_newImplementation);
         _writeMetaNonce(_metaNonce);
     }
 
-    function _executeUpdateEntryPoint(
-        bytes calldata _input,
-        uint256 _index,
-        uint32 _metaNonce
-    ) private {
-        address newEntryPoint;
-        (newEntryPoint, _index) = _input.cReadAddress(_index);
-        if (!newEntryPoint.isContract()) {
-            revert InvalidEntryPoint(newEntryPoint);
+    function updateEntryPoint(
+        uint32 _metaNonce,
+        address _newEntryPoint,
+        bytes calldata _signature
+    ) external onlySelf {
+        _requireMetaNonce(_metaNonce);
+        if (!_newEntryPoint.isContract()) {
+            revert InvalidEntryPoint(_newEntryPoint);
         }
         bytes32 digestHash = keccak256(
             abi.encodePacked(
                 _metaNonce,
                 address(this),
                 uint8(UPDATE_ENTRY_POINT),
-                newEntryPoint
+                _newEntryPoint
             )
         );
         (bool success, ) = _validateSignatureWeight(
             EXPECTED_UPDATE_ENTRY_POINT_SIG_WEIGHT,
             digestHash,
-            _input,
-            _index
+            _signature
         );
         require(success, "_executeUpdateEntryPoint: INVALID_SIG_WEIGHT");
-        _writeEntryPoint(newEntryPoint);
+        _writeEntryPoint(_newEntryPoint);
         _writeMetaNonce(_metaNonce);
     }
 
-    function isValidSignature(
+    function _validateSignature(
         SigType _sigType,
         bytes32 _hash,
         bytes calldata _signature,
         uint256 _index
-    ) public view returns (bool success) {
+    ) internal view returns (bool success) {
         if (_sigType == SigType.SigMasterKey) {
             success = _validateSigMasterKey(_hash, _signature, _index);
         } else if (_sigType == SigType.SigRecoveryEmail) {
@@ -496,17 +470,17 @@ abstract contract ModuleAuthBase is
     function _validateSignatureWeight(
         uint256 _expectedSigWeight,
         bytes32 _hash,
-        bytes calldata _signature,
-        uint256 _index
+        bytes calldata _signature
     ) internal view returns (bool success, uint256 sigWeight) {
-        SigType sigType = SigType(_signature.mcReadUint8(_index));
+        uint256 index = 0;
+        SigType sigType = SigType(_signature.mcReadUint8(index));
         sigWeight = sigType._toSignatureWeight();
         require(
             sigWeight >= _expectedSigWeight,
             "_validateSignatureWeight: INVALID_SIG_WEIGHT"
         );
-        _index++;
-        success = isValidSignature(sigType, _hash, _signature, _index);
+        index++;
+        success = _validateSignature(sigType, _hash, _signature, index);
     }
 
     function _validateSigSessionKey(

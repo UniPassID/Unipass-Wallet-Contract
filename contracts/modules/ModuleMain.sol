@@ -5,7 +5,7 @@ import "../modules/commons/ModuleCall.sol";
 import "../modules/commons/ModuleAuthFixed.sol";
 import "../modules/commons/ModuleHooks.sol";
 
-contract ModuleMain is ModuleCall, ModuleAuthFixed, ModuleHooks {
+contract ModuleMain is ModuleAuthFixed, ModuleHooks, ModuleCall {
     constructor(
         address _factory,
         address _moduleMainUpgradable,

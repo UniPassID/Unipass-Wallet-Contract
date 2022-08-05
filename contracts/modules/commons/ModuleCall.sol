@@ -16,13 +16,11 @@ import "../../interfaces/IEIP4337Wallet.sol";
 abstract contract ModuleCall is
     ITransaction,
     ModuleAuthBase,
-    ModuleEIP4337WalletCall,
-    IModuleHooks
+    IModuleHooks,
+    ModuleEIP4337WalletCall
 {
     using LibBytes for bytes;
     using SafeERC20 for IERC20;
-
-    event TxExecuted(bytes32 txHash);
 
     // NONCE_KEY = kecaak256("unipass-wallet:module-call:nonce");
     bytes32 private constant NONCE_KEY =
@@ -42,6 +40,9 @@ abstract contract ModuleCall is
 
     uint256 public constant EXPECTED_CALL_SIG_WEIGHT = 1;
     uint256 public constant EXPECTED_CALL_HOOKS_SIG_WEIGHT = 3;
+    uint256 public constant EXPECTED_CALL_ACCOUNT_TX_SIG_WEIGHT = 0;
+
+    error UnknownCallDataSelector(bytes4 _selector);
 
     function getNonce() public view returns (uint256) {
         return uint256(ModuleStorage.readBytes32(NONCE_KEY));
@@ -78,8 +79,7 @@ abstract contract ModuleCall is
         (bool success, ) = _validateSignatureWeight(
             expectedSigWeight,
             requestId,
-            userOp.signature,
-            0
+            userOp.signature
         );
         require(success, "_validateSignature: INVALID_SIGNATURE");
     }
@@ -120,8 +120,7 @@ abstract contract ModuleCall is
         (bool success, uint256 sigWeight) = _validateSignatureWeight(
             0,
             txhash,
-            _signature,
-            0
+            _signature
         );
         require(success, "execute: INVALID_SIG_WEIGHT");
 
@@ -158,11 +157,14 @@ abstract contract ModuleCall is
         bool success;
         bytes memory result;
 
-        if (_transaction.callType == CallType.Call) {
+        if (_transaction.target == address(this)) {
             require(
-                _sigWeight >= EXPECTED_CALL_SIG_WEIGHT,
-                "_execute: INVALID_Call_TYPE"
+                _sigWeight >= getSigWeightOfCallData(_transaction.data),
+                "_execute: INVALID_SIG_WEIGHT"
             );
+        }
+
+        if (_transaction.callType == CallType.Call) {
             (success, result) = _transaction.target.call{
                 value: _transaction.value,
                 gas: _transaction.gasLimit == 0
@@ -170,32 +172,45 @@ abstract contract ModuleCall is
                     : _transaction.gasLimit
             }(_transaction.data);
         } else if (_transaction.callType == CallType.DelegateCall) {
-            require(
-                _sigWeight >= EXPECTED_CALL_SIG_WEIGHT,
-                "_execute: INVALID_CALL_TYPE"
-            );
             (success, result) = _transaction.target.delegatecall{
                 gas: _transaction.gasLimit == 0
                     ? gasleft()
                     : _transaction.gasLimit
             }(_transaction.data);
-        } else if (_transaction.callType == CallType.CallAccountLayer) {
-            executeAccountTx(_transaction.data);
-            success = true;
-        } else if (_transaction.callType == CallType.CallHooks) {
-            require(
-                _sigWeight >= EXPECTED_CALL_HOOKS_SIG_WEIGHT,
-                "_execute: INVALID_CALL_TYPE"
-            );
-            _executeHooksTx(_transaction.data);
-            success = true;
         } else {
-            revert invalidCallType(_transaction.callType);
+            revert InvalidCallType(_transaction.callType);
         }
         if (success) {
             emit TxExecuted(_txHash);
         } else {
-            revert txFailed(_transaction, _txHash, result);
+            revert TxFailed(_txHash, result);
+        }
+    }
+
+    function getSigWeightOfCallData(bytes calldata callData)
+        public
+        pure
+        returns (uint256 sigWeight)
+    {
+        uint256 index = 0;
+        bytes4 selector;
+        (selector, index) = callData.cReadBytes4(index);
+        if (
+            selector == ModuleAuthBase.updateKeysetHash.selector ||
+            selector == ModuleAuthBase.unlockKeysetHash.selector ||
+            selector == ModuleAuthBase.cancelLockKeysetHsah.selector ||
+            selector == ModuleAuthBase.updateTimeLockDuring.selector ||
+            selector == ModuleAuthBase.updateImplementation.selector ||
+            selector == ModuleAuthBase.updateEntryPoint.selector
+        ) {
+            sigWeight = EXPECTED_CALL_ACCOUNT_TX_SIG_WEIGHT;
+        } else if (
+            selector == IModuleHooks.addHook.selector ||
+            selector == IModuleHooks.removeHook.selector
+        ) {
+            sigWeight = EXPECTED_CALL_HOOKS_SIG_WEIGHT;
+        } else {
+            revert UnknownCallDataSelector(selector);
         }
     }
 
