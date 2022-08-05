@@ -1,5 +1,5 @@
 import { Contract, ContractFactory, Overrides, Wallet } from "ethers";
-import { hexlify, id, randomBytes } from "ethers/lib/utils";
+import { hexlify, randomBytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import {
   generateRecoveryEmails,
@@ -33,7 +33,6 @@ function report(test: string, values: number[]) {
 describe("ModuleMain Benchmark", function () {
   let deployer: Deployer;
   let dkimKeys: Contract;
-  let entryPoint: Contract;
   let moduleMain: Contract;
   let ModuleMain: ContractFactory;
   let chainId: number;
@@ -57,16 +56,6 @@ describe("ModuleMain Benchmark", function () {
       dkimKeysAdmin.address
     );
 
-    const EntryPoint = await ethers.getContractFactory("EntryPoint");
-    entryPoint = await deployer.deployContract(
-      EntryPoint,
-      0,
-      txParams,
-      deployer.singleFactoryContract.address,
-      10,
-      0
-    );
-
     const ModuleMainUpgradable = await ethers.getContractFactory(
       "ModuleMainUpgradable"
     );
@@ -74,8 +63,7 @@ describe("ModuleMain Benchmark", function () {
       ModuleMainUpgradable,
       instance,
       txParams,
-      dkimKeys.address,
-      entryPoint.address
+      dkimKeys.address
     );
 
     ModuleMain = await ethers.getContractFactory("ModuleMain");
@@ -100,9 +88,8 @@ describe("ModuleMain Benchmark", function () {
         for (let i = 0; i < runs; i++) {
           const salt = ethers.utils.hexlify(randomBytes(32));
           const ret = await (
-            await deployer.deployProxyContract(
-              moduleMain.interface,
-              moduleMain.address,
+            await deployer.singleFactoryContract.deploy(
+              Deployer.getInitCode(moduleMain.address),
               salt,
               txParams
             )
@@ -159,7 +146,7 @@ describe("ModuleMain Benchmark", function () {
               threshold,
               recoveryEmails,
               Wallet.createRandom(),
-              Math.ceil(Date.now() / 1000) + 500,
+              Math.ceil(Date.now() / 1000) + 5000,
               wallet,
               SigType.SigSessionKey
             );

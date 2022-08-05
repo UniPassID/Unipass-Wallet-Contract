@@ -5,9 +5,7 @@ import "./ModuleAuthBase.sol";
 import "../../Wallet.sol";
 
 contract ModuleAuthUpgradable is ModuleAuthBase {
-    constructor(IDkimKeys _dkimKeys, address _entryPoint)
-        ModuleAuthBase(_dkimKeys, _entryPoint)
-    {}
+    constructor(IDkimKeys _dkimKeys) ModuleAuthBase(_dkimKeys) {}
 
     /**
      * @notice Updates the signers configuration of the wallet

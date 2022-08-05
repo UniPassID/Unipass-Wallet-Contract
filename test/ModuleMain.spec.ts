@@ -32,7 +32,6 @@ describe("ModuleMain", function () {
   let proxyModuleMain: Contract;
   let deployer: Deployer;
   let dkimKeys: Contract;
-  let entryPoint: Contract;
   let masterKey: Wallet;
   let keysetHash: string;
   let threshold: number;
@@ -63,16 +62,6 @@ describe("ModuleMain", function () {
       dkimKeysAdmin.address
     );
 
-    const EntryPoint = await ethers.getContractFactory("EntryPoint");
-    entryPoint = await deployer.deployContract(
-      EntryPoint,
-      0,
-      txParams,
-      deployer.singleFactoryContract.address,
-      PAYMASTER_STAKE,
-      UNSTAKE_DELAY_SEC
-    );
-
     ModuleMainUpgradable = await ethers.getContractFactory(
       "ModuleMainUpgradable"
     );
@@ -80,8 +69,7 @@ describe("ModuleMain", function () {
       ModuleMainUpgradable,
       0,
       txParams,
-      dkimKeys.address,
-      entryPoint.address
+      dkimKeys.address
     );
     ModuleMain = await ethers.getContractFactory("ModuleMain");
     moduleMain = await deployer.deployContract(
@@ -90,8 +78,7 @@ describe("ModuleMain", function () {
       txParams,
       deployer.singleFactoryContract.address,
       moduleMainUpgradable.address,
-      dkimKeys.address,
-      entryPoint.address
+      dkimKeys.address
     );
 
     const TestErc20Token = await ethers.getContractFactory("TestERC20");
@@ -164,19 +151,11 @@ describe("ModuleMain", function () {
     )) {
       if (
         funcFragment.stateMutability !== "pure" &&
-        funcFragment.stateMutability !== "view" &&
-        func !==
-          "execFromEntryPoint((uint8,uint256,address,uint256,bytes),uint256)" &&
-        func !==
-          "execute((uint8,uint256,address,uint256,bytes)[],uint256,address,address,uint256,bytes)" &&
-        func !==
-          "validateUserOp((address,uint256,bytes,bytes,uint256,uint256,uint256,uint256,uint256,address,bytes,bytes),bytes32,uint256)"
+        funcFragment.stateMutability !== "view"
       ) {
-        expect(
-          moduleMain.getSigWeightOfCallData(
-            keccak256(Buffer.from(func, "utf-8"))
-          )
-        ).to.not.reverted;
+        await moduleMain.getSigWeightOfCallData(
+          keccak256(Buffer.from(func, "utf-8"))
+        );
       }
     }
   });
@@ -187,19 +166,11 @@ describe("ModuleMain", function () {
     )) {
       if (
         funcFragment.stateMutability !== "pure" &&
-        funcFragment.stateMutability !== "view" &&
-        func !==
-          "execFromEntryPoint((uint8,uint256,address,uint256,bytes),uint256)" &&
-        func !==
-          "execute((uint8,uint256,address,uint256,bytes)[],uint256,address,address,uint256,bytes)" &&
-        func !==
-          "validateUserOp((address,uint256,bytes,bytes,uint256,uint256,uint256,uint256,uint256,address,bytes,bytes),bytes32,uint256)"
+        funcFragment.stateMutability !== "view"
       ) {
-        expect(
-          moduleMain.getSigWeightOfCallData(
-            keccak256(Buffer.from(func, "utf-8"))
-          )
-        ).to.not.reverted;
+        await moduleMain.getSigWeightOfCallData(
+          keccak256(Buffer.from(func, "utf-8"))
+        );
       }
     }
   });
