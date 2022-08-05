@@ -37,9 +37,12 @@ describe("GasEstimation", function () {
   let masterKey: Wallet;
   let keysetHash: string;
   let threshold: number;
+  let recoveryEmailIndexes: number[];
   let recoveryEmails: string[];
   let dkimKeysAdmin: Wallet;
   let txParams: Overrides;
+  let metaNonce: number;
+  let nonce: number;
   this.beforeAll(async function () {
     const [signer] = await ethers.getSigners();
     deployer = await new Deployer(signer).init();
@@ -100,6 +103,7 @@ describe("GasEstimation", function () {
     threshold = 4;
     masterKey = Wallet.createRandom();
 
+    recoveryEmailIndexes = [...Array(threshold).keys()].map((v) => v + 1);
     recoveryEmails = generateRecoveryEmails(10);
     keysetHash = getKeysetHash(masterKey.address, threshold, recoveryEmails);
 
@@ -117,6 +121,9 @@ describe("GasEstimation", function () {
       value: ethers.utils.parseEther("100"),
     });
     expect((await txRet.wait()).status).to.equal(1);
+
+    metaNonce = 1;
+    nonce = 1;
   });
 
   it("Should estimate wallet deployement", async function () {
@@ -147,10 +154,12 @@ describe("GasEstimation", function () {
   it("Should estimate account transaction", async function () {
     const newKeysetHash = ethers.utils.hexlify(randomBytes(32));
     const tx = await generateUpdateKeysetHashTx(
-      proxyModuleMain.address,
+      proxyModuleMain,
+      metaNonce,
       newKeysetHash,
       masterKey,
       threshold,
+      recoveryEmailIndexes,
       recoveryEmails,
       SigType.SigMasterKey
     );
@@ -196,7 +205,8 @@ describe("GasEstimation", function () {
       recoveryEmails,
       sessionKey,
       expired,
-      proxyModuleMain
+      proxyModuleMain,
+      SigType.SigSessionKey
     );
     expect(estimate.gas.toNumber() + txBaseCost(txData)).to.approximately(
       realTx.gasUsed.toNumber(),
@@ -223,11 +233,14 @@ describe("GasEstimation", function () {
       keysetHash
     );
     const newKeysetHash = ethers.utils.hexValue(randomBytes(32));
+    proxyModuleMain = ModuleMain.attach(expectedAddress);
     const accountTx = await generateUpdateKeysetHashTx(
-      expectedAddress,
+      proxyModuleMain,
+      metaNonce,
       newKeysetHash,
       masterKey,
       threshold,
+      recoveryEmailIndexes,
       recoveryEmails,
       SigType.SigMasterKey
     );
@@ -297,7 +310,6 @@ describe("GasEstimation", function () {
     expect(
       estimate.gas.toNumber() + txBaseCost(moduleGuestTxData)
     ).to.approximately(realTx.gasUsed.toNumber(), 5000);
-    proxyModuleMain = ModuleMain.attach(expectedAddress);
     const ret = await proxyModuleMain.lockedKeysetHash();
     expect(ret).to.equal(newKeysetHash);
     expect(await proxyModuleMain.provider.getBalance(expectedAddress)).to.equal(

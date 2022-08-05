@@ -4,13 +4,11 @@ import { ethers } from "hardhat";
 import {
   generateRecoveryEmails,
   getKeysetHash,
-  getProxyAddress,
   transferEth,
 } from "./utils/common";
 import { Deployer } from "./utils/deployer";
 import {
   executeCall,
-  executeUpdateKeysetHash,
   generateTransferTx,
   generateUpdateKeysetHashTx,
   SigType,
@@ -126,6 +124,9 @@ describe("ModuleMain Benchmark", function () {
           for (let i = 0; i < runs; i++) {
             const masterKey = Wallet.createRandom();
             const threshold = 4;
+            const recoveryEmailIndexes = [...Array(threshold).keys()].map(
+              (v) => v + 1
+            );
             const recoveryEmails = generateRecoveryEmails(10);
             const keysetHash = getKeysetHash(
               masterKey.address,
@@ -140,22 +141,27 @@ describe("ModuleMain Benchmark", function () {
             );
 
             const transaction = await generateUpdateKeysetHashTx(
-              wallet.address,
+              wallet,
+              1,
               newKeysetHash,
               masterKey,
               threshold,
+              recoveryEmailIndexes,
               recoveryEmails,
               sigType
             );
 
-            const tx = await executeUpdateKeysetHash(
+            const tx = await executeCall(
               [transaction],
               chainId,
               1,
               masterKey,
               threshold,
               recoveryEmails,
-              wallet
+              Wallet.createRandom(),
+              Math.ceil(Date.now() / 1000) + 500,
+              wallet,
+              SigType.SigSessionKey
             );
             results.push(tx.gasUsed);
           }
@@ -198,7 +204,8 @@ describe("ModuleMain Benchmark", function () {
             recoveryEmails,
             Wallet.createRandom(),
             Math.ceil(Date.now() + 300),
-            wallet
+            wallet,
+            SigType.SigSessionKey
           );
           results.push(tx.gasUsed);
         }
