@@ -36,6 +36,9 @@ const config: HardhatUserConfig = {
     },
   },
   networks: {
+    hardhat: {
+      allowUnlimitedContractSize: true,
+    },
     ropsten: {
       url: process.env.ROPSTEN_URL || "",
       accounts:

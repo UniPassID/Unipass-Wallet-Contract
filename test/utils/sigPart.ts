@@ -1,9 +1,14 @@
 import { BigNumber, Contract, utils, Wallet } from "ethers";
-import { arrayify, BytesLike, keccak256, solidityPack } from "ethers/lib/utils";
+import {
+  arrayify,
+  BytesLike,
+  Interface,
+  keccak256,
+  solidityPack,
+} from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import {
   DkimParams,
-  emailHash,
   getSignEmailWithDkim,
   parseEmailParams,
   pureEmailHash,
@@ -30,8 +35,6 @@ export enum SigType {
 export enum CallType {
   Call,
   DelegateCall,
-  CallAccountLayer,
-  CallHooks,
 }
 
 export enum SignerType {
@@ -153,180 +156,6 @@ export async function generateSessionKey(
   return sig;
 }
 
-export async function generateAccountLayerSignature(
-  contractAddr: string,
-  actionType: ActionType,
-  metaNonce: number,
-  newDelay: number | undefined,
-  newKeysetHash: string | undefined,
-  newImplementationOrEntryPoint: string | undefined,
-  masterKey: Wallet,
-  threshold: number,
-  recoveryEmailsIndexes: number[],
-  recoveryEmails: string[],
-  sigType: SigType | undefined
-): Promise<string> {
-  let sig = ethers.utils.solidityPack(
-    ["uint8", "uint32"],
-    [actionType, metaNonce]
-  );
-  switch (actionType) {
-    case ActionType.UpdateKeysetHash: {
-      sig = solidityPack(["bytes", "bytes32"], [sig, newKeysetHash]);
-      const digestHash = keccak256(
-        solidityPack(
-          ["uint32", "address", "uint8", "bytes32"],
-          [metaNonce, contractAddr, actionType, newKeysetHash]
-        )
-      );
-      if (sigType === undefined) {
-        throw new Error("Expected sigType");
-      }
-      sig = solidityPack(
-        ["bytes", "bytes"],
-        [
-          sig,
-          await generateSignature(
-            sigType,
-            digestHash,
-            undefined,
-            undefined,
-            masterKey,
-            threshold,
-            recoveryEmailsIndexes,
-            recoveryEmails
-          ),
-        ]
-      );
-
-      break;
-    }
-    case ActionType.UnlockKeysetHash: {
-      break;
-    }
-    case ActionType.CancelLockKeysetHash: {
-      if (sigType === undefined) {
-        throw new Error("expected SigType");
-      }
-      const digestHash = keccak256(
-        solidityPack(
-          ["uint32", "address", "uint8"],
-          [metaNonce, contractAddr, actionType]
-        )
-      );
-      sig = solidityPack(
-        ["bytes", "bytes"],
-        [
-          sig,
-          await generateSignature(
-            sigType,
-            digestHash,
-            undefined,
-            undefined,
-            masterKey,
-            threshold,
-            recoveryEmailsIndexes,
-            recoveryEmails
-          ),
-        ]
-      );
-
-      break;
-    }
-    case ActionType.UpdateTimeLockDuring: {
-      const digestHash = keccak256(
-        solidityPack(
-          ["uint32", "address", "uint8", "uint32"],
-          [metaNonce, contractAddr, actionType, newDelay]
-        )
-      );
-      if (sigType === undefined) {
-        throw new Error("Expected sigType");
-      }
-
-      sig = solidityPack(
-        ["bytes", "uint32", "bytes"],
-        [
-          sig,
-          newDelay,
-          await generateSignature(
-            sigType,
-            digestHash,
-            undefined,
-            undefined,
-            masterKey,
-            threshold,
-            recoveryEmailsIndexes,
-            recoveryEmails
-          ),
-        ]
-      );
-
-      break;
-    }
-    case ActionType.UpdateImplementation: {
-      const digestHash = keccak256(
-        solidityPack(
-          ["uint32", "address", "uint8", "address"],
-          [metaNonce, contractAddr, actionType, newImplementationOrEntryPoint]
-        )
-      );
-
-      sig = solidityPack(
-        ["bytes", "address", "bytes"],
-        [
-          sig,
-          newImplementationOrEntryPoint,
-          await generateSignature(
-            SigType.SigMasterKeyWithRecoveryEmail,
-            digestHash,
-            undefined,
-            undefined,
-            masterKey,
-            threshold,
-            recoveryEmailsIndexes,
-            recoveryEmails
-          ),
-        ]
-      );
-
-      break;
-    }
-    case ActionType.UpdateEntryPoint: {
-      const digestHash = keccak256(
-        solidityPack(
-          ["uint32", "address", "uint8", "address"],
-          [metaNonce, contractAddr, actionType, newImplementationOrEntryPoint]
-        )
-      );
-
-      sig = solidityPack(
-        ["bytes", "address", "bytes"],
-        [
-          sig,
-          newImplementationOrEntryPoint,
-          await generateSignature(
-            SigType.SigMasterKeyWithRecoveryEmail,
-            digestHash,
-            undefined,
-            undefined,
-            masterKey,
-            threshold,
-            recoveryEmailsIndexes,
-            recoveryEmails
-          ),
-        ]
-      );
-
-      break;
-    }
-    default: {
-      throw `invalid actionType: ${actionType}`;
-    }
-  }
-  return sig;
-}
-
 export async function generateTransactionSig(
   chainId: number,
   tx: Transaction[],
@@ -375,30 +204,149 @@ export async function generateTransactionSig(
 }
 
 export async function generateUpdateKeysetHashTx(
-  walletAddr: string,
+  contract: Contract,
+  metaNonce: number,
   newKeysetHash: string,
   masterKey: Wallet,
   threshold: number,
+  recoveryEmailsIndexes: number[],
   recoveryEmails: string[],
   sigType: SigType
 ) {
-  const data = await generateAccountLayerSignature(
-    walletAddr,
-    ActionType.UpdateKeysetHash,
-    1,
-    undefined,
-    newKeysetHash,
-    undefined,
-    masterKey,
-    threshold,
-    [],
-    recoveryEmails,
-    sigType
+  const digestHash = keccak256(
+    solidityPack(
+      ["uint32", "address", "uint8", "bytes32"],
+      [metaNonce, contract.address, ActionType.UpdateKeysetHash, newKeysetHash]
+    )
   );
+
+  const data = contract.interface.encodeFunctionData("updateKeysetHash", [
+    metaNonce,
+    newKeysetHash,
+    await generateSignature(
+      sigType,
+      digestHash,
+      undefined,
+      undefined,
+      masterKey,
+      threshold,
+      recoveryEmailsIndexes,
+      recoveryEmails
+    ),
+  ]);
+
   let tx = {
-    callType: CallType.CallAccountLayer,
+    callType: CallType.Call,
     gasLimit: ethers.constants.Zero,
-    target: ethers.constants.AddressZero,
+    target: contract.address,
+    value: ethers.constants.Zero,
+    data,
+  };
+  return tx;
+}
+
+export async function generateUnlockKeysetHashTx(
+  contract: Contract,
+  metaNonce: number,
+  contractInterface: Interface
+) {
+  const data = contractInterface.encodeFunctionData("unlockKeysetHash", [
+    metaNonce,
+  ]);
+
+  let tx = {
+    callType: CallType.Call,
+    gasLimit: ethers.constants.Zero,
+    target: contract.address,
+    value: ethers.constants.Zero,
+    data,
+  };
+  return tx;
+}
+
+export async function generateCancelLockKeysetHashTx(
+  contract: Contract,
+  metaNonce: number,
+  masterKey: Wallet,
+  threshold: number,
+  recoveryEmailsIndexes: number[],
+  recoveryEmails: string[],
+  sigType: SigType
+) {
+  const digestHash = keccak256(
+    solidityPack(
+      ["uint32", "address", "uint8"],
+      [metaNonce, contract.address, ActionType.CancelLockKeysetHash]
+    )
+  );
+  const data = contract.interface.encodeFunctionData("cancelLockKeysetHsah", [
+    metaNonce,
+    await generateSignature(
+      sigType,
+      digestHash,
+      undefined,
+      undefined,
+      masterKey,
+      threshold,
+      recoveryEmailsIndexes,
+      recoveryEmails
+    ),
+  ]);
+
+  let tx = {
+    callType: CallType.Call,
+    gasLimit: ethers.constants.Zero,
+    target: contract.address,
+    value: ethers.constants.Zero,
+    data,
+  };
+  return tx;
+}
+
+export async function generateUpdateTimeLockDuringTx(
+  contract: Contract,
+  metaNonce: number,
+  newTimeLockDuring: number,
+  masterKey: Wallet,
+  threshold: number,
+  recoveryEmailsIndexes: number[],
+  recoveryEmails: string[],
+  sigType: SigType
+) {
+  const digestHash = keccak256(
+    solidityPack(
+      ["uint32", "address", "uint8", "uint32"],
+      [
+        metaNonce,
+        contract.address,
+        ActionType.UpdateTimeLockDuring,
+        newTimeLockDuring,
+      ]
+    )
+  );
+  if (sigType === undefined) {
+    throw new Error("Expected sigType");
+  }
+
+  const data = contract.interface.encodeFunctionData("updateTimeLockDuring", [
+    metaNonce,
+    newTimeLockDuring,
+    await generateSignature(
+      sigType,
+      digestHash,
+      undefined,
+      undefined,
+      masterKey,
+      threshold,
+      recoveryEmailsIndexes,
+      recoveryEmails
+    ),
+  ]);
+
+  let tx = {
+    callType: CallType.Call,
+    gasLimit: ethers.constants.Zero,
+    target: contract.address,
     value: ethers.constants.Zero,
     data,
   };
@@ -420,37 +368,90 @@ export async function generateTransferTx(
   return tx;
 }
 
-export async function executeUpdateKeysetHash(
-  txs: Transaction[],
-  chainId: number,
-  nonce: number,
+export async function generateUpdateImplementationTx(
+  contract: Contract,
+  metaNonce: number,
+  newImplementation: string,
   masterKey: Wallet,
   threshold: number,
-  recoveryEmails: string[],
-  moduleMain: Contract
+  recoveryEmailsIndexes: number[],
+  recoveryEmails: string[]
 ) {
-  const feeToken = ethers.constants.AddressZero;
-  const feeReceiver = ethers.constants.AddressZero;
-  const feeAmount = 0;
-
-  const signature = await generateTransactionSig(
-    chainId,
-    txs,
-    nonce,
-    feeToken,
-    feeAmount,
-    masterKey,
-    threshold,
-    recoveryEmails,
-    [...Array(threshold).keys()].map((v) => v + 1),
-    undefined,
-    undefined,
-    SigType.SigNone
+  const digestHash = keccak256(
+    solidityPack(
+      ["uint32", "address", "uint8", "address"],
+      [
+        metaNonce,
+        contract.address,
+        ActionType.UpdateImplementation,
+        newImplementation,
+      ]
+    )
   );
-  const ret = await (
-    await moduleMain.execute(txs, nonce, feeToken, feeReceiver, 0, signature)
-  ).wait();
-  return ret;
+
+  const data = contract.interface.encodeFunctionData("updateImplementation", [
+    metaNonce,
+    newImplementation,
+    await generateSignature(
+      SigType.SigMasterKeyWithRecoveryEmail,
+      digestHash,
+      undefined,
+      undefined,
+      masterKey,
+      threshold,
+      recoveryEmailsIndexes,
+      recoveryEmails
+    ),
+  ]);
+
+  let tx = {
+    callType: CallType.Call,
+    gasLimit: ethers.constants.Zero,
+    target: contract.address,
+    value: ethers.constants.Zero,
+    data,
+  };
+  return tx;
+}
+
+export async function generateUpdateEntryPointTx(
+  contract: Contract,
+  metaNonce: number,
+  newEntryPoint: string,
+  masterKey: Wallet,
+  threshold: number,
+  recoveryEmailsIndexes: number[],
+  recoveryEmails: string[]
+) {
+  const digestHash = keccak256(
+    solidityPack(
+      ["uint32", "address", "uint8", "address"],
+      [metaNonce, contract.address, ActionType.UpdateEntryPoint, newEntryPoint]
+    )
+  );
+
+  const data = contract.interface.encodeFunctionData("updateEntryPoint", [
+    metaNonce,
+    newEntryPoint,
+    await generateSignature(
+      SigType.SigMasterKeyWithRecoveryEmail,
+      digestHash,
+      undefined,
+      undefined,
+      masterKey,
+      threshold,
+      recoveryEmailsIndexes,
+      recoveryEmails
+    ),
+  ]);
+  let tx = {
+    callType: CallType.Call,
+    gasLimit: ethers.constants.Zero,
+    target: contract.address,
+    value: ethers.constants.Zero,
+    data,
+  };
+  return tx;
 }
 
 export async function executeCall(
@@ -462,7 +463,8 @@ export async function executeCall(
   recoveryEmails: string[],
   sessionKey: Wallet,
   expired: number,
-  moduleMain: Contract
+  moduleMain: Contract,
+  sigType: SigType
 ) {
   const feeToken = ethers.constants.AddressZero;
   const feeReceiver = ethers.constants.AddressZero;
@@ -480,7 +482,7 @@ export async function executeCall(
     [...Array(threshold).keys()].map((v) => v + 1),
     sessionKey,
     expired,
-    SigType.SigSessionKey
+    sigType
   );
   const ret = await (
     await moduleMain.execute(txs, nonce, feeToken, feeReceiver, 0, signature)

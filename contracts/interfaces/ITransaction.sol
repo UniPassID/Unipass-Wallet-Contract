@@ -12,11 +12,10 @@ abstract contract ITransaction {
 
     enum CallType {
         Call,
-        DelegateCall,
-        CallAccountLayer,
-        CallHooks
+        DelegateCall
     }
+    event TxExecuted(bytes32 txHash);
 
-    error txFailed(Transaction, bytes32, bytes);
-    error invalidCallType(CallType);
+    error TxFailed(bytes32, bytes);
+    error InvalidCallType(CallType);
 }

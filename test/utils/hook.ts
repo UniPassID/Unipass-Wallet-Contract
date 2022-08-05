@@ -1,48 +1,34 @@
-import { ethers } from "hardhat";
+import { Contract, ethers } from "ethers";
+import { Interface } from "ethers/lib/utils";
+import { CallType } from "./sigPart";
 
-export enum HookActionType {
-  AddHook = 0,
-  RemoveHook = 1,
-}
-
-export function generateAddHook(
+export function generateAddHookTx(
+  contract: Contract,
   selector: string,
   implementation: string
-): string {
-  return ethers.utils.solidityPack(
-    ["bytes4", "address"],
-    [selector, implementation]
-  );
+) {
+  const data = contract.interface.encodeFunctionData("addHook", [
+    selector,
+    implementation,
+  ]);
+  let tx = {
+    callType: CallType.Call,
+    gasLimit: ethers.constants.Zero,
+    target: contract.address,
+    value: ethers.constants.Zero,
+    data,
+  };
+  return tx;
 }
 
-export function generateRemoveHook(selector: string): string {
-  return ethers.utils.solidityPack(["bytes4"], [selector]);
-}
-
-export function generateHookTx(
-  actionType: HookActionType,
-  selector: string,
-  implementation: string | undefined
-): string {
-  switch (actionType) {
-    case HookActionType.AddHook: {
-      if (implementation == undefined) {
-        throw "Expected implement";
-      } else {
-        return ethers.utils.solidityPack(
-          ["uint8", "bytes"],
-          [actionType, generateAddHook(selector, implementation)]
-        );
-      }
-    }
-    case HookActionType.RemoveHook: {
-      return ethers.utils.solidityPack(
-        ["uint8", "bytes"],
-        [actionType, generateRemoveHook(selector)]
-      );
-    }
-    default: {
-      throw "Invalid action type";
-    }
-  }
+export function generateRemoveHookTx(contract: Contract, selector: string) {
+  const data = contract.interface.encodeFunctionData("removeHook", [selector]);
+  let tx = {
+    callType: CallType.Call,
+    gasLimit: ethers.constants.Zero,
+    target: contract.address,
+    value: ethers.constants.Zero,
+    data,
+  };
+  return tx;
 }
