@@ -10,7 +10,7 @@ const prompt = ora();
 const provider = new providers.Web3Provider(network.provider.send);
 const signer = provider.getSigner();
 const txParams = {
-  gasLimit: 6000000,
+  gasLimit: 10000000,
   gasPrice: BigNumber.from(10).pow(9).mul(16),
 };
 

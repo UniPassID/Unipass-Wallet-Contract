@@ -6,6 +6,7 @@ pragma solidity ^0.8.0;
 import "./ModuleDkimAuth.sol";
 import "./ModuleTimeLock.sol";
 import "./ModuleSelfAuth.sol";
+import "./ModuleStorage.sol";
 import "./Implementation.sol";
 import "../../utils/SigPart.sol";
 import "../../utils/SignatureValidator.sol";
@@ -118,11 +119,13 @@ abstract contract ModuleAuthBase is
             inputEmailFromLen];
         newIndex += inputEmailFromLen;
         if (withDkimParams == 1) {
-            DkimParams memory params;
-            (params, newIndex) = _parseDkimParams(_signature, newIndex);
             bool succ;
             bytes memory sigHashHex;
-            (succ, emailHash, sigHashHex) = dkimVerify(params, inputEmailFrom);
+            (succ, emailHash, sigHashHex, newIndex) = _dkimVerify(
+                _signature,
+                newIndex,
+                inputEmailFrom
+            );
             require(succ, "_parseRecoveryEmail: VALIDATE_FAILED");
             require(
                 keccak256(LibBytes.toHex(uint256(_hash), 32)) ==
@@ -133,55 +136,6 @@ abstract contract ModuleAuthBase is
         } else {
             emailHash = LibDkimValidator.emailAddressHash(inputEmailFrom);
         }
-    }
-
-    function _parseDkimParams(bytes calldata _signature, uint256 _index)
-        internal
-        pure
-        returns (DkimParams memory params, uint256 newIndex)
-    {
-        uint32 emailHeaderLen;
-        (emailHeaderLen, newIndex) = _signature.cReadUint32(_index);
-        params.emailHeader = _signature[newIndex:newIndex + emailHeaderLen];
-        newIndex += emailHeaderLen;
-        uint32 dkimSigLen;
-        (dkimSigLen, newIndex) = _signature.cReadUint32(newIndex);
-        params.dkimSig = _signature[newIndex:newIndex + dkimSigLen];
-        newIndex += dkimSigLen;
-        (params.fromIndex, newIndex) = _signature.cReadUint32(newIndex);
-
-        (params.fromLeftIndex, newIndex) = _signature.cReadUint32(newIndex);
-        (params.fromRightIndex, newIndex) = _signature.cReadUint32(newIndex);
-        (params.subjectIndex, newIndex) = _signature.cReadUint32(newIndex);
-        (params.subjectRightIndex, newIndex) = _signature.cReadUint32(newIndex);
-        uint32 isSubBase64Len;
-        (isSubBase64Len, newIndex) = _signature.cReadUint32(newIndex);
-        params.isSubBase64 = new bool[](isSubBase64Len);
-        for (uint32 i = 0; i < isSubBase64Len; i++) {
-            params.isSubBase64[i] = _signature.mcReadUint8(newIndex) == 1;
-            newIndex++;
-        }
-        uint32 subjectPaddingLen;
-        (subjectPaddingLen, newIndex) = _signature.cReadUint32(newIndex);
-        params.subjectPadding = _signature[newIndex:newIndex +
-            subjectPaddingLen];
-        newIndex += subjectPaddingLen;
-        uint32 subjectLen;
-        (subjectLen, newIndex) = _signature.cReadUint32(newIndex);
-        params.subject = new bytes[](subjectLen);
-        for (uint32 i = 0; i < subjectLen; i++) {
-            uint32 partLen;
-            (partLen, newIndex) = _signature.cReadUint32(newIndex);
-            params.subject[i] = _signature[newIndex:newIndex + partLen];
-            newIndex += partLen;
-        }
-        (params.dkimHeaderIndex, newIndex) = _signature.cReadUint32(newIndex);
-        (params.selectorIndex, newIndex) = _signature.cReadUint32(newIndex);
-        (params.selectorRightIndex, newIndex) = _signature.cReadUint32(
-            newIndex
-        );
-        (params.sdidIndex, newIndex) = _signature.cReadUint32(newIndex);
-        (params.sdidRightIndex, newIndex) = _signature.cReadUint32(newIndex);
     }
 
     function _requireMetaNonce(uint256 _nonce) internal view {

@@ -8,14 +8,10 @@ import {
 } from "ethers";
 import { keccak256, randomBytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
-import { ModuleMainUpgradable } from "../typechain";
 import {
   generateRecoveryEmails,
   getKeysetHash,
   optimalGasLimit,
-  PAYMASTER_STAKE,
-  SELECTOR_ERC1271_BYTES32_BYTES,
-  UNSTAKE_DELAY_SEC,
 } from "./utils/common";
 import { Deployer } from "./utils/deployer";
 import {
@@ -51,12 +47,13 @@ describe("ModuleMain", function () {
     const [signer] = await ethers.getSigners();
     deployer = await new Deployer(signer).init();
     txParams = {
-      gasLimit: 6000000,
+      gasLimit: 10000000,
       gasPrice: (await signer.provider?.getGasPrice())?.mul(12).div(10),
     };
 
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     dkimKeysAdmin = Wallet.createRandom();
+
     dkimKeys = await deployer.deployContract(
       DkimKeys,
       0,
