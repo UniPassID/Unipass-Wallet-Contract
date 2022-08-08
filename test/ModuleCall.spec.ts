@@ -5,6 +5,7 @@ import { ethers } from "hardhat";
 import {
   generateRecoveryEmails,
   getKeysetHash,
+  SELECTOR_ERC1271_BYTES32_BYTES,
   transferEth,
 } from "./utils/common";
 import { Deployer } from "./utils/deployer";
@@ -860,5 +861,94 @@ describe("ModuleCall", function () {
     expect(await proxyTestModuleCall.lockedKeysetHash()).to.equal(
       newKeysetHash
     );
+  });
+  describe("Test EIP1271", () => {
+    let sessionKey: Wallet;
+    let expired: number;
+    let digestHash: string;
+    this.beforeEach(async () => {
+      sessionKey = Wallet.createRandom();
+      expired = Math.ceil(Date.now() / 1000 + 300);
+      digestHash = ethers.utils.hexlify(randomBytes(32));
+    });
+    it("Is Valid Signature Should Success For Master Key Signature", async () => {
+      const signature = await generateSignature(
+        SigType.SigSessionKey,
+        digestHash,
+        sessionKey,
+        expired,
+        masterKey,
+        threshold,
+        [...Array(threshold).keys()].map((v) => v + 1),
+        recoveryEmails
+      );
+      expect(
+        await proxyTestModuleCall.isValidSignature(digestHash, signature)
+      ).to.equals(SELECTOR_ERC1271_BYTES32_BYTES);
+    });
+
+    it("Is Valid Signature Should Success For Recovery Emails Signature", async () => {
+      const signature = await generateSignature(
+        SigType.SigRecoveryEmail,
+        digestHash,
+        sessionKey,
+        expired,
+        masterKey,
+        threshold,
+        [...Array(threshold).keys()].map((v) => v + 1),
+        recoveryEmails
+      );
+      expect(
+        await proxyTestModuleCall.isValidSignature(digestHash, signature)
+      ).to.equals(SELECTOR_ERC1271_BYTES32_BYTES);
+    });
+
+    it("Is Valid Signature Should Success For Master Key With Recovery Emails Signature", async () => {
+      const signature = await generateSignature(
+        SigType.SigMasterKeyWithRecoveryEmail,
+        digestHash,
+        sessionKey,
+        expired,
+        masterKey,
+        threshold,
+        [...Array(threshold).keys()].map((v) => v + 1),
+        recoveryEmails
+      );
+      expect(
+        await proxyTestModuleCall.isValidSignature(digestHash, signature)
+      ).to.equals(SELECTOR_ERC1271_BYTES32_BYTES);
+    });
+
+    it("Is Valid Signature Should Success For SessionKey Signature", async () => {
+      const signature = await generateSignature(
+        SigType.SigSessionKey,
+        digestHash,
+        sessionKey,
+        expired,
+        masterKey,
+        threshold,
+        [...Array(threshold).keys()].map((v) => v + 1),
+        recoveryEmails
+      );
+      expect(
+        await proxyTestModuleCall.isValidSignature(digestHash, signature)
+      ).to.equals(SELECTOR_ERC1271_BYTES32_BYTES);
+    });
+
+    it("Is Valid Signature Should Success For None Signature", async () => {
+      const signature = await generateSignature(
+        SigType.SigNone,
+        digestHash,
+        sessionKey,
+        expired,
+        masterKey,
+        threshold,
+        [...Array(threshold).keys()].map((v) => v + 1),
+        recoveryEmails
+      );
+      expect(
+        await proxyTestModuleCall.isValidSignature(digestHash, signature)
+      ).to.equals(SELECTOR_ERC1271_BYTES32_BYTES);
+    });
   });
 });

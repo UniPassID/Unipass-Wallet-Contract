@@ -14,12 +14,14 @@ import {
   getKeysetHash,
   optimalGasLimit,
   PAYMASTER_STAKE,
+  SELECTOR_ERC1271_BYTES32_BYTES,
   UNSTAKE_DELAY_SEC,
 } from "./utils/common";
 import { Deployer } from "./utils/deployer";
 import {
   CallType,
   generateSessionKey,
+  generateSignature,
   generateTransactionSig,
   generateUpdateKeysetHashTx,
   SigType,
@@ -209,26 +211,22 @@ describe("ModuleMain", function () {
     });
   });
 
-  // FIXME: IsValidSignature
   it("Test Validating Permit", async () => {
     const sessionKey = Wallet.createRandom();
     const expired = Math.ceil(Date.now() / 1000 + 300);
     const digestHash = ethers.utils.hexlify(randomBytes(32));
-    const permit = await generateSessionKey(
-      masterKey,
-      threshold,
-      recoveryEmails,
+    const permit = await generateSignature(
+      SigType.SigSessionKey,
       digestHash,
       sessionKey,
-      expired
+      expired,
+      masterKey,
+      threshold,
+      [...Array(threshold).keys()].map((v) => v + 1),
+      recoveryEmails
     );
-    // const ret = await proxyModuleMain.isValidSignature(
-    //   SigType.SigSessionKey,
-    //   digestHash,
-    //   permit,
-    //   0
-    // );
-    // expect(ret).to.be.true;
+    const ret = await proxyModuleMain.isValidSignature(digestHash, permit);
+    expect(ret).to.equals(SELECTOR_ERC1271_BYTES32_BYTES);
   });
 
   it("Test Account Recovery By Emails", async () => {

@@ -12,6 +12,7 @@ import "../../utils/SignatureValidator.sol";
 import "../../interfaces/IModuleAuth.sol";
 
 import "@openzeppelin/contracts/utils/Address.sol";
+import "@openzeppelin/contracts/interfaces/IERC1271.sol";
 
 import "hardhat/console.sol";
 
@@ -24,6 +25,7 @@ abstract contract ModuleAuthBase is
     IModuleAuth,
     ModuleDkimAuth,
     Implementation,
+    IERC1271,
     ModuleTimeLock,
     SignatureValidator
 {
@@ -55,19 +57,21 @@ abstract contract ModuleAuthBase is
     uint256 private constant UPDATE_IMPLEMENTATION = 4;
     uint256 private constant UPDATE_ENTRY_POINT = 5;
 
-    uint256 public constant EXPECTED_UPDATE_KEYSET_HASH_SIG_WEIGHT = 2;
-    uint256 public constant EXPECTED_CANCEL_LOCK_KEYSET_HASH_SIG_WEIGHT = 2;
-    uint256 public constant EXPECTED_UPDATE_TIMELOCK_DURINT_SIG_WEIGHT = 2;
-    uint256 public constant EXPECTED_UPDATE_IMPLEMENTATION_SIG_WEIGHT = 3;
-    uint256 public constant EXPECTED_UPDATE_ENTRY_POINT_SIG_WEIGHT = 3;
+    uint256 private constant EXPECTED_UPDATE_KEYSET_HASH_SIG_WEIGHT = 2;
+    uint256 private constant EXPECTED_CANCEL_LOCK_KEYSET_HASH_SIG_WEIGHT = 2;
+    uint256 private constant EXPECTED_UPDATE_TIMELOCK_DURINT_SIG_WEIGHT = 2;
+    uint256 private constant EXPECTED_UPDATE_IMPLEMENTATION_SIG_WEIGHT = 3;
+    uint256 private constant EXPECTED_UPDATE_ENTRY_POINT_SIG_WEIGHT = 3;
+
+    bytes4 private constant SELECTOR_ERC1271_BYTES32_BYTES = 0x1626ba7e;
 
     event KeysetHashUpdated(bytes32 newKeysetHash);
 
     error InvalidActionType(uint256 _actionType);
     error InvalidImplementation(address _implementation);
 
-    function _isValidKeysetHash(bytes32 _keysetHash)
-        internal
+    function isValidKeysetHash(bytes32 _keysetHash)
+        public
         view
         virtual
         returns (bool);
@@ -215,7 +219,7 @@ abstract contract ModuleAuthBase is
             keysetHash = keccak256(abi.encodePacked(keysetHash, recoveryEmail));
         }
 
-        success = _isValidKeysetHash(keysetHash);
+        success = isValidKeysetHash(keysetHash);
     }
 
     function _toLockKeysetHash(bytes32 _keysetHash, uint256 _lockDuring)
@@ -258,7 +262,7 @@ abstract contract ModuleAuthBase is
             threshold <= counts,
             "_validateSigRecoveryEmail: NOT_ENOUGH_RECOVERY_EMAIL"
         );
-        success = _isValidKeysetHash(keysetHash);
+        success = isValidKeysetHash(keysetHash);
     }
 
     function _validateSigMasterKeyWithRecoveryEmail(
@@ -295,7 +299,7 @@ abstract contract ModuleAuthBase is
             "_validateSigMasterKeyWithRecoveryEmail: NOT_ENOUGH_RECOVERY_EMAIL"
         );
 
-        success = _isValidKeysetHash(keysetHash);
+        success = isValidKeysetHash(keysetHash);
     }
 
     function updateKeysetHash(
@@ -479,5 +483,23 @@ abstract contract ModuleAuthBase is
 
         bytes32 digestHash = keccak256(abi.encodePacked(sessionKey, timestamp));
         success = _validateSigMasterKey(digestHash, _signature, _index);
+    }
+
+    /**
+     * @dev Should return whether the signature provided is valid for the provided data
+     * @param _hash      Hash of the data to be signed
+     * @param _signature Signature byte array associated with _data
+     */
+    function isValidSignature(bytes32 _hash, bytes calldata _signature)
+        external
+        view
+        override
+        returns (bytes4 magicValue)
+    {
+        // Validate signatures
+        (bool isValid, ) = validateSignatureWeight(0, _hash, _signature);
+        if (isValid) {
+            magicValue = SELECTOR_ERC1271_BYTES32_BYTES;
+        }
     }
 }
