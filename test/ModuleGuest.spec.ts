@@ -28,7 +28,7 @@ describe("ModuleGuest", function () {
     const [signer] = await ethers.getSigners();
     deployer = await new Deployer(signer).init();
     txParams = {
-      gasLimit: 6000000,
+      gasLimit: 10000000,
       gasPrice: (await signer.provider?.getGasPrice())?.mul(12).div(10),
     };
     ModuleGuest = await ethers.getContractFactory("ModuleGuest");

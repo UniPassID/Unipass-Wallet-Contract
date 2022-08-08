@@ -2,9 +2,16 @@
 pragma solidity ^0.8.0;
 
 import "./modules/commons/ModuleAdminAuth.sol";
+import "./modules/utils/LibDkim.sol";
 import "./interfaces/IDkimKeys.sol";
+import "./utils/LibRsa.sol";
+import "./utils/LibBytes.sol";
 
 contract DkimKeys is IDkimKeys, ModuleAdminAuth {
+    using LibDkimValidator for DkimParams;
+    using LibSlice for Slice;
+    using LibBytes for bytes;
+
     mapping(bytes => bytes) private dkimKeys;
 
     event UpdateDKIMKey(bytes emailServer, bytes oldKey, bytes newKey);
@@ -117,7 +124,7 @@ contract DkimKeys is IDkimKeys, ModuleAdminAuth {
     }
 
     function getDKIMKey(bytes calldata _emailServer)
-        external
+        public
         view
         override
         returns (bytes memory)
@@ -136,5 +143,115 @@ contract DkimKeys is IDkimKeys, ModuleAdminAuth {
     function deleteDKIMKey(bytes calldata _emailServer) external onlyAdmin {
         delete dkimKeys[_emailServer];
         emit DeleteDKIMKey(_emailServer, dkimKeys[_emailServer]);
+    }
+
+    function _parseDkimParams(bytes calldata _data, uint256 _index)
+        internal
+        pure
+        returns (DkimParams memory params, uint256 newIndex)
+    {
+        uint32 emailHeaderLen;
+        (emailHeaderLen, newIndex) = _data.cReadUint32(_index);
+        params.emailHeader = _data[newIndex:newIndex + emailHeaderLen];
+        newIndex += emailHeaderLen;
+        uint32 dkimSigLen;
+        (dkimSigLen, newIndex) = _data.cReadUint32(newIndex);
+        params.dkimSig = _data[newIndex:newIndex + dkimSigLen];
+        newIndex += dkimSigLen;
+        (params.fromIndex, newIndex) = _data.cReadUint32(newIndex);
+
+        (params.fromLeftIndex, newIndex) = _data.cReadUint32(newIndex);
+        (params.fromRightIndex, newIndex) = _data.cReadUint32(newIndex);
+        (params.subjectIndex, newIndex) = _data.cReadUint32(newIndex);
+        (params.subjectRightIndex, newIndex) = _data.cReadUint32(newIndex);
+        uint32 isSubBase64Len;
+        (isSubBase64Len, newIndex) = _data.cReadUint32(newIndex);
+        params.isSubBase64 = new bool[](isSubBase64Len);
+        for (uint32 i = 0; i < isSubBase64Len; i++) {
+            params.isSubBase64[i] = _data.mcReadUint8(newIndex) == 1;
+            newIndex++;
+        }
+        uint32 subjectPaddingLen;
+        (subjectPaddingLen, newIndex) = _data.cReadUint32(newIndex);
+        params.subjectPadding = _data[newIndex:newIndex + subjectPaddingLen];
+        newIndex += subjectPaddingLen;
+        uint32 subjectLen;
+        (subjectLen, newIndex) = _data.cReadUint32(newIndex);
+        params.subject = new bytes[](subjectLen);
+        for (uint32 i = 0; i < subjectLen; i++) {
+            uint32 partLen;
+            (partLen, newIndex) = _data.cReadUint32(newIndex);
+            params.subject[i] = _data[newIndex:newIndex + partLen];
+            newIndex += partLen;
+        }
+        (params.dkimHeaderIndex, newIndex) = _data.cReadUint32(newIndex);
+        (params.selectorIndex, newIndex) = _data.cReadUint32(newIndex);
+        (params.selectorRightIndex, newIndex) = _data.cReadUint32(newIndex);
+        (params.sdidIndex, newIndex) = _data.cReadUint32(newIndex);
+        (params.sdidRightIndex, newIndex) = _data.cReadUint32(newIndex);
+    }
+
+    function dkimVerifyParams(
+        DkimParams memory params,
+        bytes calldata inputEmailFrom
+    )
+        public
+        view
+        returns (
+            bool ret,
+            bytes32 emailHash,
+            bytes memory sigHashHex
+        )
+    {
+        bytes memory sdid;
+        bytes memory selector;
+        bytes memory emailFrom;
+        (emailFrom, sigHashHex, sdid, selector) = params._parseHeader();
+
+        require(sigHashHex.length == 66, "dkimVerify: INVALID_SIGHASHHEX");
+
+        Slice memory sdidSlice = LibSlice.toSlice(sdid);
+        emailFrom = LibDkimValidator.checkEmailFrom(emailFrom, sdidSlice);
+        bytes memory inputEmailFromRet = LibDkimValidator.checkEmailFrom(
+            inputEmailFrom,
+            sdidSlice
+        );
+        require(
+            keccak256(emailFrom) == keccak256(inputEmailFromRet),
+            "dkimVerify: INVALID_EMAIL_FROM"
+        );
+        emailHash = LibDkimValidator.emailAddressHash(inputEmailFrom);
+
+        bytes memory n = this.getDKIMKey(abi.encodePacked(selector, sdid));
+        require(n.length > 0, "zero");
+        ret = LibRsa.rsapkcs1Verify(
+            sha256(params.emailHeader),
+            n,
+            hex"010001",
+            params.dkimSig
+        );
+    }
+
+    function dkimVerify(
+        bytes calldata _data,
+        uint256 _index,
+        bytes calldata _inputEmailFrom
+    )
+        public
+        view
+        override
+        returns (
+            bool ret,
+            bytes32 emailHash,
+            bytes memory sigHashHex,
+            uint256 index
+        )
+    {
+        DkimParams memory params;
+        (params, index) = _parseDkimParams(_data, _index);
+        (ret, emailHash, sigHashHex) = dkimVerifyParams(
+            params,
+            _inputEmailFrom
+        );
     }
 }

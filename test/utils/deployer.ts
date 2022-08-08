@@ -164,6 +164,7 @@ export class Deployer {
     let ret = await (
       await this.singleFactoryContract.deploy(deployTx.data, salt, txParams)
     ).wait();
+
     expect(ret.status).to.equals(1);
     expect(await this.isDeployed(deployedContractAddr)).to.be.true;
     return new Contract(

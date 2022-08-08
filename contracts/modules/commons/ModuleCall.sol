@@ -239,7 +239,7 @@ abstract contract ModuleCall is
     ) private {
         // transfer native token to msg.sender
         if (feeToken == address(0))
-            payable(feeReceiver).transfer(feeAmount);
+            feeReceiver.call{value: feeAmount}("");
             // transfer erc20 token to msg.sender
         else IERC20(feeToken).safeTransfer(feeReceiver, feeAmount);
     }
