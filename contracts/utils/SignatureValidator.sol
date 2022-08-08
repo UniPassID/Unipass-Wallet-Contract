@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
-import "../interfaces/IERC1271Wallet.sol";
+import "@openzeppelin/contracts/interfaces/IERC1271.sol";
 
 import "./LibBytes.sol";
 
@@ -126,7 +126,7 @@ contract SignatureValidator {
 
     } else if (signatureType == SIG_TYPE_WALLET_BYTES32) {
       // Remove signature type before calling ERC1271, restore after call
-      valid = ERC1271_MAGICVALUE_BYTES32 == IERC1271Wallet(_signer).isValidSignature(_hash, _signature[0:_signature.length - 1]);
+      valid = ERC1271_MAGICVALUE_BYTES32 == IERC1271(_signer).isValidSignature(_hash, _signature[0:_signature.length - 1]);
 
     } else {
       // Anything other signature types are illegal (We do not return false because

@@ -34,10 +34,10 @@ abstract contract ModuleCall is
     uint256 private constant SIG_SESSION_KEY = 3;
     uint256 private constant SIG_NONE = 4;
 
-    uint256 public constant EXPECTED_CALL_SIG_WEIGHT = 1;
-    uint256 public constant EXPECTED_CALL_HOOKS_SIG_WEIGHT = 3;
-    uint256 public constant EXPECTED_CALL_ACCOUNT_TX_SIG_WEIGHT = 0;
-    uint256 public constant EXPECTED_EXECUTE_SIG_WEIGHT = 0;
+    uint256 private constant EXPECTED_CALL_SIG_WEIGHT = 1;
+    uint256 private constant EXPECTED_CALL_HOOKS_SIG_WEIGHT = 3;
+    uint256 private constant EXPECTED_CALL_ACCOUNT_TX_SIG_WEIGHT = 0;
+    uint256 private constant EXPECTED_EXECUTE_SIG_WEIGHT = 0;
 
     error UnknownCallDataSelector(bytes4 _selector);
     error SelectorDoesNotExist(bytes4 _selector);
@@ -145,8 +145,8 @@ abstract contract ModuleCall is
         }
     }
 
-    function getSigWeightOfSelector(bytes4 _selector)
-        public
+    function _getSigWeightOfSelector(bytes4 _selector)
+        internal
         view
         returns (uint256 sigWeight)
     {
@@ -216,7 +216,7 @@ abstract contract ModuleCall is
         uint256 index = 0;
         bytes4 selector;
         (selector, index) = callData.cReadBytes4(index);
-        sigWeight = getSigWeightOfSelector(selector);
+        sigWeight = _getSigWeightOfSelector(selector);
     }
 
     function isValidateCallData(

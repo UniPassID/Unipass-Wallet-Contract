@@ -5,6 +5,8 @@ import { pureEmailHash } from "./email";
 export const optimalGasLimit = ethers.constants.Two.pow(21);
 export const UNSTAKE_DELAY_SEC = 100;
 export const PAYMASTER_STAKE = ethers.utils.parseEther("1");
+export const SELECTOR_ERC1271_BYTES_BYTES = "0x20c13b0b";
+export const SELECTOR_ERC1271_BYTES32_BYTES = "0x1626ba7e";
 
 export function throwError(msg: string) {
   throw msg;

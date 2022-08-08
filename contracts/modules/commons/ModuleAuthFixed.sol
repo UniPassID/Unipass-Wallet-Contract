@@ -39,8 +39,8 @@ contract ModuleAuthFixed is ModuleAuthBase {
         _setImplementation(MODULE_MAIN_UPGRADABLE);
     }
 
-    function _isValidKeysetHash(bytes32 _keysetHash)
-        internal
+    function isValidKeysetHash(bytes32 _keysetHash)
+        public
         view
         override
         returns (bool)
