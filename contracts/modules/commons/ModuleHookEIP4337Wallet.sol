@@ -7,6 +7,7 @@ pragma solidity ^0.8.0;
 
 import "./ModuleStorage.sol";
 import "./ModuleSelfAuth.sol";
+import "./ModuleRole.sol";
 import "../../UserOperation.sol";
 import "../../interfaces/IEIP4337Wallet.sol";
 import "../../interfaces/IModuleCall.sol";
@@ -163,11 +164,16 @@ contract ModuleHookEIP4337Wallet is
         Transaction memory transaction;
         (transaction) = abi.decode(userOp.callData[4:], (Transaction));
         if (transaction.target != address(this)) {
-            (bool success, ) = IModuleAuth(address(this))
-                .validateSignatureWeight(0, requestId, userOp.signature);
-            require(success, "execute: INVALID_SIG_WEIGHT");
+            (bool success, RoleWeight memory roleWeight) = IModuleAuth(
+                address(this)
+            ).validateSignature(requestId, userOp.signature);
+            require(
+                success &&
+                    roleWeight.assetsOpWeight >= LibRole.GUARDIAN_THRESHOLD,
+                "execute: INVALID_SIG_WEIGHT"
+            );
         } else {
-            bool success = IModuleCall(userOp.sender).isValidateCallData(
+            bool success = IModuleCall(userOp.sender).isValidCallData(
                 transaction.data,
                 requestId,
                 userOp.signature

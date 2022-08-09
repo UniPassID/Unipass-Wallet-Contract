@@ -4,11 +4,7 @@ pragma solidity ^0.8.0;
 import "./ITransaction.sol";
 
 interface IModuleCall {
-    function getSigWeightOfCallData(bytes calldata callData)
-        external
-        returns (uint256 sigWeight);
-
-    function isValidateCallData(
+    function isValidCallData(
         bytes calldata _callData,
         bytes32 _digestHash,
         bytes calldata _signature

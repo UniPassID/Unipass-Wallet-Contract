@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "./commons/ModuleRole.sol";
 
 contract ModuleGuest {
     using SafeERC20 for IERC20;
@@ -37,7 +38,7 @@ contract ModuleGuest {
         address feeToken,
         address feeReceiver,
         uint256 feeAmount,
-        bytes calldata _signature
+        bytes calldata
     ) external payable {
         uint256 chainId;
         assembly {
@@ -52,17 +53,13 @@ contract ModuleGuest {
             )
         );
 
-        _execute(txhash, _txs, 0);
+        _execute(txhash, _txs);
         if (feeAmount != 0) {
             _payFee(feeToken, feeReceiver, feeAmount);
         }
     }
 
-    function _execute(
-        bytes32 _txHash,
-        Transaction[] calldata _txs,
-        uint256 _sigType
-    ) internal {
+    function _execute(bytes32 _txHash, Transaction[] calldata _txs) internal {
         for (uint256 i = 0; i < _txs.length; i++) {
             Transaction calldata transaction = _txs[i];
 
