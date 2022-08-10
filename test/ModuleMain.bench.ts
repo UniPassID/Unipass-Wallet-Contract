@@ -1,17 +1,14 @@
 import { Contract, ContractFactory, Overrides, Wallet } from "ethers";
 import { hexlify, randomBytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
-import {
-  generateRecoveryEmails,
-  getKeysetHash,
-  transferEth,
-} from "./utils/common";
+import { getKeysetHash, transferEth } from "./utils/common";
 import { Deployer } from "./utils/deployer";
+import { randomKeys, selectKeys } from "./utils/key";
 import {
   executeCall,
   generateTransferTx,
   generateUpdateKeysetHashTx,
-  SigType,
+  Role,
 } from "./utils/sigPart";
 
 const runs = 256;
@@ -41,7 +38,7 @@ describe("ModuleMain Benchmark", function () {
     const [signer] = await ethers.getSigners();
     deployer = await new Deployer(signer).init();
     txParams = {
-      gasLimit: 6000000,
+      gasLimit: 10000000,
       gasPrice: (await signer.getGasPrice()).mul(12).div(10),
     };
 
@@ -102,24 +99,11 @@ describe("ModuleMain Benchmark", function () {
       it("Relay 1/1 Update KeysetHash transaction", async () => {
         const newKeysetHash = hexlify(randomBytes(32));
 
-        for (const sigType of [
-          SigType.SigMasterKey,
-          SigType.SigRecoveryEmail,
-          SigType.SigMasterKeyWithRecoveryEmail,
-        ]) {
+        for (const role of [Role.Owner, Role.Guardian]) {
           const results: number[] = [];
           for (let i = 0; i < runs; i++) {
-            const masterKey = Wallet.createRandom();
-            const threshold = 4;
-            const recoveryEmailIndexes = [...Array(threshold).keys()].map(
-              (v) => v + 1
-            );
-            const recoveryEmails = generateRecoveryEmails(10);
-            const keysetHash = getKeysetHash(
-              masterKey.address,
-              threshold,
-              recoveryEmails
-            );
+            const keys = randomKeys(10);
+            const keysetHash = getKeysetHash(keys);
             const wallet = await deployer.deployProxyContract(
               moduleMain.interface,
               moduleMain.address,
@@ -131,43 +115,30 @@ describe("ModuleMain Benchmark", function () {
               wallet,
               1,
               newKeysetHash,
-              masterKey,
-              threshold,
-              recoveryEmailIndexes,
-              recoveryEmails,
-              sigType
+              role,
+              selectKeys(keys, role)
             );
 
             const tx = await executeCall(
               [transaction],
               chainId,
               1,
-              masterKey,
-              threshold,
-              recoveryEmails,
-              Wallet.createRandom(),
-              Math.ceil(Date.now() / 1000) + 5000,
+              [],
               wallet,
-              SigType.SigSessionKey
+              undefined
             );
             results.push(tx.gasUsed);
           }
 
-          report(`relay 1/1 Update Keyset By ${sigType} transaction`, results);
+          report(`relay 1/1 Update Keyset By ${role} transaction`, results);
         }
       });
 
       it("Relay 1/1 Transfer Eth transaction", async () => {
         const results: number[] = [];
         for (let i = 0; i < runs; i++) {
-          const masterKey = Wallet.createRandom();
-          const threshold = 4;
-          const recoveryEmails = generateRecoveryEmails(10);
-          const keysetHash = getKeysetHash(
-            masterKey.address,
-            threshold,
-            recoveryEmails
-          );
+          const keys = randomKeys(10);
+          const keysetHash = getKeysetHash(keys);
           const wallet = await deployer.deployProxyContract(
             moduleMain.interface,
             moduleMain.address,
@@ -186,13 +157,13 @@ describe("ModuleMain Benchmark", function () {
             [transaction],
             chainId,
             1,
-            masterKey,
-            threshold,
-            recoveryEmails,
-            Wallet.createRandom(),
-            Math.ceil(Date.now() + 300),
+            selectKeys(keys, Role.AssetsOp),
             wallet,
-            SigType.SigSessionKey
+            {
+              key: Wallet.createRandom(),
+              timestamp: Math.ceil(Date.now() / 1000) + 10000,
+              weight: 100,
+            }
           );
           results.push(tx.gasUsed);
         }

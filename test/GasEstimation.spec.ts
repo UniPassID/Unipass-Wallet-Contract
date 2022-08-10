@@ -2,19 +2,16 @@ import { expect } from "chai";
 import { Contract, ContractFactory, Overrides, Wallet } from "ethers";
 import { BytesLike, randomBytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
-import {
-  generateRecoveryEmails,
-  getKeysetHash,
-  optimalGasLimit,
-} from "./utils/common";
+import { getKeysetHash, optimalGasLimit } from "./utils/common";
 import { Deployer } from "./utils/deployer";
+import { KeyBase, randomKeys, selectKeys } from "./utils/key";
 import {
   CallType,
   executeCall,
   generateTransactionSig,
   generateTransferTx,
   generateUpdateKeysetHashTx,
-  SigType,
+  Role,
 } from "./utils/sigPart";
 
 function txBaseCost(data: BytesLike): number {
@@ -33,11 +30,8 @@ describe("GasEstimation", function () {
   let gasEstimation: Contract;
   let deployer: Deployer;
   let dkimKeys: Contract;
-  let masterKey: Wallet;
+  let keys: KeyBase[];
   let keysetHash: string;
-  let threshold: number;
-  let recoveryEmailIndexes: number[];
-  let recoveryEmails: string[];
   let dkimKeysAdmin: Wallet;
   let txParams: Overrides;
   let metaNonce: number;
@@ -87,12 +81,8 @@ describe("GasEstimation", function () {
     moduleGuest = await deployer.deployContract(ModuleGuest, 0, txParams);
   });
   this.beforeEach(async function () {
-    threshold = 4;
-    masterKey = Wallet.createRandom();
-
-    recoveryEmailIndexes = [...Array(threshold).keys()].map((v) => v + 1);
-    recoveryEmails = generateRecoveryEmails(10);
-    keysetHash = getKeysetHash(masterKey.address, threshold, recoveryEmails);
+    keys = randomKeys(10);
+    keysetHash = getKeysetHash(keys);
 
     proxyModuleMain = await deployer.deployProxyContract(
       ModuleMain.interface,
@@ -140,36 +130,27 @@ describe("GasEstimation", function () {
   });
   it("Should estimate account transaction", async function () {
     const newKeysetHash = ethers.utils.hexlify(randomBytes(32));
+    const selectedKeys = selectKeys(keys, Role.Owner);
     const tx = await generateUpdateKeysetHashTx(
       proxyModuleMain,
       metaNonce,
       newKeysetHash,
-      masterKey,
-      threshold,
-      recoveryEmailIndexes,
-      recoveryEmails,
-      SigType.SigMasterKey
+      Role.Owner,
+      selectedKeys
     );
     const nonce = 1;
     const { chainId } = await proxyModuleMain.provider.getNetwork();
     const feeToken = ethers.constants.AddressZero;
     const feeReceiver = ethers.constants.AddressZero;
     const feeAmount = 0;
-    const sessionKey = Wallet.createRandom();
-    const expired = Math.ceil(Date.now() / 1000) + 300;
     const signature = await generateTransactionSig(
       chainId,
       [tx],
       nonce,
       feeToken,
       feeAmount,
-      masterKey,
-      threshold,
-      recoveryEmails,
-      [...Array(threshold).keys()].map((v) => v + 1),
-      sessionKey,
-      expired,
-      SigType.SigSessionKey
+      [],
+      undefined
     );
     const txData = proxyModuleMain.interface.encodeFunctionData("execute", [
       [tx],
@@ -187,13 +168,9 @@ describe("GasEstimation", function () {
       [tx],
       chainId,
       nonce,
-      masterKey,
-      threshold,
-      recoveryEmails,
-      sessionKey,
-      expired,
+      [],
       proxyModuleMain,
-      SigType.SigSessionKey
+      undefined
     );
     expect(estimate.gas.toNumber() + txBaseCost(txData)).to.approximately(
       realTx.gasUsed.toNumber(),
@@ -201,8 +178,8 @@ describe("GasEstimation", function () {
     );
   });
   it("Should estimate deploy + Account Layer Transaction + Transfer", async function () {
-    threshold = 5;
-    keysetHash = getKeysetHash(masterKey.address, threshold, recoveryEmails);
+    keys = randomKeys(10);
+    keysetHash = getKeysetHash(keys);
     const deployTxData =
       deployer.singleFactoryContract.interface.encodeFunctionData("deploy", [
         Deployer.getInitCode(moduleMain.address),
@@ -225,11 +202,8 @@ describe("GasEstimation", function () {
       proxyModuleMain,
       metaNonce,
       newKeysetHash,
-      masterKey,
-      threshold,
-      recoveryEmailIndexes,
-      recoveryEmails,
-      SigType.SigMasterKey
+      Role.Guardian,
+      selectKeys(keys, Role.Guardian)
     );
     let value = ethers.utils.parseEther("0.1");
     const transferTx = await generateTransferTx(
@@ -248,13 +222,8 @@ describe("GasEstimation", function () {
       nonce,
       feeToken,
       feeAmount,
-      masterKey,
-      threshold,
-      recoveryEmails,
-      [...Array(threshold).keys()].map((v) => v + 1),
-      undefined,
-      undefined,
-      SigType.SigNone
+      [],
+      undefined
     );
     const moduleMainTxData = moduleMain.interface.encodeFunctionData(
       "execute",
