@@ -1,6 +1,6 @@
-import { getCreate2Address, keccak256 } from "ethers/lib/utils";
+import { getCreate2Address, keccak256, solidityPack } from "ethers/lib/utils";
 import { ethers } from "hardhat";
-import { pureEmailHash } from "./email";
+import { KeyBase } from "./key";
 
 export const optimalGasLimit = ethers.constants.Two.pow(21);
 export const UNSTAKE_DELAY_SEC = 100;
@@ -23,23 +23,11 @@ export async function transferEth(to: string, amount: number) {
   ).wait();
 }
 
-export function getKeysetHash(
-  masterKeyAddress: string,
-  threshold: number,
-  recoveryEmails: string[]
-): string {
-  let keysetHash = keccak256(
-    ethers.utils.solidityPack(
-      ["address", "uint16"],
-      [masterKeyAddress, threshold]
-    )
-  );
-  recoveryEmails.forEach((recoveryEmail) => {
+export function getKeysetHash(keys: KeyBase[]): string {
+  let keysetHash = "0x";
+  keys.forEach((key) => {
     keysetHash = keccak256(
-      ethers.utils.solidityPack(
-        ["bytes32", "bytes32"],
-        [keysetHash, pureEmailHash(recoveryEmail)]
-      )
+      solidityPack(["bytes", "bytes"], [keysetHash, key.serialize()])
     );
   });
   return keysetHash;

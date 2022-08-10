@@ -7,14 +7,8 @@ import {
   solidityPack,
 } from "ethers/lib/utils";
 import { ethers } from "hardhat";
-import {
-  DkimParams,
-  getSignEmailWithDkim,
-  parseEmailParams,
-  pureEmailHash,
-  SerializeDkimParams,
-} from "./email";
-import { UserOperation } from "./userOperation";
+import { DkimParams, pureEmailHash, SerializeDkimParams } from "./email";
+import { KeyBase } from "./key";
 
 export enum ActionType {
   UpdateKeysetHash = 0,
@@ -25,12 +19,11 @@ export enum ActionType {
   UpdateEntryPoint = 5,
 }
 
-export enum SigType {
-  SigMasterKey = 0,
-  SigRecoveryEmail = 1,
-  SigMasterKeyWithRecoveryEmail = 2,
-  SigSessionKey = 3,
-  SigNone = 4,
+export enum Role {
+  Owner,
+  AssetsOp,
+  Guardian,
+  Synchronizer,
 }
 
 export enum CallType {
@@ -163,13 +156,8 @@ export async function generateTransactionSig(
   nonce: number,
   feeToken: string,
   feeAmount: number,
-  masterKey: Wallet,
-  threshold: number,
-  recoveryEmails: string[],
-  recoveryEmailsIndexes: number[],
-  sessionKey: Wallet | undefined,
-  expired: number | undefined,
-  sigType: SigType
+  keys: [KeyBase, boolean][],
+  sessionKey: SessionKey | undefined
 ): Promise<string> {
   const digestHash = keccak256(
     solidityPack(
@@ -190,16 +178,7 @@ export async function generateTransactionSig(
       ]
     )
   );
-  let sig: string = await generateSignature(
-    sigType,
-    digestHash,
-    sessionKey,
-    expired,
-    masterKey,
-    threshold,
-    recoveryEmailsIndexes,
-    recoveryEmails
-  );
+  let sig: string = await generateSignature(digestHash, keys, sessionKey);
 
   return sig;
 }
@@ -208,11 +187,8 @@ export async function generateUpdateKeysetHashTx(
   contract: Contract,
   metaNonce: number,
   newKeysetHash: string,
-  masterKey: Wallet,
-  threshold: number,
-  recoveryEmailsIndexes: number[],
-  recoveryEmails: string[],
-  sigType: SigType
+  role: Role,
+  keys: [KeyBase, boolean][]
 ) {
   const digestHash = keccak256(
     solidityPack(
@@ -221,19 +197,18 @@ export async function generateUpdateKeysetHashTx(
     )
   );
 
-  const data = contract.interface.encodeFunctionData("updateKeysetHash", [
+  let func: string;
+  if (role === Role.Guardian) {
+    func = "updateKeysetHashByGuardian";
+  } else if (role === Role.Owner) {
+    func = "updateKeysetHashByOwner";
+  } else {
+    throw new Error(`Invalid Role: ${role}`);
+  }
+  const data = contract.interface.encodeFunctionData(func, [
     metaNonce,
     newKeysetHash,
-    await generateSignature(
-      sigType,
-      digestHash,
-      undefined,
-      undefined,
-      masterKey,
-      threshold,
-      recoveryEmailsIndexes,
-      recoveryEmails
-    ),
+    await generateSignature(digestHash, keys, undefined),
   ]);
 
   let tx = {
@@ -268,11 +243,7 @@ export async function generateUnlockKeysetHashTx(
 export async function generateCancelLockKeysetHashTx(
   contract: Contract,
   metaNonce: number,
-  masterKey: Wallet,
-  threshold: number,
-  recoveryEmailsIndexes: number[],
-  recoveryEmails: string[],
-  sigType: SigType
+  keys: [KeyBase, boolean][]
 ) {
   const digestHash = keccak256(
     solidityPack(
@@ -282,16 +253,7 @@ export async function generateCancelLockKeysetHashTx(
   );
   const data = contract.interface.encodeFunctionData("cancelLockKeysetHsah", [
     metaNonce,
-    await generateSignature(
-      sigType,
-      digestHash,
-      undefined,
-      undefined,
-      masterKey,
-      threshold,
-      recoveryEmailsIndexes,
-      recoveryEmails
-    ),
+    await generateSignature(digestHash, keys, undefined),
   ]);
 
   let tx = {
@@ -308,11 +270,7 @@ export async function generateUpdateTimeLockDuringTx(
   contract: Contract,
   metaNonce: number,
   newTimeLockDuring: number,
-  masterKey: Wallet,
-  threshold: number,
-  recoveryEmailsIndexes: number[],
-  recoveryEmails: string[],
-  sigType: SigType
+  keys: [KeyBase, boolean][]
 ) {
   const digestHash = keccak256(
     solidityPack(
@@ -325,23 +283,11 @@ export async function generateUpdateTimeLockDuringTx(
       ]
     )
   );
-  if (sigType === undefined) {
-    throw new Error("Expected sigType");
-  }
 
   const data = contract.interface.encodeFunctionData("updateTimeLockDuring", [
     metaNonce,
     newTimeLockDuring,
-    await generateSignature(
-      sigType,
-      digestHash,
-      undefined,
-      undefined,
-      masterKey,
-      threshold,
-      recoveryEmailsIndexes,
-      recoveryEmails
-    ),
+    await generateSignature(digestHash, keys, undefined),
   ]);
 
   let tx = {
@@ -373,10 +319,7 @@ export async function generateUpdateImplementationTx(
   contract: Contract,
   metaNonce: number,
   newImplementation: string,
-  masterKey: Wallet,
-  threshold: number,
-  recoveryEmailsIndexes: number[],
-  recoveryEmails: string[]
+  keys: [KeyBase, boolean][]
 ) {
   const digestHash = keccak256(
     solidityPack(
@@ -393,16 +336,7 @@ export async function generateUpdateImplementationTx(
   const data = contract.interface.encodeFunctionData("updateImplementation", [
     metaNonce,
     newImplementation,
-    await generateSignature(
-      SigType.SigMasterKeyWithRecoveryEmail,
-      digestHash,
-      undefined,
-      undefined,
-      masterKey,
-      threshold,
-      recoveryEmailsIndexes,
-      recoveryEmails
-    ),
+    await generateSignature(digestHash, keys, undefined),
   ]);
 
   let tx = {
@@ -434,14 +368,13 @@ export function generateUpdateEntryPointTx(
   return tx;
 }
 
-export function generateRemoveSigWeightOfSelector(
+export function generateRemovePermissionTx(
   contract: Contract,
   selector: BytesLike
 ) {
-  const data = contract.interface.encodeFunctionData(
-    "removeSigWeightOfSelector",
-    [selector]
-  );
+  const data = contract.interface.encodeFunctionData("removePermission", [
+    selector,
+  ]);
   let tx = {
     callType: CallType.Call,
     gasLimit: ethers.constants.Zero,
@@ -452,14 +385,16 @@ export function generateRemoveSigWeightOfSelector(
   return tx;
 }
 
-export function generateAddSigWeightOfSelector(
+export function generateAddPermissionTx(
   contract: Contract,
+  role: Role,
   selector: BytesLike,
-  sigWeight: number
+  threshold: number
 ) {
-  const data = contract.interface.encodeFunctionData("addSigWeightOfSelector", [
+  const data = contract.interface.encodeFunctionData("addPermission", [
+    role,
     selector,
-    sigWeight,
+    threshold,
   ]);
   let tx = {
     callType: CallType.Call,
@@ -475,148 +410,72 @@ export async function executeCall(
   txs: Transaction[],
   chainId: number,
   nonce: number,
-  masterKey: Wallet,
-  threshold: number,
-  recoveryEmails: string[],
-  sessionKey: Wallet,
-  expired: number,
+  keys: [KeyBase, boolean][],
   moduleMain: Contract,
-  sigType: SigType
+  sessionKey: SessionKey | undefined
 ) {
   const feeToken = ethers.constants.AddressZero;
   const feeReceiver = ethers.constants.AddressZero;
   const feeAmount = 0;
 
-  const signature = await generateTransactionSig(
+  let signature = await generateTransactionSig(
     chainId,
     txs,
     nonce,
     feeToken,
     feeAmount,
-    masterKey,
-    threshold,
-    recoveryEmails,
-    [...Array(threshold).keys()].map((v) => v + 1),
-    sessionKey,
-    expired,
-    sigType
+    keys,
+    sessionKey
   );
+
   const ret = await (
     await moduleMain.execute(txs, nonce, feeToken, feeReceiver, 0, signature)
   ).wait();
   return ret;
 }
 
-export async function generateSignature(
-  sigType: SigType,
-  digestHash: string,
-  sessionKey: Wallet | undefined,
-  expired: number | undefined,
-  masterKey: Wallet,
-  threshold: number,
-  recoveryEmailsIndexes: number[],
-  recoveryEmails: string[]
-): Promise<string> {
-  let sig: string = solidityPack(["uint8"], [sigType]);
-  switch (sigType) {
-    case SigType.SigMasterKey: {
-      const masterKeySig = await signerSign(digestHash, masterKey);
-      sig = solidityPack(
-        ["bytes", "bytes"],
-        [sig, generateSigMasterKey(masterKeySig, threshold, recoveryEmails)]
-      );
-      break;
-    }
-    case SigType.SigRecoveryEmail: {
-      let recoveryEmailWithDkim: [string, DkimParams | null][] = [];
-      let index = 0;
-      for (const recoveryEmail of recoveryEmails) {
-        if (recoveryEmailsIndexes.includes(index) === true) {
-          let email = await getSignEmailWithDkim(
-            digestHash,
-            recoveryEmail,
-            "test@unipass.id.com"
-          );
-          let { params } = await parseEmailParams(email);
-          recoveryEmailWithDkim.push([recoveryEmail, params]);
-        } else {
-          recoveryEmailWithDkim.push([recoveryEmail, null]);
-        }
-        index++;
-      }
-      sig = solidityPack(
-        ["bytes", "bytes"],
-        [
-          sig,
-          generateSigRecoveryEmails(
-            masterKey.address,
-            threshold,
-            recoveryEmailWithDkim
-          ),
-        ]
-      );
-      break;
-    }
-    case SigType.SigMasterKeyWithRecoveryEmail: {
-      let recoveryEmailWithDkim: [string, DkimParams | null][] = [];
-      const masterKeySig = await signerSign(digestHash, masterKey);
-      let index = 0;
-      for (const recoveryEmail of recoveryEmails) {
-        if (recoveryEmailsIndexes.includes(index) === true) {
-          let email = await getSignEmailWithDkim(
-            digestHash,
-            recoveryEmail,
-            "test@unipass.me"
-          );
-          let { params, from } = await parseEmailParams(email);
-          recoveryEmailWithDkim.push([recoveryEmail, params]);
-        } else {
-          recoveryEmailWithDkim.push([recoveryEmail, null]);
-        }
-        index++;
-      }
-      sig = solidityPack(
-        ["bytes", "bytes"],
-        [
-          sig,
-          generateSigMasterKeyWithRecoveryEmails(
-            masterKeySig,
-            threshold,
-            recoveryEmailWithDkim
-          ),
-        ]
-      );
-      break;
-    }
-    case SigType.SigSessionKey: {
-      if (sessionKey === undefined) {
-        throw "expected Session Key";
-      }
-      if (expired === undefined) {
-        throw "expected Expired";
-      }
-      sig = solidityPack(
-        ["bytes", "bytes"],
-        [
-          sig,
-          await generateSessionKey(
-            masterKey,
-            threshold,
-            recoveryEmails,
-            digestHash,
-            sessionKey,
-            expired
-          ),
-        ]
-      );
-      break;
-    }
-    case SigType.SigNone: {
-      break;
-    }
+export interface SessionKey {
+  timestamp: number;
+  weight: number;
+  key: Wallet;
+}
 
-    default: {
-      throw new Error(`invalid sigType: ${sigType}`);
+export async function generateSignature(
+  digestHash: string,
+  keys: [KeyBase, boolean][],
+  sessionKey: SessionKey | undefined
+): Promise<string> {
+  let sig: string;
+  if (keys.length === 0) {
+    return "0x";
+  }
+  if (sessionKey === undefined) {
+    sig = solidityPack(["uint8"], [0]);
+  } else {
+    sig = solidityPack(
+      ["uint8", "uint32", "uint32", "bytes"],
+      [
+        1,
+        sessionKey.timestamp,
+        sessionKey.weight,
+        await signerSign(digestHash, sessionKey.key),
+      ]
+    );
+    digestHash = keccak256(
+      solidityPack(
+        ["address", "uint32", "uint32"],
+        [sessionKey.key.address, sessionKey.timestamp, sessionKey.weight]
+      )
+    );
+  }
+  for (const [key, isSig] of keys) {
+    if (isSig) {
+      sig = solidityPack(
+        ["bytes", "bytes"],
+        [sig, await key.generateSignature(digestHash)]
+      );
+    } else {
+      sig = solidityPack(["bytes", "bytes"], [sig, await key.generateKey()]);
     }
   }
   return sig;

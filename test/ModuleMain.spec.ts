@@ -8,19 +8,15 @@ import {
 } from "ethers";
 import { keccak256, randomBytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
-import {
-  generateRecoveryEmails,
-  getKeysetHash,
-  optimalGasLimit,
-} from "./utils/common";
+import { getKeysetHash, optimalGasLimit } from "./utils/common";
 import { Deployer } from "./utils/deployer";
+import { KeyBase, randomKeys, selectKeys } from "./utils/key";
 import {
   CallType,
-  generateSessionKey,
-  generateSignature,
+  executeCall,
   generateTransactionSig,
   generateUpdateKeysetHashTx,
-  SigType,
+  Role,
 } from "./utils/sigPart";
 
 describe("ModuleMain", function () {
@@ -30,10 +26,8 @@ describe("ModuleMain", function () {
   let proxyModuleMain: Contract;
   let deployer: Deployer;
   let dkimKeys: Contract;
-  let masterKey: Wallet;
   let keysetHash: string;
-  let threshold: number;
-  let recoveryEmails: string[];
+  let keys: KeyBase[];
   let dkimKeysAdmin: Wallet;
   let testErc20Token: Contract;
   let testERC721: Contract;
@@ -42,9 +36,10 @@ describe("ModuleMain", function () {
   let ERC721TokenId: string;
   let ERC1155TokenId: string;
   let txParams: Overrides;
-  let recoveryEmailsIndexes: number[];
+  let chainId: number;
   this.beforeAll(async function () {
     const [signer] = await ethers.getSigners();
+    chainId = (await signer.provider!.getNetwork()).chainId;
     deployer = await new Deployer(signer).init();
     txParams = {
       gasLimit: 10000000,
@@ -91,12 +86,8 @@ describe("ModuleMain", function () {
   });
 
   this.beforeEach(async function () {
-    threshold = 4;
-    masterKey = Wallet.createRandom();
-
-    recoveryEmailsIndexes = [...Array(threshold).keys()].map((v) => v + 1);
-    recoveryEmails = generateRecoveryEmails(10);
-    keysetHash = getKeysetHash(masterKey.address, threshold, recoveryEmails);
+    keys = randomKeys(10);
+    keysetHash = getKeysetHash(keys);
 
     proxyModuleMain = await deployer.deployProxyContract(
       moduleMain.interface,
@@ -152,8 +143,8 @@ describe("ModuleMain", function () {
         funcFragment.stateMutability !== "pure" &&
         funcFragment.stateMutability !== "view"
       ) {
-        await moduleMain.getSigWeightOfCallData(
-          keccak256(Buffer.from(func, "utf-8"))
+        await moduleMain.getRoleOfPermission(
+          keccak256(Buffer.from(func, "utf-8")).slice(0, 10)
         );
       }
     }
@@ -167,25 +158,20 @@ describe("ModuleMain", function () {
         funcFragment.stateMutability !== "pure" &&
         funcFragment.stateMutability !== "view"
       ) {
-        await moduleMain.getSigWeightOfCallData(
-          keccak256(Buffer.from(func, "utf-8"))
+        await moduleMain.getRoleOfPermission(
+          keccak256(Buffer.from(func, "utf-8")).slice(0, 10)
         );
       }
     }
   });
 
   describe("Test User Register", async () => {
-    let masterKey: Wallet;
-    let recoveryEmails: string[];
-    let threshold: number;
+    let keys: KeyBase[];
     let userAddress: string;
     let keysetHash: string;
     it("User Not Registered", async () => {
-      masterKey = Wallet.createRandom();
-      threshold = 5;
-
-      recoveryEmails = generateRecoveryEmails(10);
-      keysetHash = getKeysetHash(masterKey.address, threshold, recoveryEmails);
+      keys = randomKeys(10);
+      keysetHash = getKeysetHash(keys);
 
       userAddress = deployer.getProxyContractAddress(
         moduleMain.address,
@@ -208,68 +194,27 @@ describe("ModuleMain", function () {
     });
   });
 
-  it("Test Validating Permit", async () => {
-    const sessionKey = Wallet.createRandom();
-    const expired = Math.ceil(Date.now() / 1000 + 300);
-    const digestHash = ethers.utils.hexlify(randomBytes(32));
-    const permit = await generateSignature(
-      SigType.SigSessionKey,
-      digestHash,
-      sessionKey,
-      expired,
-      masterKey,
-      threshold,
-      [...Array(threshold).keys()].map((v) => v + 1),
-      recoveryEmails
-    );
-    const ret = await proxyModuleMain.isValidSignature(digestHash, permit);
-    expect(ret).to.equals(SELECTOR_ERC1271_BYTES32_BYTES);
-  });
-
-  it("Test Account Recovery By Emails", async () => {
+  it("Test Account Recovery", async () => {
     const newKeysetHash = `0x${Buffer.from(randomBytes(32)).toString("hex")}`;
+    const selectedKeys = selectKeys(keys, Role.Guardian);
     const metaNonce = 1;
     const tx = await generateUpdateKeysetHashTx(
       proxyModuleMain,
       metaNonce,
       newKeysetHash,
-      masterKey,
-      threshold,
-      recoveryEmailsIndexes,
-      recoveryEmails,
-      SigType.SigRecoveryEmail
+      Role.Guardian,
+      selectedKeys
     );
 
     const nonce = 1;
-    const { chainId } = await proxyModuleMain.provider.getNetwork();
-    const feeToken = ethers.constants.AddressZero;
-    const feeReceiver = ethers.constants.AddressZero;
-    const feeAmount = 0;
-
-    const signature = generateTransactionSig(
-      chainId,
+    const ret = await executeCall(
       [tx],
+      chainId,
       nonce,
-      feeToken,
-      feeAmount,
-      masterKey,
-      threshold,
-      recoveryEmails,
-      [...Array(threshold).keys()].map((v) => v + 1),
-      undefined,
-      undefined,
-      SigType.SigNone
+      [],
+      proxyModuleMain,
+      undefined
     );
-    const ret = await (
-      await proxyModuleMain.execute(
-        [tx],
-        nonce,
-        feeToken,
-        feeReceiver,
-        0,
-        signature
-      )
-    ).wait();
     expect(ret.status).to.equal(1);
     expect(await proxyModuleMain.lockedKeysetHash()).to.equal(newKeysetHash);
   });
@@ -281,7 +226,8 @@ describe("ModuleMain", function () {
     const feeReceiver = Wallet.createRandom().address;
     const feeAmount = 0;
     const sessionKey = Wallet.createRandom();
-    const expired = Math.ceil(Date.now() / 1000 + 300);
+    const timestamp = Math.ceil(Date.now() / 1000 + 300);
+    const selectedKeys = selectKeys(keys, Role.AssetsOp);
 
     const to1 = Wallet.createRandom();
     const to2 = Wallet.createRandom();
@@ -308,13 +254,12 @@ describe("ModuleMain", function () {
       nonce,
       feeToken,
       feeAmount,
-      masterKey,
-      threshold,
-      recoveryEmails,
-      [...Array(threshold).keys()].map((v) => v + 1),
-      sessionKey,
-      expired,
-      SigType.SigSessionKey
+      selectedKeys,
+      {
+        key: sessionKey,
+        timestamp,
+        weight: 100,
+      }
     );
 
     const recipt = await (
@@ -344,7 +289,8 @@ describe("ModuleMain", function () {
     const feeReceiver = Wallet.createRandom().address;
     const feeAmount = 0;
     const sessionKey = Wallet.createRandom();
-    const expired = Math.ceil(Date.now() / 1000 + 300);
+    const timestamp = Math.ceil(Date.now() / 1000 + 300);
+    const selectedKeys = selectKeys(keys, Role.AssetsOp);
 
     const to1 = Wallet.createRandom();
     const to2 = Wallet.createRandom();
@@ -379,13 +325,8 @@ describe("ModuleMain", function () {
       nonce,
       feeToken,
       feeAmount,
-      masterKey,
-      threshold,
-      recoveryEmails,
-      [...Array(threshold).keys()].map((v) => v + 1),
-      sessionKey,
-      expired,
-      SigType.SigSessionKey
+      selectedKeys,
+      { key: sessionKey, timestamp, weight: 100 }
     );
 
     const recipt = await (
@@ -411,7 +352,8 @@ describe("ModuleMain", function () {
     const feeReceiver = Wallet.createRandom().address;
     const feeAmount = 0;
     const sessionKey = Wallet.createRandom();
-    const expired = Math.ceil(Date.now() / 1000 + 300);
+    const timestamp = Math.ceil(Date.now() / 1000 + 300);
+    const selectedKeys = selectKeys(keys, Role.AssetsOp);
 
     const to1 = Wallet.createRandom();
     const data1 = testERC721.interface.encodeFunctionData("transferFrom", [
@@ -434,13 +376,8 @@ describe("ModuleMain", function () {
       nonce,
       feeToken,
       feeAmount,
-      masterKey,
-      threshold,
-      recoveryEmails,
-      [...Array(threshold).keys()].map((v) => v + 1),
-      sessionKey,
-      expired,
-      SigType.SigSessionKey
+      selectedKeys,
+      { key: sessionKey, timestamp, weight: 100 }
     );
 
     const recipt = await (
@@ -465,7 +402,8 @@ describe("ModuleMain", function () {
     const feeReceiver = Wallet.createRandom().address;
     const feeAmount = 0;
     const sessionKey = Wallet.createRandom();
-    const expired = Math.ceil(Date.now() / 1000 + 300);
+    const timestamp = Math.ceil(Date.now() / 1000 + 300);
+    const selectedKeys = selectKeys(keys, Role.AssetsOp);
 
     const to1 = Wallet.createRandom();
     const to2 = Wallet.createRandom();
@@ -506,13 +444,8 @@ describe("ModuleMain", function () {
       nonce,
       feeToken,
       feeAmount,
-      masterKey,
-      threshold,
-      recoveryEmails,
-      [...Array(threshold).keys()].map((v) => v + 1),
-      sessionKey,
-      expired,
-      SigType.SigSessionKey
+      selectedKeys,
+      { key: sessionKey, timestamp, weight: 100 }
     );
 
     const recipt = await (
