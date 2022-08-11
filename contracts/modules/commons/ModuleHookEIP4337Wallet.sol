@@ -23,11 +23,7 @@ import "hardhat/console.sol";
  * this contract provides the basic logic for implementing the IWallet interface  - validateUserOp
  * specific wallet implementation should inherit it and provide the wallet-specific logic
  */
-contract ModuleHookEIP4337Wallet is
-    ITransaction,
-    IEIP4337Wallet,
-    ModuleSelfAuth
-{
+contract ModuleHookEIP4337Wallet is ITransaction, IEIP4337Wallet, ModuleSelfAuth {
     using UserOperationLib for UserOperation;
     using Address for address;
     using LibBytes for bytes;
@@ -35,16 +31,11 @@ contract ModuleHookEIP4337Wallet is
     address public immutable ENTRY_POINT;
 
     //                       ENTRY_POINT_KEY = keccak256("unipass-wallet:module-hook-eip4337-wallet:entry-point")
-    bytes32 private constant ENTRY_POINT_KEY =
-        bytes32(
-            0x06f757a338bda2d50616d8b9f12f755f66fab01c0eb54b1926b257c970e16ba1
-        );
+    bytes32 private constant ENTRY_POINT_KEY = bytes32(0x06f757a338bda2d50616d8b9f12f755f66fab01c0eb54b1926b257c970e16ba1);
 
     //                       EIP4337_WALLET_NONCE_KEY = keccak256("unipass-wallet:module-hook-eip4337-wallet:eip4337-wallet-nonce")
     bytes32 private constant EIP4337_WALLET_NONCE_KEY =
-        bytes32(
-            0x9190635b97808fd3d18811bd3d940c445971100d934599c77d259adaac8633c1
-        );
+        bytes32(0x9190635b97808fd3d18811bd3d940c445971100d934599c77d259adaac8633c1);
 
     error InvalidEntryPoint(address _entryPoint);
 
@@ -53,20 +44,11 @@ contract ModuleHookEIP4337Wallet is
     }
 
     function _requireEIP4337WalletNonce(uint256 _nonce) private view {
-        require(
-            getEIP4337WalletNonce() + 1 == _nonce,
-            "_requireEIP4337WalletNonce: INVALID_NONCE"
-        );
+        require(getEIP4337WalletNonce() + 1 == _nonce, "_requireEIP4337WalletNonce: INVALID_NONCE");
     }
 
-    function getEIP4337WalletNonce()
-        public
-        view
-        returns (uint256 eip4337WalletNonce)
-    {
-        eip4337WalletNonce = (uint256)(
-            ModuleStorage.readBytes32(EIP4337_WALLET_NONCE_KEY)
-        );
+    function getEIP4337WalletNonce() public view returns (uint256 eip4337WalletNonce) {
+        eip4337WalletNonce = (uint256)(ModuleStorage.readBytes32(EIP4337_WALLET_NONCE_KEY));
     }
 
     function _writeEIP4337WalletNonce(uint256 _nonce) private {
@@ -78,18 +60,13 @@ contract ModuleHookEIP4337Wallet is
      * subclass should return the current entryPoint used by this wallet.
      */
     function getEntryPoint() public view virtual returns (address entryPoint) {
-        entryPoint = address(
-            uint160(uint256(ModuleStorage.readBytes32(ENTRY_POINT_KEY)))
-        );
+        entryPoint = address(uint160(uint256(ModuleStorage.readBytes32(ENTRY_POINT_KEY))));
         if (entryPoint == address(0)) {
             entryPoint = ENTRY_POINT;
         }
     }
 
-    function updateEntryPoint(
-        uint32 _eip4337WalletNonce,
-        address _newEntryPoint
-    ) external onlySelf {
+    function updateEntryPoint(uint32 _eip4337WalletNonce, address _newEntryPoint) external onlySelf {
         _requireEIP4337WalletNonce(_eip4337WalletNonce);
         if (!_newEntryPoint.isContract()) {
             revert InvalidEntryPoint(_newEntryPoint);
@@ -100,20 +77,14 @@ contract ModuleHookEIP4337Wallet is
     }
 
     function _writeEntryPoint(address newEntryPoint) internal {
-        ModuleStorage.writeBytes32(
-            ENTRY_POINT_KEY,
-            bytes32(uint256(uint160(newEntryPoint)))
-        );
+        ModuleStorage.writeBytes32(ENTRY_POINT_KEY, bytes32(uint256(uint160(newEntryPoint))));
     }
 
     /**
      * ensure the request comes from the known entrypoint.
      */
     function _requireFromEntryPoint() internal view {
-        require(
-            msg.sender == address(getEntryPoint()),
-            "_requireFromEntryPoint: INVALID_FROM"
-        );
+        require(msg.sender == address(getEntryPoint()), "_requireFromEntryPoint: INVALID_FROM");
     }
 
     /**
@@ -152,32 +123,21 @@ contract ModuleHookEIP4337Wallet is
      * @param requestId convenient field: the hash of the request, to check the signature against
      *          (also hashes the entrypoint and chain-id)
      */
-    function _validateUserOp(UserOperation calldata userOp, bytes32 requestId)
-        private
-        view
-    {
+    function _validateUserOp(UserOperation calldata userOp, bytes32 requestId) private view {
         require(
-            bytes4(userOp.callData[:4]) ==
-                ModuleHookEIP4337Wallet.execFromEntryPoint.selector,
+            bytes4(userOp.callData[:4]) == ModuleHookEIP4337Wallet.execFromEntryPoint.selector,
             "_validateUserOp: INVALID_SELECTOR"
         );
         Transaction memory transaction;
         (transaction) = abi.decode(userOp.callData[4:], (Transaction));
         if (transaction.target != address(this)) {
-            (bool success, RoleWeight memory roleWeight) = IModuleAuth(
-                address(this)
-            ).validateSignature(requestId, userOp.signature);
-            require(
-                success &&
-                    roleWeight.assetsOpWeight >= LibRole.GUARDIAN_THRESHOLD,
-                "execute: INVALID_SIG_WEIGHT"
-            );
-        } else {
-            bool success = IModuleCall(userOp.sender).isValidCallData(
-                transaction.data,
+            (bool success, RoleWeight memory roleWeight) = IModuleAuth(address(this)).validateSignature(
                 requestId,
                 userOp.signature
             );
+            require(success && roleWeight.assetsOpWeight >= LibRole.GUARDIAN_THRESHOLD, "execute: INVALID_SIG_WEIGHT");
+        } else {
+            bool success = IModuleCall(userOp.sender).isValidCallData(transaction.data, requestId, userOp.signature);
 
             require(success, "_validateUserOp: INVALID_SIGNATURE");
         }
@@ -195,10 +155,7 @@ contract ModuleHookEIP4337Wallet is
         if (missingWalletFunds != 0) {
             //pay required prefund. make sure NOT to use the "gas" opcode, which is banned during validateUserOp
             // (and used by default by the "call")
-            (bool success, ) = payable(msg.sender).call{
-                value: missingWalletFunds,
-                gas: type(uint256).max
-            }("");
+            (bool success, ) = payable(msg.sender).call{value: missingWalletFunds, gas: type(uint256).max}("");
             (success);
             //ignore failure (its EntryPoint's job to verify, not wallet.)
         }
@@ -216,15 +173,11 @@ contract ModuleHookEIP4337Wallet is
         if (_transaction.callType == CallType.Call) {
             (success, result) = _transaction.target.call{
                 value: _transaction.value,
-                gas: _transaction.gasLimit == 0
-                    ? gasleft()
-                    : _transaction.gasLimit
+                gas: _transaction.gasLimit == 0 ? gasleft() : _transaction.gasLimit
             }(_transaction.data);
         } else if (_transaction.callType == CallType.DelegateCall) {
             (success, result) = _transaction.target.delegatecall{
-                gas: _transaction.gasLimit == 0
-                    ? gasleft()
-                    : _transaction.gasLimit
+                gas: _transaction.gasLimit == 0 ? gasleft() : _transaction.gasLimit
             }(_transaction.data);
         } else {
             revert InvalidCallType(_transaction.callType);

@@ -53,12 +53,7 @@ contract EntryPoint is StakeManager {
      * @param nonce the nonce used in the request
      * @param revertReason - the return bytes from the (reverted) call to "callData".
      */
-    event UserOperationRevertReason(
-        bytes32 indexed requestId,
-        address indexed sender,
-        uint256 nonce,
-        bytes revertReason
-    );
+    event UserOperationRevertReason(bytes32 indexed requestId, address indexed sender, uint256 nonce, bytes revertReason);
 
     /**
      * a custom revert error of handleOps, to identify the offending op.
@@ -104,10 +99,7 @@ contract EntryPoint is StakeManager {
      * @param ops the operations to execute
      * @param beneficiary the address to receive the fees
      */
-    function handleOps(
-        UserOperation[] calldata ops,
-        address payable beneficiary
-    ) public {
+    function handleOps(UserOperation[] calldata ops, address payable beneficiary) public {
         uint256 opslen = ops.length;
         UserOpInfo[] memory opInfos = new UserOpInfo[](opslen);
 
@@ -121,11 +113,7 @@ contract EntryPoint is StakeManager {
                 bytes32 requestId = getRequestId(op);
                 uint256 prefund;
                 PaymentMode paymentMode;
-                (prefund, paymentMode, context) = _validatePrepayment(
-                    i,
-                    op,
-                    requestId
-                );
+                (prefund, paymentMode, context) = _validatePrepayment(i, op, requestId);
                 assembly {
                     contextOffset := context
                 }
@@ -150,20 +138,11 @@ contract EntryPoint is StakeManager {
                     context := contextOffset
                 }
 
-                try this.innerHandleOp(op, opInfo, context) returns (
-                    uint256 _actualGasCost
-                ) {
+                try this.innerHandleOp(op, opInfo, context) returns (uint256 _actualGasCost) {
                     collected += _actualGasCost;
                 } catch {
                     uint256 actualGas = preGas - gasleft() + opInfo.preOpGas;
-                    collected += _handlePostOp(
-                        i,
-                        IPaymaster.PostOpMode.postOpReverted,
-                        op,
-                        opInfo,
-                        context,
-                        actualGas
-                    );
+                    collected += _handlePostOp(i, IPaymaster.PostOpMode.postOpReverted, op, opInfo, context, actualGas);
                 }
             }
 
@@ -193,17 +172,10 @@ contract EntryPoint is StakeManager {
 
         IPaymaster.PostOpMode mode = IPaymaster.PostOpMode.opSucceeded;
         if (op.callData.length > 0) {
-            (bool success, bytes memory result) = address(op.getSender()).call{
-                gas: op.callGas
-            }(op.callData);
+            (bool success, bytes memory result) = address(op.getSender()).call{gas: op.callGas}(op.callData);
             if (!success) {
                 if (result.length > 0) {
-                    emit UserOperationRevertReason(
-                        opInfo.requestId,
-                        op.getSender(),
-                        op.nonce,
-                        result
-                    );
+                    emit UserOperationRevertReason(opInfo.requestId, op.getSender(), op.nonce, result);
                 }
                 mode = IPaymaster.PostOpMode.opReverted;
             }
@@ -220,13 +192,8 @@ contract EntryPoint is StakeManager {
      * generate a request Id - unique identifier for this request.
      * the request ID is a hash over the content of the userOp (except the signature), the entrypoint and the chainid.
      */
-    function getRequestId(UserOperation calldata userOp)
-        public
-        view
-        returns (bytes32)
-    {
-        return
-            keccak256(abi.encode(userOp.hash(), address(this), block.chainid));
+    function getRequestId(UserOperation calldata userOp) public view returns (bytes32) {
+        return keccak256(abi.encode(userOp.hash(), address(this), block.chainid));
     }
 
     /**
@@ -238,20 +205,14 @@ contract EntryPoint is StakeManager {
      * @return preOpGas total gas used by validation (including contract creation)
      * @return prefund the amount the wallet had to prefund (zero in case a paymaster pays)
      */
-    function simulateValidation(UserOperation calldata userOp)
-        external
-        returns (uint256 preOpGas, uint256 prefund)
-    {
+    function simulateValidation(UserOperation calldata userOp) external returns (uint256 preOpGas, uint256 prefund) {
         uint256 preGas = gasleft();
 
         bytes32 requestId = getRequestId(userOp);
         (prefund, , ) = _validatePrepayment(0, userOp, requestId);
         preOpGas = preGas - gasleft() + userOp.preVerificationGas;
 
-        require(
-            msg.sender == address(0),
-            "must be called off-chain with from=zero-addr"
-        );
+        require(msg.sender == address(0), "must be called off-chain with from=zero-addr");
     }
 
     function _getPaymentInfo(UserOperation calldata userOp)
@@ -274,15 +235,9 @@ contract EntryPoint is StakeManager {
             // this create2 creates a proxy account.
             // @dev initCode must be unique (e.g. contains the signer address), to make sure
             //   it can only be executed from the entryPoint, and called with its initialization code (callData)
-            address sender1 = ICreate2Deployer(create2factory).deploy(
-                op.initCode,
-                bytes32(op.nonce)
-            );
+            address sender1 = ICreate2Deployer(create2factory).deploy(op.initCode, bytes32(op.nonce));
             require(sender1 != address(0), "create2 failed");
-            require(
-                sender1 == op.getSender(),
-                "sender doesn't match create2 address"
-            );
+            require(sender1 == op.getSender(), "sender doesn't match create2 address");
         }
     }
 
@@ -292,19 +247,8 @@ contract EntryPoint is StakeManager {
      * @param initCode the constructor code to be passed into the UserOperation.
      * @param salt the salt parameter, to be passed as "nonce" in the UserOperation.
      */
-    function getSenderAddress(bytes memory initCode, uint256 salt)
-        public
-        view
-        returns (address)
-    {
-        bytes32 hash = keccak256(
-            abi.encodePacked(
-                bytes1(0xff),
-                address(create2factory),
-                salt,
-                keccak256(initCode)
-            )
-        );
+    function getSenderAddress(bytes memory initCode, uint256 salt) public view returns (address) {
+        bytes32 hash = keccak256(abi.encodePacked(bytes1(0xff), address(create2factory), salt, keccak256(initCode)));
 
         // NOTE: cast last 20 bytes of hash to address
         return address(uint160(uint256(hash)));
@@ -329,18 +273,12 @@ contract EntryPoint is StakeManager {
             address sender = op.getSender();
             if (paymentMode != PaymentMode.paymasterDeposit) {
                 uint256 bal = balanceOf(sender);
-                missingWalletFunds = bal > requiredPrefund
-                    ? 0
-                    : requiredPrefund - bal;
+                missingWalletFunds = bal > requiredPrefund ? 0 : requiredPrefund - bal;
             }
             // solhint-disable-next-line no-empty-blocks
-            try
-                IEIP4337Wallet(sender).validateUserOp{gas: op.verificationGas}(
-                    op,
-                    requestId,
-                    missingWalletFunds
-                )
-            {} catch Error(string memory revertReason) {
+            try IEIP4337Wallet(sender).validateUserOp{gas: op.verificationGas}(op, requestId, missingWalletFunds) {} catch Error(
+                string memory revertReason
+            ) {
                 revert FailedOp(opIndex, address(0), revertReason);
             } catch {
                 revert FailedOp(opIndex, address(0), "");
@@ -349,11 +287,7 @@ contract EntryPoint is StakeManager {
                 DepositInfo storage senderInfo = deposits[sender];
                 uint256 deposit = senderInfo.deposit;
                 if (requiredPrefund > deposit) {
-                    revert FailedOp(
-                        opIndex,
-                        address(0),
-                        "wallet didn't pay prefund"
-                    );
+                    revert FailedOp(opIndex, address(0), "wallet didn't pay prefund");
                 }
                 senderInfo.deposit = uint112(deposit - requiredPrefund);
             }
@@ -384,22 +318,13 @@ contract EntryPoint is StakeManager {
                 revert FailedOp(opIndex, paymaster, "not staked");
             }
             if (deposit < requiredPreFund) {
-                revert FailedOp(
-                    opIndex,
-                    paymaster,
-                    "paymaster deposit too low"
-                );
+                revert FailedOp(opIndex, paymaster, "paymaster deposit too low");
             }
             paymasterInfo.deposit = uint112(deposit - requiredPreFund);
-            uint256 gas = op.verificationGas -
-                gasUsedByValidateWalletPrepayment;
-            try
-                IPaymaster(paymaster).validatePaymasterUserOp{gas: gas}(
-                    op,
-                    requestId,
-                    requiredPreFund
-                )
-            returns (bytes memory _context) {
+            uint256 gas = op.verificationGas - gasUsedByValidateWalletPrepayment;
+            try IPaymaster(paymaster).validatePaymasterUserOp{gas: gas}(op, requestId, requiredPreFund) returns (
+                bytes memory _context
+            ) {
                 context = _context;
             } catch Error(string memory revertReason) {
                 revert FailedOp(opIndex, paymaster, revertReason);
@@ -436,13 +361,7 @@ contract EntryPoint is StakeManager {
         uint256 gasUsedByValidateWalletPrepayment;
         (requiredPreFund, paymentMode) = _getPaymentInfo(userOp);
 
-        (gasUsedByValidateWalletPrepayment) = _validateWalletPrepayment(
-            opIndex,
-            userOp,
-            requestId,
-            requiredPreFund,
-            paymentMode
-        );
+        (gasUsedByValidateWalletPrepayment) = _validateWalletPrepayment(opIndex, userOp, requestId, requiredPreFund, paymentMode);
 
         //a "marker" where wallet opcode validation is done and paymaster opcode validation is about to start
         // (used only by off-chain simulateValidation)
@@ -464,11 +383,7 @@ contract EntryPoint is StakeManager {
             uint256 gasUsed = preGas - gasleft();
 
             if (userOp.verificationGas < gasUsed) {
-                revert FailedOp(
-                    opIndex,
-                    userOp.paymaster,
-                    "Used more than verificationGas"
-                );
+                revert FailedOp(opIndex, userOp.paymaster, "Used more than verificationGas");
             }
         }
     }
@@ -506,25 +421,15 @@ contract EntryPoint is StakeManager {
                 if (context.length > 0) {
                     actualGasCost = actualGas * gasPrice;
                     if (mode != IPaymaster.PostOpMode.postOpReverted) {
-                        IPaymaster(paymaster).postOp{gas: op.verificationGas}(
-                            mode,
-                            context,
-                            actualGasCost
-                        );
+                        IPaymaster(paymaster).postOp{gas: op.verificationGas}(mode, context, actualGasCost);
                     } else {
                         // solhint-disable-next-line no-empty-blocks
-                        try
-                            IPaymaster(paymaster).postOp{
-                                gas: op.verificationGas
-                            }(mode, context, actualGasCost)
-                        {} catch Error(string memory reason) {
+                        try IPaymaster(paymaster).postOp{gas: op.verificationGas}(mode, context, actualGasCost) {} catch Error(
+                            string memory reason
+                        ) {
                             revert FailedOp(opIndex, paymaster, reason);
                         } catch {
-                            revert FailedOp(
-                                opIndex,
-                                paymaster,
-                                "postOp revert"
-                            );
+                            revert FailedOp(opIndex, paymaster, "postOp revert");
                         }
                     }
                 }
@@ -532,24 +437,12 @@ contract EntryPoint is StakeManager {
             actualGas += preGas - gasleft();
             actualGasCost = actualGas * gasPrice;
             if (opInfo.prefund < actualGasCost) {
-                revert FailedOp(
-                    opIndex,
-                    paymaster,
-                    "prefund below actualGasCost"
-                );
+                revert FailedOp(opIndex, paymaster, "prefund below actualGasCost");
             }
             uint256 refund = opInfo.prefund - actualGasCost;
             internalIncrementDeposit(refundAddress, refund);
             bool success = mode == IPaymaster.PostOpMode.opSucceeded;
-            emit UserOperationEvent(
-                opInfo.requestId,
-                op.getSender(),
-                op.paymaster,
-                op.nonce,
-                actualGasCost,
-                gasPrice,
-                success
-            );
+            emit UserOperationEvent(opInfo.requestId, op.getSender(), op.paymaster, op.nonce, actualGasCost, gasPrice, success);
         } // unchecked
     }
 
@@ -559,11 +452,7 @@ contract EntryPoint is StakeManager {
      *  (that is, a wallet/paymaster are allowed to access their own deposit balance on the
      *  EntryPoint's storage, but no other account)
      */
-    function getSenderStorage(address sender)
-        external
-        view
-        returns (uint256[] memory senderStorageCells)
-    {
+    function getSenderStorage(address sender) external view returns (uint256[] memory senderStorageCells) {
         uint256 cell;
         DepositInfo storage info = deposits[sender];
 

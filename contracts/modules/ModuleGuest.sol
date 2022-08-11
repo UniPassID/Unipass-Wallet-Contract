@@ -46,11 +46,7 @@ contract ModuleGuest {
         }
 
         bytes32 txhash = keccak256(
-            abi.encodePacked(
-                abi.encodePacked(chainId, keccak256(abi.encode(_nonce, _txs))),
-                feeToken,
-                feeAmount
-            )
+            abi.encodePacked(abi.encodePacked(chainId, keccak256(abi.encode(_nonce, _txs))), feeToken, feeAmount)
         );
 
         _execute(txhash, _txs);
@@ -63,10 +59,7 @@ contract ModuleGuest {
         for (uint256 i = 0; i < _txs.length; i++) {
             Transaction calldata transaction = _txs[i];
 
-            require(
-                gasleft() >= transaction.gasLimit,
-                "_execute: NOT_ENOUGH_GAS"
-            );
+            require(gasleft() >= transaction.gasLimit, "_execute: NOT_ENOUGH_GAS");
 
             bool success;
             bytes memory result;
@@ -74,9 +67,7 @@ contract ModuleGuest {
             if (transaction.callType == CallType.Call) {
                 (success, result) = transaction.target.call{
                     value: transaction.value,
-                    gas: transaction.gasLimit == 0
-                        ? gasleft()
-                        : transaction.gasLimit
+                    gas: transaction.gasLimit == 0 ? gasleft() : transaction.gasLimit
                 }(transaction.data);
             } else {
                 revert InvalidCallType(transaction.callType);

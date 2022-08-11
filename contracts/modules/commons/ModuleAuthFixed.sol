@@ -16,12 +16,7 @@ abstract contract ModuleAuthFixed is ModuleAuthBase {
     ) ModuleAuthBase(_dkimKeys) {
         FACTORY = _factory;
         MODULE_MAIN_UPGRADABLE = _moduleMainUpgradable;
-        INIT_CODE_HASH = keccak256(
-            abi.encodePacked(
-                Wallet.CREATION_CODE,
-                uint256(uint160(address(this)))
-            )
-        );
+        INIT_CODE_HASH = keccak256(abi.encodePacked(Wallet.CREATION_CODE, uint256(uint160(address(this)))));
     }
 
     /**
@@ -39,26 +34,9 @@ abstract contract ModuleAuthFixed is ModuleAuthBase {
         _setImplementation(MODULE_MAIN_UPGRADABLE);
     }
 
-    function isValidKeysetHash(bytes32 _keysetHash)
-        public
-        view
-        override
-        returns (bool)
-    {
+    function isValidKeysetHash(bytes32 _keysetHash) public view override returns (bool) {
         return
-            address(
-                uint160(
-                    uint256(
-                        keccak256(
-                            abi.encodePacked(
-                                hex"ff",
-                                FACTORY,
-                                _keysetHash,
-                                INIT_CODE_HASH
-                            )
-                        )
-                    )
-                )
-            ) == address(this);
+            address(uint160(uint256(keccak256(abi.encodePacked(hex"ff", FACTORY, _keysetHash, INIT_CODE_HASH))))) ==
+            address(this);
     }
 }
