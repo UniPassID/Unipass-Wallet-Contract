@@ -9,6 +9,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./ModuleStorage.sol";
 import "./ModuleNonceBase.sol";
 import "./ModuleAuthBase.sol";
+import "./ModuleRole.sol";
 import "../../utils/LibBytes.sol";
 import "../../interfaces/IModuleHooks.sol";
 import "../../interfaces/ITransaction.sol";
@@ -17,7 +18,7 @@ import "../../interfaces/IEIP4337Wallet.sol";
 
 import "hardhat/console.sol";
 
-abstract contract ModuleCall is ITransaction, IModuleCall, ModuleNonceBase, ModuleAuthBase, IModuleHooks {
+abstract contract ModuleCall is ITransaction, IModuleCall, ModuleNonceBase, ModuleRole, ModuleAuthBase, IModuleHooks {
     using LibBytes for bytes;
     using SafeERC20 for IERC20;
 
@@ -27,6 +28,7 @@ abstract contract ModuleCall is ITransaction, IModuleCall, ModuleNonceBase, Modu
     error UnknownCallDataSelector(bytes4 _selector);
     error SelectorDoesNotExist(bytes4 _selector);
     error ImmutableSelectorSigWeight(bytes4 _selector);
+    error InvalidRole(Role _role);
 
     function getNonce() public view override returns (uint256) {
         return uint256(ModuleStorage.readBytes32(NONCE_KEY));
@@ -36,6 +38,13 @@ abstract contract ModuleCall is ITransaction, IModuleCall, ModuleNonceBase, Modu
         ModuleStorage.writeBytes32(NONCE_KEY, bytes32(_nonce));
     }
 
+    /**
+     * @param _txs Transactions to execute
+     * @param _nonce Signature nonce
+     * @param feeToken ERC20 Token Address to pay fee
+     * @param feeReceiver Fee Receiver Address
+     * @param _signature Signature bytes
+     */
     function execute(
         Transaction[] calldata _txs,
         uint256 _nonce,
@@ -90,7 +99,7 @@ abstract contract ModuleCall is ITransaction, IModuleCall, ModuleNonceBase, Modu
         bytes memory result;
 
         if (_transaction.target == address(this)) {
-            (Role role, uint32 threshold) = getPermissionOfCallData(_transaction.data);
+            (Role role, uint32 threshold) = _getPermissionOfCallData(_transaction.data);
 
             require(_validateRoleWeight(role, threshold, _roleWeight), "_execute: INVALID_ROLE_WEIGHT");
         } else {
@@ -116,19 +125,24 @@ abstract contract ModuleCall is ITransaction, IModuleCall, ModuleNonceBase, Modu
         }
     }
 
-    function getPermissionOfCallData(bytes calldata callData) public view returns (Role role, uint32 threshold) {
+    function _getPermissionOfCallData(bytes calldata callData) private view returns (Role role, uint32 threshold) {
         uint256 index = 0;
         bytes4 selector;
         (selector, index) = callData.cReadBytes4(index);
         (role, threshold) = getRoleOfPermission(selector);
     }
 
+    /**
+     * @param _callData Calldata of One Transaction
+     * @param _digestHash The Hash to valdiate signature
+     * @param _signature The internal signature of One Transaction
+     */
     function isValidCallData(
         bytes calldata _callData,
         bytes32 _digestHash,
         bytes calldata _signature
     ) external view returns (bool success) {
-        (Role role, uint32 threshold) = getPermissionOfCallData(_callData);
+        (Role role, uint32 threshold) = _getPermissionOfCallData(_callData);
         (bool succ, RoleWeight memory roleWeight) = validateSignature(_digestHash, _signature);
 
         success = succ && _validateRoleWeight(role, threshold, roleWeight);
