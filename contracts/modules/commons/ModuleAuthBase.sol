@@ -3,7 +3,6 @@ pragma solidity ^0.8.0;
 
 /* solhint-disable no-unused-vars */
 
-import "./ModuleRole.sol";
 import "./ModuleNonceBase.sol";
 import "./ModuleDkimAuth.sol";
 import "./ModuleTimeLock.sol";
@@ -26,7 +25,6 @@ abstract contract ModuleAuthBase is
     ModuleSelfAuth,
     IModuleAuth,
     ModuleNonceBase,
-    ModuleRole,
     ModuleDkimAuth,
     Implementation,
     IERC1271,
@@ -59,7 +57,6 @@ abstract contract ModuleAuthBase is
     error InvalidActionType(uint256 _actionType);
     error InvalidImplementation(address _implementation);
     error InvalidKeyType(KeyType _keyType);
-    error InvalidRole(Role _role);
 
     function isValidKeysetHash(bytes32 _keysetHash) public view virtual returns (bool);
 
@@ -209,6 +206,11 @@ abstract contract ModuleAuthBase is
         success = isValidKeysetHash(keysetHash);
     }
 
+    /**
+     * @param _metaNonce The Account layer transaction Signature Nonce
+     * @param _keysetHash The latest keysetHash in the Root Blockchain
+     * @param _signature The internal signature of Accont layer transction
+     */
     function syncAccount(
         uint32 _metaNonce,
         bytes32 _keysetHash,
@@ -226,6 +228,11 @@ abstract contract ModuleAuthBase is
         _writeMetaNonce(_metaNonce);
     }
 
+    /**
+     * @param _metaNonce The Account layer transaction Signature Nonce
+     * @param _newKeysetHash New KeysetHash
+     * @param _signature The internal signature of Accont layer transction
+     */
     function updateKeysetHash(
         uint32 _metaNonce,
         bytes32 _newKeysetHash,
@@ -247,6 +254,11 @@ abstract contract ModuleAuthBase is
         _writeMetaNonce(_metaNonce);
     }
 
+    /**
+     * @param _metaNonce The Account layer transaction Signature Nonce
+     * @param _newKeysetHash New KeysetHash
+     * @param _signature The internal signature of Accont layer transction
+     */
     function updateKeysetHashWithTimeLock(
         uint32 _metaNonce,
         bytes32 _newKeysetHash,
@@ -265,6 +277,9 @@ abstract contract ModuleAuthBase is
         _writeMetaNonce(_metaNonce);
     }
 
+    /**
+     * @param _metaNonce The Account layer transaction Signature Nonce
+     */
     function unlockKeysetHash(uint256 _metaNonce) external {
         _requireMetaNonce(_metaNonce);
         _requireToUnLock();
@@ -273,6 +288,10 @@ abstract contract ModuleAuthBase is
         _writeMetaNonce(_metaNonce);
     }
 
+    /**
+     * @param _metaNonce The Account layer transaction Signature Nonce
+     * @param _signature The internal signature of Accont layer transction
+     */
     function cancelLockKeysetHsah(uint32 _metaNonce, bytes calldata _signature) external onlySelf {
         _requireMetaNonce(_metaNonce);
         _requireLocked();
@@ -287,6 +306,11 @@ abstract contract ModuleAuthBase is
         _writeMetaNonce(_metaNonce);
     }
 
+    /**
+     * @param _metaNonce The Account layer transaction Signature Nonce
+     * @param _newTimeLockDuring New TimeLock Lock During
+     * @param _signature The internal signature of Accont layer transction
+     */
     function updateTimeLockDuring(
         uint32 _metaNonce,
         uint32 _newTimeLockDuring,
@@ -306,6 +330,11 @@ abstract contract ModuleAuthBase is
         _writeMetaNonce(_metaNonce);
     }
 
+    /**
+     * @param _metaNonce The Account layer transaction Signature Nonce
+     * @param _newImplementation New Contract Implemenation
+     * @param _signature The internal signature of Accont layer transction
+     */
     function updateImplementation(
         uint32 _metaNonce,
         address _newImplementation,
@@ -327,6 +356,12 @@ abstract contract ModuleAuthBase is
         _writeMetaNonce(_metaNonce);
     }
 
+    /**
+     * @param _hash The Hash To Valdiate Signature
+     * @param _signature The Transaction Signature
+     * @return succ Whether The Signature is Valid
+     * @return roleWeightRet The Role And Signature Weight
+     */
     function validateSignature(bytes32 _hash, bytes calldata _signature)
         public
         view

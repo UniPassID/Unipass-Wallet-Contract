@@ -31,6 +31,11 @@ contract ModuleRole is ModuleSelfAuth {
         permissions[_permission] = bytes5(0);
     }
 
+    /**
+     * @param _role The Signature Role
+     * @param _permission The Permission Of The Role, whose value is the selector of Method
+     * @param _threshold The Threshold required by the Permission
+     */
     function addPermission(
         Role _role,
         bytes4 _permission,
@@ -53,6 +58,9 @@ contract ModuleRole is ModuleSelfAuth {
         _addPermission(_role, _permission, _threshold);
     }
 
+    /**
+     * @param _permission The Permission
+     */
     function removePermission(bytes4 _permission) external onlySelf {
         if (
             _permission == IModuleAuth.updateKeysetHash.selector ||
@@ -71,6 +79,11 @@ contract ModuleRole is ModuleSelfAuth {
         _removePermission(_permission);
     }
 
+    /**
+     * @param _permission The Permission
+     * @return role The Role Of The Permission
+     * @return threshold The Threshold required by the Permission
+     */
     function getRoleOfPermission(bytes4 _permission) public view returns (Role role, uint32 threshold) {
         if (
             _permission == IModuleAuth.updateKeysetHash.selector ||

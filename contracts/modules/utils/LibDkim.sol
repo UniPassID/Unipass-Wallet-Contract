@@ -59,7 +59,7 @@ library LibDkimValidator {
         }
         localPartArray[localPartArray.length - 2] = atSlice;
         localPartArray[localPartArray.length - 1] = domainPart;
-        fromRet = LibSlice.concat_all(localPartArray);
+        fromRet = LibSlice.concatAll(localPartArray);
         return fromRet;
     }
 
@@ -190,7 +190,7 @@ library LibDkimValidator {
             }
         }
 
-        ret = LibSlice.concat_all(retPart);
+        ret = LibSlice.concatAll(retPart);
 
         if (subjectPadding.length > 0) {
             ret = LibSlice.toSlice(subjectPadding).concat(LibSlice.toSlice(ret));
