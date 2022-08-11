@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 /* solhint-disable no-unused-vars */
+/* solhint-disable no-inline-assembly */
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -16,21 +17,12 @@ import "../../interfaces/IEIP4337Wallet.sol";
 
 import "hardhat/console.sol";
 
-abstract contract ModuleCall is
-    ITransaction,
-    IModuleCall,
-    ModuleNonceBase,
-    ModuleAuthBase,
-    IModuleHooks
-{
+abstract contract ModuleCall is ITransaction, IModuleCall, ModuleNonceBase, ModuleAuthBase, IModuleHooks {
     using LibBytes for bytes;
     using SafeERC20 for IERC20;
 
     // NONCE_KEY = kecaak256("unipass-wallet:module-call:nonce");
-    bytes32 private constant NONCE_KEY =
-        bytes32(
-            0x93ed8d86f5d7fd79ac84d87731132a08aec6fc45dd823a5af26bb3e79833c46b
-        );
+    bytes32 private constant NONCE_KEY = bytes32(0x93ed8d86f5d7fd79ac84d87731132a08aec6fc45dd823a5af26bb3e79833c46b);
 
     error UnknownCallDataSelector(bytes4 _selector);
     error SelectorDoesNotExist(bytes4 _selector);
@@ -59,19 +51,9 @@ abstract contract ModuleCall is
             chainId := chainid()
         }
 
-        bytes32 txhash = keccak256(
-            abi.encodePacked(
-                chainId,
-                keccak256(abi.encode(_nonce, _txs)),
-                feeToken,
-                feeAmount
-            )
-        );
+        bytes32 txhash = keccak256(abi.encodePacked(chainId, keccak256(abi.encode(_nonce, _txs)), feeToken, feeAmount));
 
-        (bool succ, RoleWeight memory roleWeight) = validateSignature(
-            txhash,
-            _signature
-        );
+        (bool succ, RoleWeight memory roleWeight) = validateSignature(txhash, _signature);
         require(succ, "execute: INVALID_SIG_WEIGHT");
 
         _execute(txhash, _txs, roleWeight);
@@ -108,33 +90,21 @@ abstract contract ModuleCall is
         bytes memory result;
 
         if (_transaction.target == address(this)) {
-            (Role role, uint32 threshold) = getPermissionOfCallData(
-                _transaction.data
-            );
+            (Role role, uint32 threshold) = getPermissionOfCallData(_transaction.data);
 
-            require(
-                _validateRoleWeight(role, threshold, _roleWeight),
-                "_execute: INVALID_ROLE_WEIGHT"
-            );
+            require(_validateRoleWeight(role, threshold, _roleWeight), "_execute: INVALID_ROLE_WEIGHT");
         } else {
-            require(
-                _roleWeight.assetsOpWeight >= LibRole.ASSETS_OP_THRESHOLD,
-                "_executeOnce: INVALID_ROLE_WEIGHT"
-            );
+            require(_roleWeight.assetsOpWeight >= LibRole.ASSETS_OP_THRESHOLD, "_executeOnce: INVALID_ROLE_WEIGHT");
         }
 
         if (_transaction.callType == CallType.Call) {
             (success, result) = _transaction.target.call{
                 value: _transaction.value,
-                gas: _transaction.gasLimit == 0
-                    ? gasleft()
-                    : _transaction.gasLimit
+                gas: _transaction.gasLimit == 0 ? gasleft() : _transaction.gasLimit
             }(_transaction.data);
         } else if (_transaction.callType == CallType.DelegateCall) {
             (success, result) = _transaction.target.delegatecall{
-                gas: _transaction.gasLimit == 0
-                    ? gasleft()
-                    : _transaction.gasLimit
+                gas: _transaction.gasLimit == 0 ? gasleft() : _transaction.gasLimit
             }(_transaction.data);
         } else {
             revert InvalidCallType(_transaction.callType);
@@ -146,11 +116,7 @@ abstract contract ModuleCall is
         }
     }
 
-    function getPermissionOfCallData(bytes calldata callData)
-        public
-        view
-        returns (Role role, uint32 threshold)
-    {
+    function getPermissionOfCallData(bytes calldata callData) public view returns (Role role, uint32 threshold) {
         uint256 index = 0;
         bytes4 selector;
         (selector, index) = callData.cReadBytes4(index);
@@ -163,10 +129,7 @@ abstract contract ModuleCall is
         bytes calldata _signature
     ) external view returns (bool success) {
         (Role role, uint32 threshold) = getPermissionOfCallData(_callData);
-        (bool succ, RoleWeight memory roleWeight) = validateSignature(
-            _digestHash,
-            _signature
-        );
+        (bool succ, RoleWeight memory roleWeight) = validateSignature(_digestHash, _signature);
 
         success = succ && _validateRoleWeight(role, threshold, roleWeight);
     }

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
+/* solhint-disable no-inline-assembly */
+
 struct Slice {
     uint256 _len;
     uint256 _ptr;
@@ -40,11 +42,7 @@ library LibSlice {
      * @param self The string to make a Slice from.
      * @return A newly allocated Slice containing the entire string.
      */
-    function stringToSlice(string memory self)
-        internal
-        pure
-        returns (Slice memory)
-    {
+    function stringToSlice(string memory self) internal pure returns (Slice memory) {
         uint256 ptr;
         assembly {
             ptr := add(self, 0x20)
@@ -85,11 +83,7 @@ library LibSlice {
      * @param other The second Slice to compare.
      * @return The result of the comparison.
      */
-    function compare(Slice memory self, Slice memory other)
-        internal
-        pure
-        returns (int256)
-    {
+    function compare(Slice memory self, Slice memory other) internal pure returns (int256) {
         uint256 shortest = self._len;
         if (other._len < self._len) shortest = other._len;
 
@@ -125,11 +119,7 @@ library LibSlice {
      * @param self The second Slice to compare.
      * @return True if the Slices are equal, false otherwise.
      */
-    function equals(Slice memory self, Slice memory other)
-        internal
-        pure
-        returns (bool)
-    {
+    function equals(Slice memory self, Slice memory other) internal pure returns (bool) {
         return compare(self, other) == 0;
     }
 
@@ -198,11 +188,7 @@ library LibSlice {
      * @param needle The text to search for.
      * @return `self`.
      */
-    function find(Slice memory self, Slice memory needle)
-        internal
-        pure
-        returns (Slice memory)
-    {
+    function find(Slice memory self, Slice memory needle) internal pure returns (Slice memory) {
         uint256 ptr = findPtr(self._len, self._ptr, needle._len, needle._ptr);
         self._len -= ptr - self._ptr;
         self._ptr = ptr;
@@ -246,11 +232,7 @@ library LibSlice {
      * @param needle The text to search for in `self`.
      * @return The part of `self` up to the first occurrence of `delim`.
      */
-    function split(Slice memory self, Slice memory needle)
-        internal
-        pure
-        returns (Slice memory token)
-    {
+    function split(Slice memory self, Slice memory needle) internal pure returns (Slice memory token) {
         split(self, needle, token);
     }
 
@@ -260,23 +242,11 @@ library LibSlice {
      * @param needle The text to search for in `self`.
      * @return The number of occurrences of `needle` found in `self`.
      */
-    function count(Slice memory self, Slice memory needle)
-        internal
-        pure
-        returns (uint256 cnt)
-    {
-        uint256 ptr = findPtr(self._len, self._ptr, needle._len, needle._ptr) +
-            needle._len;
+    function count(Slice memory self, Slice memory needle) internal pure returns (uint256 cnt) {
+        uint256 ptr = findPtr(self._len, self._ptr, needle._len, needle._ptr) + needle._len;
         while (ptr <= self._ptr + self._len) {
             cnt++;
-            ptr =
-                findPtr(
-                    self._len - (ptr - self._ptr),
-                    ptr,
-                    needle._len,
-                    needle._ptr
-                ) +
-                needle._len;
+            ptr = findPtr(self._len - (ptr - self._ptr), ptr, needle._len, needle._ptr) + needle._len;
         }
     }
 
@@ -287,11 +257,7 @@ library LibSlice {
      * @param other The second Slice to concatenate.
      * @return The concatenation of the two strings.
      */
-    function concat(Slice memory self, Slice memory other)
-        internal
-        pure
-        returns (bytes memory)
-    {
+    function concat(Slice memory self, Slice memory other) internal pure returns (bytes memory) {
         bytes memory ret = new bytes(self._len + other._len);
         uint256 retptr;
         assembly {
@@ -302,11 +268,7 @@ library LibSlice {
         return ret;
     }
 
-    function concat_all(Slice[] memory self)
-        internal
-        pure
-        returns (bytes memory)
-    {
+    function concatAll(Slice[] memory self) internal pure returns (bytes memory) {
         if (self.length == 0) return "";
 
         uint256 length = 0;

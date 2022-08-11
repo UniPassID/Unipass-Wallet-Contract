@@ -27,10 +27,6 @@ contract ModuleDkimAuth {
             uint256 index
         )
     {
-        (ret, emailHash, sigHashHex, index) = dkimKeys.dkimVerify(
-            _data,
-            _index,
-            inputEmailFrom
-        );
+        (ret, emailHash, sigHashHex, index) = dkimKeys.dkimVerify(_data, _index, inputEmailFrom);
     }
 }

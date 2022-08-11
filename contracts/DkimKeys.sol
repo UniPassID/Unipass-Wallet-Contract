@@ -123,19 +123,11 @@ contract DkimKeys is IDkimKeys, ModuleAdminAuth {
         ] = hex"b1929caebbdbfc48b036f6b8b0d3ec94c4c4599d64534d8ff77d8713f52e40ba71068d783e7ee1f454ce009504b5c0739ab256cb2131d03884ad002d1e2abbf921f3d0614df8eb80e423e1cb3a8df3a383a46078c82e4d8085ead422e86afe9f4d7e722548c561c92c39cb2ad36cd6ea6c29ea40827ce0d4e2de9863199670e5c604af6238e56f5d018adaeba59df46807996ed726e39d28d38274b0b3583e482addce9249d9168f85f118222c039abf85e5a9b7209651d6a77c064285ff1f0c1bc45f47d0c764c4d69e0552dc295a17d1ca588d63cdd10a31e1e30eeace43d110d943fce788572d2a096e05cff6e8ec72dc869473c415ec080508478194d661";
     }
 
-    function getDKIMKey(bytes calldata _emailServer)
-        public
-        view
-        override
-        returns (bytes memory)
-    {
+    function getDKIMKey(bytes calldata _emailServer) public view override returns (bytes memory) {
         return dkimKeys[_emailServer];
     }
 
-    function updateDKIMKey(bytes calldata _emailServer, bytes calldata key)
-        external
-        onlyAdmin
-    {
+    function updateDKIMKey(bytes calldata _emailServer, bytes calldata key) external onlyAdmin {
         dkimKeys[_emailServer] = key;
         emit UpdateDKIMKey(_emailServer, dkimKeys[_emailServer], key);
     }
@@ -191,10 +183,7 @@ contract DkimKeys is IDkimKeys, ModuleAdminAuth {
         (params.sdidRightIndex, newIndex) = _data.cReadUint32(newIndex);
     }
 
-    function dkimVerifyParams(
-        DkimParams memory params,
-        bytes calldata inputEmailFrom
-    )
+    function dkimVerifyParams(DkimParams memory params, bytes calldata inputEmailFrom)
         public
         view
         returns (
@@ -212,24 +201,13 @@ contract DkimKeys is IDkimKeys, ModuleAdminAuth {
 
         Slice memory sdidSlice = LibSlice.toSlice(sdid);
         emailFrom = LibDkimValidator.checkEmailFrom(emailFrom, sdidSlice);
-        bytes memory inputEmailFromRet = LibDkimValidator.checkEmailFrom(
-            inputEmailFrom,
-            sdidSlice
-        );
-        require(
-            keccak256(emailFrom) == keccak256(inputEmailFromRet),
-            "dkimVerify: INVALID_EMAIL_FROM"
-        );
+        bytes memory inputEmailFromRet = LibDkimValidator.checkEmailFrom(inputEmailFrom, sdidSlice);
+        require(keccak256(emailFrom) == keccak256(inputEmailFromRet), "dkimVerify: INVALID_EMAIL_FROM");
         emailHash = LibDkimValidator.emailAddressHash(inputEmailFrom);
 
         bytes memory n = this.getDKIMKey(abi.encodePacked(selector, sdid));
         require(n.length > 0, "zero");
-        ret = LibRsa.rsapkcs1Verify(
-            sha256(params.emailHeader),
-            n,
-            hex"010001",
-            params.dkimSig
-        );
+        ret = LibRsa.rsapkcs1Verify(sha256(params.emailHeader), n, hex"010001", params.dkimSig);
     }
 
     function dkimVerify(
@@ -249,9 +227,6 @@ contract DkimKeys is IDkimKeys, ModuleAdminAuth {
     {
         DkimParams memory params;
         (params, index) = _parseDkimParams(_data, _index);
-        (ret, emailHash, sigHashHex) = dkimVerifyParams(
-            params,
-            _inputEmailFrom
-        );
+        (ret, emailHash, sigHashHex) = dkimVerifyParams(params, _inputEmailFrom);
     }
 }

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
+/* solhint-disable no-inline-assembly */
+
 library LibBytes {
     using LibBytes for bytes;
 
@@ -26,11 +28,7 @@ library LibBytes {
      * @return a uint16 value of data at index zero.
      * @return newIndex Updated index after reading the values.
      */
-    function readFirstUint16(bytes memory data)
-        internal
-        pure
-        returns (uint16 a, uint256 newIndex)
-    {
+    function readFirstUint16(bytes memory data) internal pure returns (uint16 a, uint256 newIndex) {
         if (data.length < 2) revert ReadFirstUint16OutOfBounds(data);
         assembly {
             let word := mload(add(32, data))
@@ -39,11 +37,7 @@ library LibBytes {
         }
     }
 
-    function cReadFirstUint16(bytes calldata data)
-        internal
-        pure
-        returns (uint16 a, uint256 newIndex)
-    {
+    function cReadFirstUint16(bytes calldata data) internal pure returns (uint16 a, uint256 newIndex) {
         if (data.length < 2) revert ReadFirstUint16OutOfBounds(data);
         assembly {
             let word := calldataload(data.offset)
@@ -52,11 +46,7 @@ library LibBytes {
         }
     }
 
-    function readFirstUint8(bytes memory data)
-        internal
-        pure
-        returns (uint8 a, uint256 newIndex)
-    {
+    function readFirstUint8(bytes memory data) internal pure returns (uint8 a, uint256 newIndex) {
         if (data.length == 0) revert ReadFirstUint8OutOfBounds(data);
         assembly {
             let word := mload(add(32, data))
@@ -65,11 +55,7 @@ library LibBytes {
         }
     }
 
-    function cReadFirstUint8(bytes calldata data)
-        internal
-        pure
-        returns (uint8 a, uint256 newIndex)
-    {
+    function cReadFirstUint8(bytes calldata data) internal pure returns (uint8 a, uint256 newIndex) {
         if (data.length == 0) revert ReadFirstUint8OutOfBounds(data);
         assembly {
             let word := calldataload(data.offset)
@@ -78,21 +64,13 @@ library LibBytes {
         }
     }
 
-    function mcReadBytes32(bytes calldata data, uint256 index)
-        internal
-        pure
-        returns (bytes32 a)
-    {
+    function mcReadBytes32(bytes calldata data, uint256 index) internal pure returns (bytes32 a) {
         assembly {
             a := calldataload(add(data.offset, index))
         }
     }
 
-    function mcReadUint8(bytes calldata data, uint256 index)
-        internal
-        pure
-        returns (uint8 a)
-    {
+    function mcReadUint8(bytes calldata data, uint256 index) internal pure returns (uint8 a) {
         assembly {
             let word := calldataload(add(data.offset, index))
             a := shr(248, word)
@@ -122,8 +100,7 @@ library LibBytes {
             b := and(shr(240, word), 0xff)
             newIndex := add(index, 2)
         }
-        if (newIndex > data.length)
-            revert ReadUint8Uint8OutOfBounds(data, index);
+        if (newIndex > data.length) revert ReadUint8Uint8OutOfBounds(data, index);
     }
 
     function cReadUint8Uint8(bytes calldata data, uint256 index)
@@ -150,11 +127,7 @@ library LibBytes {
      * @return a address value of data at given index.
      * @return newIndex Updated index after reading the value.
      */
-    function readAddress(bytes memory data, uint256 index)
-        internal
-        pure
-        returns (address a, uint256 newIndex)
-    {
+    function readAddress(bytes memory data, uint256 index) internal pure returns (address a, uint256 newIndex) {
         assembly {
             let word := mload(add(index, add(32, data)))
             a := and(shr(96, word), 0xffffffffffffffffffffffffffffffffffffffff)
@@ -163,11 +136,7 @@ library LibBytes {
         if (newIndex > data.length) revert ReadAddressOutOfBounds(data, index);
     }
 
-    function cReadAddress(bytes calldata data, uint256 index)
-        internal
-        pure
-        returns (address a, uint256 newIndex)
-    {
+    function cReadAddress(bytes calldata data, uint256 index) internal pure returns (address a, uint256 newIndex) {
         assembly {
             let word := calldataload(add(index, data.offset))
             a := and(shr(96, word), 0xffffffffffffffffffffffffffffffffffffffff)
@@ -182,11 +151,7 @@ library LibBytes {
      * @return a 66 bytes bytes array value of data at given index.
      * @return newIndex Updated index after reading the value.
      */
-    function readBytes66(bytes memory data, uint256 index)
-        internal
-        pure
-        returns (bytes memory a, uint256 newIndex)
-    {
+    function readBytes66(bytes memory data, uint256 index) internal pure returns (bytes memory a, uint256 newIndex) {
         a = new bytes(66);
         assembly {
             let offset := add(32, add(data, index))
@@ -204,11 +169,7 @@ library LibBytes {
      * @param index Index in byte array of bytes32 value.
      * @return result bytes32 value from byte array.
      */
-    function readBytes32(bytes memory b, uint256 index)
-        internal
-        pure
-        returns (bytes32 result)
-    {
+    function readBytes32(bytes memory b, uint256 index) internal pure returns (bytes32 result) {
         // Arrays are prefixed by a 256 bit length parameter
         uint256 pos = index + 32;
 
@@ -228,11 +189,7 @@ library LibBytes {
      * @return a uint16 value of data at given index.
      * @return newIndex Updated index after reading the value.
      */
-    function readUint16(bytes memory data, uint256 index)
-        internal
-        pure
-        returns (uint16 a, uint256 newIndex)
-    {
+    function readUint16(bytes memory data, uint256 index) internal pure returns (uint16 a, uint256 newIndex) {
         assembly {
             let word := mload(add(index, add(32, data)))
             a := and(shr(240, word), 0xffff)
@@ -241,22 +198,14 @@ library LibBytes {
         if (newIndex > data.length) revert ReadUint16OutOfBounds(data, index);
     }
 
-    function cReadBytes4(bytes calldata data, uint256 index)
-        internal
-        pure
-        returns (bytes4 a, uint256 newIndex)
-    {
+    function cReadBytes4(bytes calldata data, uint256 index) internal pure returns (bytes4 a, uint256 newIndex) {
         assembly {
             a := calldataload(add(index, data.offset))
             newIndex := add(index, 4)
         }
     }
 
-    function cReadUint16(bytes calldata data, uint256 index)
-        internal
-        pure
-        returns (uint16 a, uint256 newIndex)
-    {
+    function cReadUint16(bytes calldata data, uint256 index) internal pure returns (uint16 a, uint256 newIndex) {
         assembly {
             let word := calldataload(add(index, data.offset))
             a := and(shr(240, word), 0xffff)
@@ -264,11 +213,7 @@ library LibBytes {
         }
     }
 
-    function cReadUint32(bytes calldata data, uint256 index)
-        internal
-        pure
-        returns (uint32 a, uint256 newIndex)
-    {
+    function cReadUint32(bytes calldata data, uint256 index) internal pure returns (uint32 a, uint256 newIndex) {
         assembly {
             let word := calldataload(add(index, data.offset))
             a := and(shr(224, word), 0xffffffff)
@@ -320,15 +265,10 @@ library LibBytes {
         }
 
         assert(newIndex >= index);
-        if (newIndex > data.length)
-            revert ReadBytesOutOfBounds(data, index, size);
+        if (newIndex > data.length) revert ReadBytesOutOfBounds(data, index, size);
     }
 
-    function splitSigAndArgs(bytes memory data)
-        internal
-        pure
-        returns (bytes4 sig, bytes memory args)
-    {
+    function splitSigAndArgs(bytes memory data) internal pure returns (bytes4 sig, bytes memory args) {
         assembly {
             // First 4 bytes are the signature
             sig := and(0xffffffff, mload(add(data, 32)))
@@ -371,11 +311,7 @@ library LibBytes {
         }
     }
 
-    function toHex(uint256 value, uint256 length)
-        internal
-        pure
-        returns (bytes memory)
-    {
+    function toHex(uint256 value, uint256 length) internal pure returns (bytes memory) {
         bytes memory buffer = new bytes(2 * length + 2);
         buffer[0] = "0";
         buffer[1] = "x";

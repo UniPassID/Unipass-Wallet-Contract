@@ -20,12 +20,7 @@ abstract contract ModuleAuthUpgradable is ModuleAuthBase {
         emit KeysetHashUpdated(_keysetHash);
     }
 
-    function isValidKeysetHash(bytes32 _keysetHash)
-        public
-        view
-        override
-        returns (bool)
-    {
+    function isValidKeysetHash(bytes32 _keysetHash) public view override returns (bool) {
         return _keysetHash != bytes32(0) && getKeysetHash() == _keysetHash;
     }
 }

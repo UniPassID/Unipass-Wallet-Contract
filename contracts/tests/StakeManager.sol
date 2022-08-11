@@ -9,51 +9,32 @@ pragma solidity ^0.8.12;
  * stake is value locked for at least "unstakeDelay" by a paymaster.
  */
 abstract contract StakeManager {
-
     /**
      * minimum time (in seconds) required to lock a paymaster stake before it can be withdraw.
      */
-    uint32 immutable public unstakeDelaySec;
+    uint32 public immutable unstakeDelaySec;
 
     /**
      * minimum value required to stake for a paymaster
      */
-    uint256 immutable public paymasterStake;
+    uint256 public immutable paymasterStake;
 
     constructor(uint256 _paymasterStake, uint32 _unstakeDelaySec) {
         unstakeDelaySec = _unstakeDelaySec;
         paymasterStake = _paymasterStake;
     }
 
-    event Deposited(
-        address indexed account,
-        uint256 totalDeposit
-    );
+    event Deposited(address indexed account, uint256 totalDeposit);
 
-    event Withdrawn(
-        address indexed account,
-        address withdrawAddress,
-        uint256 amount
-    );
+    event Withdrawn(address indexed account, address withdrawAddress, uint256 amount);
 
     /// Emitted once a stake is scheduled for withdrawal
-    event StakeLocked(
-        address indexed account,
-        uint256 totalStaked,
-        uint256 withdrawTime
-    );
+    event StakeLocked(address indexed account, uint256 totalStaked, uint256 withdrawTime);
 
     /// Emitted once a stake is scheduled for withdrawal
-    event StakeUnlocked(
-        address indexed account,
-        uint256 withdrawTime
-    );
+    event StakeUnlocked(address indexed account, uint256 withdrawTime);
 
-    event StakeWithdrawn(
-        address indexed account,
-        address withdrawAddress,
-        uint256 amount
-    );
+    event StakeWithdrawn(address indexed account, address withdrawAddress, uint256 amount);
 
     /**
      * @param deposit the account's deposit
@@ -119,13 +100,7 @@ abstract contract StakeManager {
         uint256 stake = info.stake + msg.value;
         require(stake >= paymasterStake, "stake value too low");
         require(stake < type(uint112).max, "stake overflow");
-        deposits[msg.sender] = DepositInfo(
-            info.deposit,
-            true,
-            uint112(stake),
-            _unstakeDelaySec,
-            0
-        );
+        deposits[msg.sender] = DepositInfo(info.deposit, true, uint112(stake), _unstakeDelaySec, 0);
         emit StakeLocked(msg.sender, stake, _unstakeDelaySec);
     }
 
@@ -143,7 +118,6 @@ abstract contract StakeManager {
         emit StakeUnlocked(msg.sender, withdrawTime);
     }
 
-
     /**
      * withdraw from the (unlocked) stake.
      * must first call unlockStake and wait for the unstakeDelay to pass
@@ -159,7 +133,7 @@ abstract contract StakeManager {
         info.withdrawTime = 0;
         info.stake = 0;
         emit StakeWithdrawn(msg.sender, withdrawAddress, stake);
-        (bool success,) = withdrawAddress.call{value : stake}("");
+        (bool success, ) = withdrawAddress.call{value: stake}("");
         require(success, "failed to withdraw stake");
     }
 
@@ -173,7 +147,7 @@ abstract contract StakeManager {
         require(withdrawAmount <= info.deposit, "Withdraw amount too large");
         info.deposit = uint112(info.deposit - withdrawAmount);
         emit Withdrawn(msg.sender, withdrawAddress, withdrawAmount);
-        (bool success,) = withdrawAddress.call{value : withdrawAmount}("");
+        (bool success, ) = withdrawAddress.call{value: withdrawAmount}("");
         require(success, "failed to withdraw");
     }
 }

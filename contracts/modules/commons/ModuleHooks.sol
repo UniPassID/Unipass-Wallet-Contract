@@ -15,31 +15,17 @@ import "../../utils/LibBytes.sol";
 
 import "hardhat/console.sol";
 
-contract ModuleHooks is
-    ModuleSelfAuth,
-    IERC1155Receiver,
-    IERC721Receiver,
-    IModuleHooks,
-    ModuleERC165
-{
+contract ModuleHooks is ModuleSelfAuth, IERC1155Receiver, IERC721Receiver, IModuleHooks, ModuleERC165 {
     using LibBytes for bytes;
     //                       HOOKS_KEY = keccak256("org.arcadeum.module.hooks.hooks");
-    bytes32 private constant HOOKS_KEY =
-        bytes32(
-            0xbe27a319efc8734e89e26ba4bc95f5c788584163b959f03fa04e2d7ab4b9a120
-        );
+    bytes32 private constant HOOKS_KEY = bytes32(0xbe27a319efc8734e89e26ba4bc95f5c788584163b959f03fa04e2d7ab4b9a120);
 
     /**
      * @notice Reads the implementation hook of a signature
      * @param _signature Signature function
      * @return The address of the implementation hook, address(0) if none
      */
-    function readHook(bytes4 _signature)
-        external
-        view
-        override
-        returns (address)
-    {
+    function readHook(bytes4 _signature) external view override returns (address) {
         return _readHook(_signature);
     }
 
@@ -49,13 +35,8 @@ contract ModuleHooks is
      * @param _implementation Hook implementation contract
      * @dev Can't overwrite hooks that are part of the mainmodule (those defined below)
      */
-    function addHook(bytes4 _signature, address _implementation)
-        external
-        override
-        onlySelf
-    {
-        if (_readHook(_signature) != address(0))
-            revert HookAlreadyExists(_signature);
+    function addHook(bytes4 _signature, address _implementation) external override onlySelf {
+        if (_readHook(_signature) != address(0)) revert HookAlreadyExists(_signature);
         _writeHook(_signature, _implementation);
     }
 
@@ -66,8 +47,7 @@ contract ModuleHooks is
      *      without upgrading the wallet
      */
     function removeHook(bytes4 _signature) external override onlySelf {
-        if (_readHook(_signature) == address(0))
-            revert HookDoesNotExist(_signature);
+        if (_readHook(_signature) == address(0)) revert HookDoesNotExist(_signature);
         _writeHook(_signature, address(0));
     }
 
@@ -77,12 +57,7 @@ contract ModuleHooks is
      * @return The address of the implementation hook, address(0) if none
      */
     function _readHook(bytes4 _signature) private view returns (address) {
-        return
-            address(
-                uint160(
-                    uint256(ModuleStorage.readBytes32Map(HOOKS_KEY, _signature))
-                )
-            );
+        return address(uint160(uint256(ModuleStorage.readBytes32Map(HOOKS_KEY, _signature))));
     }
 
     /**
@@ -91,11 +66,7 @@ contract ModuleHooks is
      * @param _implementation Hook implementation contract
      */
     function _writeHook(bytes4 _signature, address _implementation) private {
-        ModuleStorage.writeBytes32Map(
-            HOOKS_KEY,
-            _signature,
-            bytes32(uint256(uint160(_implementation)))
-        );
+        ModuleStorage.writeBytes32Map(HOOKS_KEY, _signature, bytes32(uint256(uint160(_implementation))));
     }
 
     /**
@@ -166,13 +137,7 @@ contract ModuleHooks is
      * @param _interfaceID The interface identifier, as specified in ERC-165
      * @return `true` if the contract implements `_interfaceID`
      */
-    function supportsInterface(bytes4 _interfaceID)
-        public
-        pure
-        virtual
-        override
-        returns (bool)
-    {
+    function supportsInterface(bytes4 _interfaceID) public pure virtual override returns (bool) {
         if (
             _interfaceID == type(IModuleHooks).interfaceId ||
             _interfaceID == type(IERC1155Receiver).interfaceId ||

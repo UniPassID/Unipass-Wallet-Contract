@@ -2,6 +2,8 @@
 pragma solidity ^0.8.0;
 import "hardhat/console.sol";
 
+/* solhint-disable no-inline-assembly */
+
 abstract contract ModuleTimeLock {
     bytes32 public lockedKeysetHash;
     bool public isLocked;
@@ -35,10 +37,7 @@ abstract contract ModuleTimeLock {
 
     function _requireToUnLock() internal view {
         require(isLocked, "_requireToUnLock: UNLOCKED");
-        require(
-            block.timestamp > unLockAfter,
-            "_requireToUnLock: UNLOCK_AFTER"
-        );
+        require(block.timestamp > unLockAfter, "_requireToUnLock: UNLOCK_AFTER");
     }
 
     function _lockKeysetHash(bytes32 _toLockKeysetHash) internal {

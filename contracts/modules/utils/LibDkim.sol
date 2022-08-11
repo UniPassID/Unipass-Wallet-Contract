@@ -28,21 +28,13 @@ library LibDkimValidator {
     using LibDkimValidator for DkimParams;
     using LibSlice for Slice;
 
-    function checkEmailFrom(bytes memory emailFrom, Slice memory sdid)
-        internal
-        pure
-        returns (bytes memory emailFromRet)
-    {
+    function checkEmailFrom(bytes memory emailFrom, Slice memory sdid) internal pure returns (bytes memory emailFromRet) {
         emailFromRet = emailFrom.toLower();
 
         Slice memory headerSlice = LibSlice.toSlice(emailFromRet);
         Slice memory atSlice = LibSlice.stringToSlice("@");
         Slice memory localPart = LibSlice.split(headerSlice, atSlice);
-        require(
-            headerSlice.equals(LibSlice.stringToSlice("mail.unipass.me")) ||
-                headerSlice.equals(sdid),
-            "ED"
-        );
+        require(headerSlice.equals(LibSlice.stringToSlice("mail.unipass.me")) || headerSlice.equals(sdid), "ED");
 
         if (
             sdid.equals(LibSlice.stringToSlice("gmail.com")) ||
@@ -51,11 +43,7 @@ library LibDkimValidator {
             sdid.equals(LibSlice.stringToSlice("proton.me")) ||
             sdid.equals(LibSlice.stringToSlice("pm.me"))
         ) {
-            emailFromRet = removeDotForEmailFrom(
-                localPart,
-                atSlice,
-                headerSlice
-            );
+            emailFromRet = removeDotForEmailFrom(localPart, atSlice, headerSlice);
         }
     }
 
@@ -65,9 +53,7 @@ library LibDkimValidator {
         Slice memory domainPart
     ) internal pure returns (bytes memory fromRet) {
         Slice memory dotSlice = LibSlice.stringToSlice(".");
-        Slice[] memory localPartArray = new Slice[](
-            localPart.count(dotSlice) + 3
-        );
+        Slice[] memory localPartArray = new Slice[](localPart.count(dotSlice) + 3);
         for (uint256 i = 0; i < localPartArray.length - 2; i++) {
             localPartArray[i] = localPart.split(dotSlice);
         }
@@ -77,11 +63,7 @@ library LibDkimValidator {
         return fromRet;
     }
 
-    function emailAddressHash(bytes memory from)
-        internal
-        pure
-        returns (bytes32)
-    {
+    function emailAddressHash(bytes memory from) internal pure returns (bytes32) {
         uint256 emailLength = 124;
         require(from.length < emailLength, "to long");
         uint256 diff = emailLength - from.length;
@@ -97,39 +79,23 @@ library LibDkimValidator {
 
         // swap bytes
         v =
-            ((v &
-                0xFF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00) >>
-                8) |
-            ((v &
-                0x00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF) <<
-                8);
+            ((v & 0xFF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00) >> 8) |
+            ((v & 0x00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF) << 8);
 
         // swap 2-byte long pairs
         v =
-            ((v &
-                0xFFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000) >>
-                16) |
-            ((v &
-                0x0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF) <<
-                16);
+            ((v & 0xFFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000) >> 16) |
+            ((v & 0x0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF) << 16);
 
         // swap 4-byte long pairs
         v =
-            ((v &
-                0xFFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000) >>
-                32) |
-            ((v &
-                0x00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF) <<
-                32);
+            ((v & 0xFFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000) >> 32) |
+            ((v & 0x00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF) << 32);
 
         // swap 8-byte long pairs
         v =
-            ((v &
-                0xFFFFFFFFFFFFFFFF0000000000000000FFFFFFFFFFFFFFFF0000000000000000) >>
-                64) |
-            ((v &
-                0x0000000000000000FFFFFFFFFFFFFFFF0000000000000000FFFFFFFFFFFFFFFF) <<
-                64);
+            ((v & 0xFFFFFFFFFFFFFFFF0000000000000000FFFFFFFFFFFFFFFF0000000000000000) >> 64) |
+            ((v & 0x0000000000000000FFFFFFFFFFFFFFFF0000000000000000FFFFFFFFFFFFFFFF) << 64);
 
         // swap 16-byte long pairs
         v = (v >> 128) | (v << 128);
@@ -146,38 +112,15 @@ library LibDkimValidator {
         )
     {
         // see https://www.rfc-editor.org/rfc/rfc2822#section-3.4.1
-        require(
-            self.fromIndex + 4 < self.fromLeftIndex &&
-                self.fromLeftIndex < self.fromRightIndex,
-            "LE"
-        );
+        require(self.fromIndex + 4 < self.fromLeftIndex && self.fromLeftIndex < self.fromRightIndex, "LE");
         if (self.fromIndex != 0) {
-            require(
-                self.emailHeader.readBytesN(self.fromIndex - 2, 7) ==
-                    bytes32("\r\nfrom:"),
-                "FE"
-            );
+            require(self.emailHeader.readBytesN(self.fromIndex - 2, 7) == bytes32("\r\nfrom:"), "FE");
         } else {
-            require(
-                self.emailHeader.readBytesN(self.fromIndex, 5) ==
-                    bytes32("from:"),
-                "FE"
-            );
+            require(self.emailHeader.readBytesN(self.fromIndex, 5) == bytes32("from:"), "FE");
         }
-        require(
-            self.fromIndex + 4 < self.fromLeftIndex &&
-                self.fromLeftIndex < self.fromRightIndex,
-            "LE"
-        );
-        if (
-            self.emailHeader[self.fromLeftIndex - 1] == "<" &&
-            self.emailHeader[self.fromRightIndex + 1] == ">"
-        ) {
-            for (
-                uint256 i = self.fromLeftIndex - 1;
-                i > self.fromIndex + 4;
-                i--
-            ) {
+        require(self.fromIndex + 4 < self.fromLeftIndex && self.fromLeftIndex < self.fromRightIndex, "LE");
+        if (self.emailHeader[self.fromLeftIndex - 1] == "<" && self.emailHeader[self.fromRightIndex + 1] == ">") {
+            for (uint256 i = self.fromLeftIndex - 1; i > self.fromIndex + 4; i--) {
                 require(self.emailHeader[i] != "\n", "NE");
             }
         } else {
@@ -186,24 +129,12 @@ library LibDkimValidator {
         // see https://datatracker.ietf.org/doc/html/rfc5322#section-2.2
 
         if (self.subjectIndex != 0) {
-            require(
-                self.emailHeader.readBytesN(self.subjectIndex - 2, 10) ==
-                    bytes32("\r\nsubject:"),
-                "FE"
-            );
+            require(self.emailHeader.readBytesN(self.subjectIndex - 2, 10) == bytes32("\r\nsubject:"), "FE");
         } else {
-            require(
-                self.emailHeader.readBytesN(self.subjectIndex, 8) ==
-                    bytes32("subject:"),
-                "FE"
-            );
+            require(self.emailHeader.readBytesN(self.subjectIndex, 8) == bytes32("subject:"), "FE");
         }
         // see https://datatracker.ietf.org/doc/html/rfc5322#section-2.2
-        for (
-            uint256 i = self.subjectIndex + 8;
-            i < self.subjectRightIndex;
-            i++
-        ) {
+        for (uint256 i = self.subjectIndex + 8; i < self.subjectRightIndex; i++) {
             require(self.emailHeader[i] != "\n", "NE");
         }
 
@@ -212,51 +143,21 @@ library LibDkimValidator {
             self.subjectRightIndex - self.subjectIndex - 8
         );
 
-        (bool succ, bytes memory ret) = checkSubjectHeader(
-            subject,
-            self.subject,
-            self.isSubBase64,
-            self.subjectPadding
-        );
+        (bool succ, bytes memory ret) = checkSubjectHeader(subject, self.subject, self.isSubBase64, self.subjectPadding);
         require(succ, "SHE");
         require(ret.length == 66, "SHE");
         sigHashHex = ret;
 
-        require(
-            self.emailHeader.readBytesN(self.dkimHeaderIndex - 2, 17) ==
-                bytes32("\r\ndkim-signature:"),
-            "DE"
-        );
-        require(
-            self.selectorIndex > self.dkimHeaderIndex &&
-                self.sdidIndex > self.dkimHeaderIndex,
-            "DHE"
-        );
+        require(self.emailHeader.readBytesN(self.dkimHeaderIndex - 2, 17) == bytes32("\r\ndkim-signature:"), "DE");
+        require(self.selectorIndex > self.dkimHeaderIndex && self.sdidIndex > self.dkimHeaderIndex, "DHE");
 
-        require(
-            self.emailHeader.readBytesN(self.sdidIndex - 4, 4) ==
-                bytes32("; d="),
-            "DDE"
-        );
-        (sdid, _newIndex) = self.emailHeader.readBytes(
-            self.sdidIndex,
-            self.sdidRightIndex - self.sdidIndex
-        );
+        require(self.emailHeader.readBytesN(self.sdidIndex - 4, 4) == bytes32("; d="), "DDE");
+        (sdid, _newIndex) = self.emailHeader.readBytes(self.sdidIndex, self.sdidRightIndex - self.sdidIndex);
 
-        require(
-            self.emailHeader.readBytesN(self.selectorIndex - 4, 4) ==
-                bytes32("; s="),
-            "DSE"
-        );
-        (selector, _newIndex) = self.emailHeader.readBytes(
-            self.selectorIndex,
-            self.selectorRightIndex - self.selectorIndex
-        );
+        require(self.emailHeader.readBytesN(self.selectorIndex - 4, 4) == bytes32("; s="), "DSE");
+        (selector, _newIndex) = self.emailHeader.readBytes(self.selectorIndex, self.selectorRightIndex - self.selectorIndex);
 
-        (emailFrom, _newIndex) = self.emailHeader.readBytes(
-            self.fromLeftIndex,
-            self.fromRightIndex - self.fromLeftIndex + 1
-        );
+        (emailFrom, _newIndex) = self.emailHeader.readBytes(self.fromLeftIndex, self.fromRightIndex - self.fromLeftIndex + 1);
     }
 
     function checkSubjectHeader(
@@ -266,10 +167,7 @@ library LibDkimValidator {
         bytes memory subjectPadding
     ) internal pure returns (bool, bytes memory ret) {
         require(subjectPadding.length < 3, "SPE");
-        require(
-            decodedHeader.length > 0 && isBase64.length == decodedHeader.length,
-            "DHE"
-        );
+        require(decodedHeader.length > 0 && isBase64.length == decodedHeader.length, "DHE");
 
         Slice memory headerSlice = LibSlice.toSlice(header);
 
@@ -295,9 +193,7 @@ library LibDkimValidator {
         ret = LibSlice.concat_all(retPart);
 
         if (subjectPadding.length > 0) {
-            ret = LibSlice.toSlice(subjectPadding).concat(
-                LibSlice.toSlice(ret)
-            );
+            ret = LibSlice.toSlice(subjectPadding).concat(LibSlice.toSlice(ret));
         }
         return (true, ret);
     }

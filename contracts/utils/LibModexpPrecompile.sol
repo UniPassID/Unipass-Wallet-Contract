@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+/* solhint-disable no-inline-assembly */
+
 library ModexpPrecompile {
     /**
      * @dev Computes (base ^ exponent) % modulus over big numbers.
@@ -22,14 +24,7 @@ library ModexpPrecompile {
         output = new bytes(modulus.length);
 
         assembly {
-            success := staticcall(
-                gas(),
-                5,
-                add(input, 32),
-                mload(input),
-                add(output, 32),
-                mload(modulus)
-            )
+            success := staticcall(gas(), 5, add(input, 32), mload(input), add(output, 32), mload(modulus))
         }
     }
 }

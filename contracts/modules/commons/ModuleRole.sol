@@ -22,8 +22,7 @@ contract ModuleRole is ModuleSelfAuth {
         bytes4 _permission,
         uint32 _threshold
     ) internal {
-        bytes5 role = bytes5(uint40(_role)) |
-            (bytes5((bytes4(_threshold))) >> 8);
+        bytes5 role = bytes5(uint40(_role)) | (bytes5((bytes4(_threshold))) >> 8);
 
         permissions[_permission] = role;
     }
@@ -72,11 +71,7 @@ contract ModuleRole is ModuleSelfAuth {
         _removePermission(_permission);
     }
 
-    function getRoleOfPermission(bytes4 _permission)
-        public
-        view
-        returns (Role role, uint32 threshold)
-    {
+    function getRoleOfPermission(bytes4 _permission) public view returns (Role role, uint32 threshold) {
         if (
             _permission == IModuleAuth.updateKeysetHash.selector ||
             _permission == IModuleAuth.updateKeysetHashWithTimeLock.selector ||
