@@ -58,6 +58,7 @@
     "@types/node-rsa": "^1.1.1",
     "dkim": "github:zzhengzhuo/node-dkim#next",
     "ethereumjs-util": "^7.1.5",
+    "hardhat-change-network": "^0.0.7",
     "mailparser": "zzhengzhuo/mailparser",
     "node-rsa": "^1.1.1",
     "nodemailer": "^6.7.6"

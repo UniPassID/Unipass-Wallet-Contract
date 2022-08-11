@@ -9,6 +9,7 @@ import "solidity-coverage";
 import "@openzeppelin/hardhat-upgrades";
 import "@tenderly/hardhat-tenderly";
 import "hardhat-contract-sizer";
+import "hardhat-change-network";
 
 dotenv.config();
 
@@ -36,6 +37,7 @@ const config: HardhatUserConfig = {
     },
   },
   networks: {
+    local1: { url: "http://127.0.0.1:10086" },
     ropsten: {
       url: process.env.ROPSTEN_URL || "",
       accounts:

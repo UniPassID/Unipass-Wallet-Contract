@@ -9,13 +9,19 @@ interface IModuleAuth {
         view
         returns (bool succ, RoleWeight memory roleWeightRet);
 
-    function updateKeysetHashByOwner(
+    function syncAccount(
+        uint32 _metaNonce,
+        bytes32 _keysetHash,
+        bytes calldata _signature
+    ) external;
+
+    function updateKeysetHash(
         uint32 _metaNonce,
         bytes32 _newKeysetHash,
         bytes calldata _signature
     ) external;
 
-    function updateKeysetHashByGuardian(
+    function updateKeysetHashWithTimeLock(
         uint32 _metaNonce,
         bytes32 _newKeysetHash,
         bytes calldata _signature

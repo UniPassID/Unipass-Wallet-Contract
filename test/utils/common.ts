@@ -7,6 +7,11 @@ export const UNSTAKE_DELAY_SEC = 100;
 export const PAYMASTER_STAKE = ethers.utils.parseEther("1");
 export const SELECTOR_ERC1271_BYTES_BYTES = "0x20c13b0b";
 export const SELECTOR_ERC1271_BYTES32_BYTES = "0x1626ba7e";
+export const OWNER_THRESHOLD = 100;
+export const OWNER_CANCEL_TIMELOCK_THRESHOLD = 1;
+export const GUARDIAN_THRESHOLD = 100;
+export const GUARDIAN_TIMELOCK_THRESHOLD = 50;
+export const ASSETS_OP_THRESHOLD = 100;
 
 export function throwError(msg: string) {
   throw msg;

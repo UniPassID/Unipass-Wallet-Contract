@@ -22,7 +22,7 @@ contract ModuleGuest {
         CallHooks
     }
 
-    error TxFailed(Transaction, bytes32, bytes);
+    error TxFailed(bytes32, bytes);
     error InvalidCallType(CallType);
 
     event TxExecuted(bytes32 txHash);
@@ -84,7 +84,7 @@ contract ModuleGuest {
             if (success) {
                 emit TxExecuted(_txHash);
             } else {
-                revert TxFailed(transaction, _txHash, result);
+                revert TxFailed(_txHash, result);
             }
         }
     }

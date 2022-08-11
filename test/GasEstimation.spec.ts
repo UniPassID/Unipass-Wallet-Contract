@@ -1,8 +1,15 @@
 import { expect } from "chai";
 import { Contract, ContractFactory, Overrides, Wallet } from "ethers";
-import { BytesLike, randomBytes } from "ethers/lib/utils";
+import { BytesLike, randomBytes, solidityPack } from "ethers/lib/utils";
 import { ethers } from "hardhat";
-import { getKeysetHash, optimalGasLimit } from "./utils/common";
+import NodeRSA from "node-rsa";
+import {
+  getKeysetHash,
+  GUARDIAN_TIMELOCK_THRESHOLD,
+  optimalGasLimit,
+  OWNER_THRESHOLD,
+  transferEth,
+} from "./utils/common";
 import { Deployer } from "./utils/deployer";
 import { KeyBase, randomKeys, selectKeys } from "./utils/key";
 import {
@@ -36,6 +43,7 @@ describe("GasEstimation", function () {
   let txParams: Overrides;
   let metaNonce: number;
   let nonce: number;
+  let unipassPrivateKey: string;
   this.beforeAll(async function () {
     const [signer] = await ethers.getSigners();
     deployer = await new Deployer(signer).init();
@@ -46,7 +54,8 @@ describe("GasEstimation", function () {
     };
 
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
-    dkimKeysAdmin = Wallet.createRandom();
+    dkimKeysAdmin = Wallet.createRandom().connect(signer.provider!);
+    await transferEth(dkimKeysAdmin.address, 10);
     dkimKeys = await deployer.deployContract(
       DkimKeys,
       0,
@@ -79,9 +88,24 @@ describe("GasEstimation", function () {
 
     const ModuleGuest = await ethers.getContractFactory("ModuleGuest");
     moduleGuest = await deployer.deployContract(ModuleGuest, 0, txParams);
+
+    const privateKey = new NodeRSA({ b: 2048 });
+    unipassPrivateKey = privateKey.exportKey("pkcs1");
+    const ret = await (
+      await dkimKeys
+        .connect(dkimKeysAdmin)
+        .updateDKIMKey(
+          solidityPack(
+            ["bytes", "bytes"],
+            [Buffer.from("s2055"), Buffer.from("uipass.com")]
+          ),
+          privateKey.exportKey("components-public").n.subarray(1)
+        )
+    ).wait();
+    expect(ret.status).to.equals(1);
   });
   this.beforeEach(async function () {
-    keys = randomKeys(10);
+    keys = randomKeys(10, unipassPrivateKey);
     keysetHash = getKeysetHash(keys);
 
     proxyModuleMain = await deployer.deployProxyContract(
@@ -130,12 +154,12 @@ describe("GasEstimation", function () {
   });
   it("Should estimate account transaction", async function () {
     const newKeysetHash = ethers.utils.hexlify(randomBytes(32));
-    const selectedKeys = selectKeys(keys, Role.Owner);
+    const selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
     const tx = await generateUpdateKeysetHashTx(
       proxyModuleMain,
       metaNonce,
       newKeysetHash,
-      Role.Owner,
+      false,
       selectedKeys
     );
     const nonce = 1;
@@ -170,7 +194,8 @@ describe("GasEstimation", function () {
       nonce,
       [],
       proxyModuleMain,
-      undefined
+      undefined,
+      txParams
     );
     expect(estimate.gas.toNumber() + txBaseCost(txData)).to.approximately(
       realTx.gasUsed.toNumber(),
@@ -178,7 +203,7 @@ describe("GasEstimation", function () {
     );
   });
   it("Should estimate deploy + Account Layer Transaction + Transfer", async function () {
-    keys = randomKeys(10);
+    keys = randomKeys(10, unipassPrivateKey);
     keysetHash = getKeysetHash(keys);
     const deployTxData =
       deployer.singleFactoryContract.interface.encodeFunctionData("deploy", [
@@ -202,8 +227,8 @@ describe("GasEstimation", function () {
       proxyModuleMain,
       metaNonce,
       newKeysetHash,
-      Role.Guardian,
-      selectKeys(keys, Role.Guardian)
+      true,
+      selectKeys(keys, Role.Guardian, GUARDIAN_TIMELOCK_THRESHOLD)
     );
     let value = ethers.utils.parseEther("0.1");
     const transferTx = await generateTransferTx(

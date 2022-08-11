@@ -18,7 +18,6 @@ export interface RoleWeight {
   ownerWeight: number;
   assetsOpWeight: number;
   guardianWeight: number;
-  synchronizerWeight: number;
 }
 
 export abstract class KeyBase {
@@ -28,12 +27,11 @@ export abstract class KeyBase {
   public abstract serialize(): string;
   public serializeRoleWeight(): string {
     return solidityPack(
-      ["uint32", "uint32", "uint32", "uint32"],
+      ["uint32", "uint32", "uint32"],
       [
         this.roleWeight.ownerWeight,
         this.roleWeight.assetsOpWeight,
         this.roleWeight.guardianWeight,
-        this.roleWeight.synchronizerWeight,
       ]
     );
   }
@@ -71,14 +69,19 @@ export class KeySecp256k1 extends KeyBase {
 }
 
 export class KeyEmailAddress extends KeyBase {
-  constructor(readonly emailAddress: string, roleWeight: RoleWeight) {
+  constructor(
+    readonly emailAddress: string,
+    readonly unipassPrivateKey: string,
+    roleWeight: RoleWeight
+  ) {
     super(roleWeight);
   }
   public async generateSignature(digestHash: string): Promise<string> {
     let email = await getSignEmailWithDkim(
       digestHash,
       this.emailAddress,
-      "test@unipass.me"
+      "test@unipass.me",
+      this.unipassPrivateKey
     );
     let { params } = await parseEmailParams(email);
     return solidityPack(
@@ -118,15 +121,10 @@ export class KeyEmailAddress extends KeyBase {
   }
 }
 
-export function randomKeys(len: number): KeyBase[] {
+export function randomKeys(len: number, unipassPrivateKey: string): KeyBase[] {
   let ret: KeyBase[] = [];
   for (let i = 0; i < len; i++) {
-    for (const role of [
-      Role.Owner,
-      Role.AssetsOp,
-      Role.Guardian,
-      Role.Synchronizer,
-    ]) {
+    for (const role of [Role.Owner, Role.AssetsOp, Role.Guardian]) {
       let random = randomInt(1);
       if (random === 0) {
         ret.push(
@@ -136,6 +134,7 @@ export function randomKeys(len: number): KeyBase[] {
         ret.push(
           new KeyEmailAddress(
             Buffer.from(randomBytes(10)).toString("hex"),
+            unipassPrivateKey,
             randomRoleWeight(role)
           )
         );
@@ -151,35 +150,29 @@ export function randomRoleWeight(role: Role): RoleWeight {
       ownerWeight: randomInt(40) + 10,
       assetsOpWeight: 0,
       guardianWeight: 0,
-      synchronizerWeight: 0,
     };
   } else if (role === Role.AssetsOp) {
     return {
       ownerWeight: 0,
       assetsOpWeight: randomInt(40) + 10,
       guardianWeight: 0,
-      synchronizerWeight: 0,
     };
   } else if (role === Role.Guardian) {
     return {
       ownerWeight: 0,
       assetsOpWeight: 0,
       guardianWeight: randomInt(40) + 10,
-      synchronizerWeight: 0,
-    };
-  } else if (role === Role.Synchronizer) {
-    return {
-      ownerWeight: 0,
-      assetsOpWeight: 0,
-      guardianWeight: 0,
-      synchronizerWeight: randomInt(40) + 10,
     };
   } else {
     throw new Error(`Invalid Role: ${role}`);
   }
 }
 
-export function selectKeys(keys: KeyBase[], role: Role): [KeyBase, boolean][] {
+export function selectKeys(
+  keys: KeyBase[],
+  role: Role,
+  threshold: number
+): [KeyBase, boolean][] {
   let indexes: number[] = [];
   let sum = 0;
   keys
@@ -191,8 +184,6 @@ export function selectKeys(keys: KeyBase[], role: Role): [KeyBase, boolean][] {
         value = v.roleWeight.assetsOpWeight;
       } else if (role === Role.Guardian) {
         value = v.roleWeight.guardianWeight;
-      } else if (role === Role.Synchronizer) {
-        value = v.roleWeight.synchronizerWeight;
       } else {
         throw new Error(`Invalid Role: ${role}`);
       }
@@ -200,7 +191,7 @@ export function selectKeys(keys: KeyBase[], role: Role): [KeyBase, boolean][] {
     })
     .sort((a, b) => b.value - a.value)
     .forEach((v) => {
-      if (sum < 100) {
+      if (sum < threshold) {
         indexes.push(v.index);
         sum += v.value;
       }

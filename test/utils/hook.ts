@@ -1,5 +1,4 @@
 import { Contract, ethers } from "ethers";
-import { Interface } from "ethers/lib/utils";
 import { CallType } from "./sigPart";
 
 export function generateAddHookTx(
