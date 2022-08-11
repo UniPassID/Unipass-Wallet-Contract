@@ -6,6 +6,7 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./ModuleStorage.sol";
+import "./ModuleNonceBase.sol";
 import "./ModuleAuthBase.sol";
 import "../../utils/LibBytes.sol";
 import "../../interfaces/IModuleHooks.sol";
@@ -18,6 +19,7 @@ import "hardhat/console.sol";
 abstract contract ModuleCall is
     ITransaction,
     IModuleCall,
+    ModuleNonceBase,
     ModuleAuthBase,
     IModuleHooks
 {
@@ -34,7 +36,7 @@ abstract contract ModuleCall is
     error SelectorDoesNotExist(bytes4 _selector);
     error ImmutableSelectorSigWeight(bytes4 _selector);
 
-    function getNonce() public view returns (uint256) {
+    function getNonce() public view override returns (uint256) {
         return uint256(ModuleStorage.readBytes32(NONCE_KEY));
     }
 
@@ -181,8 +183,6 @@ abstract contract ModuleCall is
             weight = _roleWeight.assetsOpWeight;
         } else if (_role == Role.Guardian) {
             weight = _roleWeight.guardianWeight;
-        } else if (_role == Role.Synchronizer) {
-            weight = _roleWeight.synchronizerWeight;
         } else {
             revert InvalidRole(_role);
         }

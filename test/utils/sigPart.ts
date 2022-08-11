@@ -1,4 +1,4 @@
-import { BigNumber, Contract, utils, Wallet } from "ethers";
+import { BigNumber, Contract, Overrides, utils, Wallet } from "ethers";
 import {
   arrayify,
   BytesLike,
@@ -17,13 +17,13 @@ export enum ActionType {
   UpdateTimeLockDuring = 3,
   UpdateImplementation = 4,
   UpdateEntryPoint = 5,
+  SyncAccount = 6,
 }
 
 export enum Role {
   Owner,
   AssetsOp,
   Guardian,
-  Synchronizer,
 }
 
 export enum CallType {
@@ -183,11 +183,40 @@ export async function generateTransactionSig(
   return sig;
 }
 
+export async function generateSyncAccountTx(
+  contract: Contract,
+  metaNonce: number,
+  newKeysetHash: string,
+  keys: [KeyBase, boolean][]
+) {
+  const digestHash = keccak256(
+    solidityPack(
+      ["uint32", "address", "uint8", "bytes32"],
+      [metaNonce, contract.address, ActionType.SyncAccount, newKeysetHash]
+    )
+  );
+
+  const data = contract.interface.encodeFunctionData("syncAccount", [
+    metaNonce,
+    newKeysetHash,
+    await generateSignature(digestHash, keys, undefined),
+  ]);
+
+  let tx = {
+    callType: CallType.Call,
+    gasLimit: ethers.constants.Zero,
+    target: contract.address,
+    value: ethers.constants.Zero,
+    data,
+  };
+  return tx;
+}
+
 export async function generateUpdateKeysetHashTx(
   contract: Contract,
   metaNonce: number,
   newKeysetHash: string,
-  role: Role,
+  withTimeLock: boolean,
   keys: [KeyBase, boolean][]
 ) {
   const digestHash = keccak256(
@@ -198,12 +227,10 @@ export async function generateUpdateKeysetHashTx(
   );
 
   let func: string;
-  if (role === Role.Guardian) {
-    func = "updateKeysetHashByGuardian";
-  } else if (role === Role.Owner) {
-    func = "updateKeysetHashByOwner";
+  if (withTimeLock) {
+    func = "updateKeysetHashWithTimeLock";
   } else {
-    throw new Error(`Invalid Role: ${role}`);
+    func = "updateKeysetHash";
   }
   const data = contract.interface.encodeFunctionData(func, [
     metaNonce,
@@ -223,10 +250,9 @@ export async function generateUpdateKeysetHashTx(
 
 export async function generateUnlockKeysetHashTx(
   contract: Contract,
-  metaNonce: number,
-  contractInterface: Interface
+  metaNonce: number
 ) {
-  const data = contractInterface.encodeFunctionData("unlockKeysetHash", [
+  const data = contract.interface.encodeFunctionData("unlockKeysetHash", [
     metaNonce,
   ]);
 
@@ -412,7 +438,8 @@ export async function executeCall(
   nonce: number,
   keys: [KeyBase, boolean][],
   moduleMain: Contract,
-  sessionKey: SessionKey | undefined
+  sessionKey: SessionKey | undefined,
+  txParams: Overrides
 ) {
   const feeToken = ethers.constants.AddressZero;
   const feeReceiver = ethers.constants.AddressZero;
@@ -429,7 +456,15 @@ export async function executeCall(
   );
 
   const ret = await (
-    await moduleMain.execute(txs, nonce, feeToken, feeReceiver, 0, signature)
+    await moduleMain.execute(
+      txs,
+      nonce,
+      feeToken,
+      feeReceiver,
+      0,
+      signature,
+      txParams
+    )
   ).wait();
   return ret;
 }

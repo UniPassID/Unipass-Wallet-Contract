@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { Contract } from "ethers";
 import { ethers } from "hardhat";
-import { DkimParams, parseEmailParams, EmailParams } from "./utils/email";
+import { parseEmailParams, EmailParams } from "./utils/email";
 import * as fs from "fs";
 
 describe("LibDkimValidator", function () {

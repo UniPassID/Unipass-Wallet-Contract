@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 /* solhint-disable no-unused-vars */
 
 import "./ModuleRole.sol";
+import "./ModuleNonceBase.sol";
 import "./ModuleDkimAuth.sol";
 import "./ModuleTimeLock.sol";
 import "./ModuleStorage.sol";
@@ -24,6 +25,7 @@ import "hardhat/console.sol";
 abstract contract ModuleAuthBase is
     ModuleSelfAuth,
     IModuleAuth,
+    ModuleNonceBase,
     ModuleRole,
     ModuleDkimAuth,
     Implementation,
@@ -57,6 +59,7 @@ abstract contract ModuleAuthBase is
     uint256 private constant UPDATE_TIMELOCK_DURING = 3;
     uint256 private constant UPDATE_IMPLEMENTATION = 4;
     uint256 private constant UPDATE_ENTRY_POINT = 5;
+    uint256 private constant SYNC_ACCOUNT = 6;
 
     bytes4 private constant SELECTOR_ERC1271_BYTES32_BYTES = 0x1626ba7e;
 
@@ -252,7 +255,40 @@ abstract contract ModuleAuthBase is
         success = isValidKeysetHash(keysetHash);
     }
 
-    function updateKeysetHashByOwner(
+    function syncAccount(
+        uint32 _metaNonce,
+        bytes32 _keysetHash,
+        bytes calldata _signature
+    ) external override onlySelf {
+        uint256 metaNonce = getMetaNonce();
+        require(
+            metaNonce < _metaNonce && metaNonce + 100 > _metaNonce,
+            "syncAccount: INVALID_METANONCE"
+        );
+        bytes32 digestHash = keccak256(
+            abi.encodePacked(
+                _metaNonce,
+                address(this),
+                uint8(SYNC_ACCOUNT),
+                _keysetHash
+            )
+        );
+
+        (bool success, RoleWeight memory roleWeight) = validateSignature(
+            digestHash,
+            _signature
+        );
+        require(success, "syncAccount: INVALID_SIG");
+
+        require(
+            roleWeight.ownerWeight >= LibRole.OWNER_THRESHOLD,
+            "syncAccount: INVALID_WEIGHT"
+        );
+        _updateKeysetHash(_keysetHash);
+        _writeMetaNonce(_metaNonce);
+    }
+
+    function updateKeysetHash(
         uint32 _metaNonce,
         bytes32 _newKeysetHash,
         bytes calldata _signature
@@ -272,18 +308,19 @@ abstract contract ModuleAuthBase is
             digestHash,
             _signature
         );
-        require(success, "updateKeysetHashByOwner: INVALID_SIG");
+        require(success, "updateKeysetHash: INVALID_SIG");
 
         require(
-            roleWeight.ownerWeight >= LibRole.OWNER_THRESHOLD,
-            "updateKeysetHashByOwner: INVALID_WEIGHT"
+            roleWeight.ownerWeight >= LibRole.OWNER_THRESHOLD ||
+                roleWeight.guardianWeight >= LibRole.GUARDIAN_THRESHOLD,
+            "updateKeysetHash: INVALID_WEIGHT"
         );
 
         _updateKeysetHash(_newKeysetHash);
         _writeMetaNonce(_metaNonce);
     }
 
-    function updateKeysetHashByGuardian(
+    function updateKeysetHashWithTimeLock(
         uint32 _metaNonce,
         bytes32 _newKeysetHash,
         bytes calldata _signature
@@ -303,11 +340,11 @@ abstract contract ModuleAuthBase is
             digestHash,
             _signature
         );
-        require(success, "updateKeysetHashByGuardian: INVALID_SIG");
+        require(success, "updateKeysetHashWithTimeLock: INVALID_SIG");
 
         require(
-            roleWeight.guardianWeight >= LibRole.GUARDIAN_THRESHOLD,
-            "updateKeysetHashByGuardian: INVALID_WEIGHT"
+            roleWeight.guardianWeight >= LibRole.GUARDIAN_TIMELOCK_THRESHOLD,
+            "updateKeysetHashWithTimeLock: INVALID_WEIGHT"
         );
 
         _toLockKeysetHash(_newKeysetHash, getLockDuring());
@@ -488,7 +525,6 @@ abstract contract ModuleAuthBase is
             roleWeightSum.ownerWeight += roleWeight.ownerWeight;
             roleWeightSum.assetsOpWeight += roleWeight.assetsOpWeight;
             roleWeightSum.guardianWeight += roleWeight.guardianWeight;
-            roleWeightSum.synchronizerWeight += roleWeight.synchronizerWeight;
         }
         if (keyType == KeyType.Secp256k1 || keyType == KeyType.ERC1271Wallet) {
             keysetHash = keccak256(
@@ -497,8 +533,7 @@ abstract contract ModuleAuthBase is
                     key,
                     roleWeight.ownerWeight,
                     roleWeight.assetsOpWeight,
-                    roleWeight.guardianWeight,
-                    roleWeight.synchronizerWeight
+                    roleWeight.guardianWeight
                 )
             );
         } else {
@@ -508,8 +543,7 @@ abstract contract ModuleAuthBase is
                     emailHash,
                     roleWeight.ownerWeight,
                     roleWeight.assetsOpWeight,
-                    roleWeight.guardianWeight,
-                    roleWeight.synchronizerWeight
+                    roleWeight.guardianWeight
                 )
             );
         }
@@ -524,8 +558,6 @@ abstract contract ModuleAuthBase is
                 roleWeightSum.ownerWeight += roleWeight.ownerWeight;
                 roleWeightSum.assetsOpWeight += roleWeight.assetsOpWeight;
                 roleWeightSum.guardianWeight += roleWeight.guardianWeight;
-                roleWeightSum.synchronizerWeight += roleWeight
-                    .synchronizerWeight;
             }
             if (
                 keyType == KeyType.Secp256k1 || keyType == KeyType.ERC1271Wallet
@@ -537,8 +569,7 @@ abstract contract ModuleAuthBase is
                         key,
                         roleWeight.ownerWeight,
                         roleWeight.assetsOpWeight,
-                        roleWeight.guardianWeight,
-                        roleWeight.synchronizerWeight
+                        roleWeight.guardianWeight
                     )
                 );
             } else {
@@ -549,8 +580,7 @@ abstract contract ModuleAuthBase is
                         emailHash,
                         roleWeight.ownerWeight,
                         roleWeight.assetsOpWeight,
-                        roleWeight.guardianWeight,
-                        roleWeight.synchronizerWeight
+                        roleWeight.guardianWeight
                     )
                 );
             }
@@ -567,7 +597,6 @@ abstract contract ModuleAuthBase is
         (roleWeight.ownerWeight, index) = _signature.cReadUint32(_index);
         (roleWeight.assetsOpWeight, index) = _signature.cReadUint32(index);
         (roleWeight.guardianWeight, index) = _signature.cReadUint32(index);
-        (roleWeight.synchronizerWeight, index) = _signature.cReadUint32(index);
     }
 
     function _parseKey(

@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import "./ModuleAuthBase.sol";
 import "../../Wallet.sol";
 
-contract ModuleAuthFixed is ModuleAuthBase {
+abstract contract ModuleAuthFixed is ModuleAuthBase {
     bytes32 public immutable INIT_CODE_HASH;
     address public immutable FACTORY;
     address public immutable MODULE_MAIN_UPGRADABLE;

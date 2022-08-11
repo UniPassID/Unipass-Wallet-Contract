@@ -3,14 +3,14 @@ pragma solidity ^0.8.0;
 
 import "./ModuleHooks.sol";
 import "../../interfaces/IModuleAuth.sol";
+import "../../interfaces/IModuleCall.sol";
 import "../../utils/LibRole.sol";
 
 contract ModuleRole is ModuleSelfAuth {
     enum Role {
         Owner,
         AssetsOp,
-        Guardian,
-        Synchronizer
+        Guardian
     }
 
     mapping(bytes4 => bytes5) public permissions;
@@ -38,15 +38,16 @@ contract ModuleRole is ModuleSelfAuth {
         uint32 _threshold
     ) external onlySelf {
         if (
-            _permission == IModuleAuth.updateKeysetHashByOwner.selector ||
-            _permission == IModuleAuth.updateKeysetHashByGuardian.selector ||
+            _permission == IModuleAuth.updateKeysetHash.selector ||
+            _permission == IModuleAuth.updateKeysetHashWithTimeLock.selector ||
             _permission == IModuleAuth.updateTimeLockDuring.selector ||
             _permission == IModuleAuth.updateImplementation.selector ||
             _permission == ModuleHooks.addHook.selector ||
             _permission == ModuleHooks.removeHook.selector ||
             _permission == this.addPermission.selector ||
             _permission == this.removePermission.selector ||
-            _permission == IModuleAuth.cancelLockKeysetHsah.selector
+            _permission == IModuleAuth.cancelLockKeysetHsah.selector ||
+            _permission == IModuleAuth.syncAccount.selector
         ) {
             revert ConstantPermission(_permission);
         }
@@ -55,15 +56,16 @@ contract ModuleRole is ModuleSelfAuth {
 
     function removePermission(bytes4 _permission) external onlySelf {
         if (
-            _permission == IModuleAuth.updateKeysetHashByOwner.selector ||
-            _permission == IModuleAuth.updateKeysetHashByGuardian.selector ||
+            _permission == IModuleAuth.updateKeysetHash.selector ||
+            _permission == IModuleAuth.updateKeysetHashWithTimeLock.selector ||
             _permission == IModuleAuth.updateTimeLockDuring.selector ||
             _permission == IModuleAuth.updateImplementation.selector ||
             _permission == ModuleHooks.addHook.selector ||
             _permission == ModuleHooks.removeHook.selector ||
             _permission == this.addPermission.selector ||
             _permission == this.removePermission.selector ||
-            _permission == IModuleAuth.cancelLockKeysetHsah.selector
+            _permission == IModuleAuth.cancelLockKeysetHsah.selector ||
+            _permission == IModuleAuth.syncAccount.selector
         ) {
             revert ConstantPermission(_permission);
         }
@@ -76,10 +78,12 @@ contract ModuleRole is ModuleSelfAuth {
         returns (Role role, uint32 threshold)
     {
         if (
-            _permission == IModuleAuth.updateKeysetHashByOwner.selector ||
+            _permission == IModuleAuth.updateKeysetHash.selector ||
+            _permission == IModuleAuth.updateKeysetHashWithTimeLock.selector ||
             _permission == IModuleAuth.updateTimeLockDuring.selector ||
             _permission == IModuleAuth.updateImplementation.selector ||
-            _permission == IModuleAuth.cancelLockKeysetHsah.selector
+            _permission == IModuleAuth.cancelLockKeysetHsah.selector ||
+            _permission == IModuleAuth.syncAccount.selector
         ) {
             role = Role.Owner;
             threshold = LibRole.SYNC_TX_THRESHOLD;
@@ -91,11 +95,6 @@ contract ModuleRole is ModuleSelfAuth {
         ) {
             role = Role.Owner;
             threshold = LibRole.OWNER_THRESHOLD;
-        } else if (
-            _permission == IModuleAuth.updateKeysetHashByGuardian.selector
-        ) {
-            role = Role.Guardian;
-            threshold = LibRole.SYNC_TX_THRESHOLD;
         } else {
             bytes5 roleInfo = permissions[_permission];
             role = Role(uint8(bytes1(roleInfo >> 32)));

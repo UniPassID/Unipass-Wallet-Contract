@@ -1,7 +1,16 @@
+import { expect } from "chai";
 import { Contract, ContractFactory, Overrides, Wallet } from "ethers";
-import { hexlify, randomBytes } from "ethers/lib/utils";
+import { hexlify, randomBytes, solidityPack } from "ethers/lib/utils";
 import { ethers } from "hardhat";
-import { getKeysetHash, transferEth } from "./utils/common";
+import NodeRSA from "node-rsa";
+import {
+  ASSETS_OP_THRESHOLD,
+  getKeysetHash,
+  GUARDIAN_THRESHOLD,
+  GUARDIAN_TIMELOCK_THRESHOLD,
+  OWNER_THRESHOLD,
+  transferEth,
+} from "./utils/common";
 import { Deployer } from "./utils/deployer";
 import { randomKeys, selectKeys } from "./utils/key";
 import {
@@ -34,6 +43,7 @@ describe("ModuleMain Benchmark", function () {
   let ModuleMain: ContractFactory;
   let chainId: number;
   let txParams: Overrides;
+  let unipassPrivateKey: string;
   this.beforeAll(async () => {
     const [signer] = await ethers.getSigners();
     deployer = await new Deployer(signer).init();
@@ -45,7 +55,8 @@ describe("ModuleMain Benchmark", function () {
     const instance = 0;
 
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
-    const dkimKeysAdmin = Wallet.createRandom();
+    const dkimKeysAdmin = Wallet.createRandom().connect(signer.provider!);
+    await transferEth(dkimKeysAdmin.address, 10);
     dkimKeys = await deployer.deployContract(
       DkimKeys,
       instance,
@@ -74,6 +85,20 @@ describe("ModuleMain Benchmark", function () {
     );
 
     chainId = await (await moduleMain.provider.getNetwork()).chainId;
+    const privateKey = new NodeRSA({ b: 2048 });
+    unipassPrivateKey = privateKey.exportKey("pkcs1");
+    const ret = await (
+      await dkimKeys
+        .connect(dkimKeysAdmin)
+        .updateDKIMKey(
+          solidityPack(
+            ["bytes", "bytes"],
+            [Buffer.from("s2055"), Buffer.from("uipass.com")]
+          ),
+          privateKey.exportKey("components-public").n.subarray(1)
+        )
+    ).wait();
+    expect(ret.status).to.equals(1);
   });
 
   if (process.env.BENCHMARK) {
@@ -99,10 +124,14 @@ describe("ModuleMain Benchmark", function () {
       it("Relay 1/1 Update KeysetHash transaction", async () => {
         const newKeysetHash = hexlify(randomBytes(32));
 
-        for (const role of [Role.Owner, Role.Guardian]) {
+        for (const [role, threshold, withTimeOut] of [
+          [Role.Owner, OWNER_THRESHOLD, false],
+          [Role.Guardian, GUARDIAN_THRESHOLD, false],
+          [Role.Guardian, GUARDIAN_TIMELOCK_THRESHOLD, true],
+        ]) {
           const results: number[] = [];
           for (let i = 0; i < runs; i++) {
-            const keys = randomKeys(10);
+            const keys = randomKeys(10, unipassPrivateKey);
             const keysetHash = getKeysetHash(keys);
             const wallet = await deployer.deployProxyContract(
               moduleMain.interface,
@@ -115,8 +144,8 @@ describe("ModuleMain Benchmark", function () {
               wallet,
               1,
               newKeysetHash,
-              role,
-              selectKeys(keys, role)
+              withTimeOut as boolean,
+              selectKeys(keys, role as Role, threshold as number)
             );
 
             const tx = await executeCall(
@@ -125,7 +154,8 @@ describe("ModuleMain Benchmark", function () {
               1,
               [],
               wallet,
-              undefined
+              undefined,
+              txParams
             );
             results.push(tx.gasUsed);
           }
@@ -137,7 +167,7 @@ describe("ModuleMain Benchmark", function () {
       it("Relay 1/1 Transfer Eth transaction", async () => {
         const results: number[] = [];
         for (let i = 0; i < runs; i++) {
-          const keys = randomKeys(10);
+          const keys = randomKeys(10, unipassPrivateKey);
           const keysetHash = getKeysetHash(keys);
           const wallet = await deployer.deployProxyContract(
             moduleMain.interface,
@@ -157,13 +187,14 @@ describe("ModuleMain Benchmark", function () {
             [transaction],
             chainId,
             1,
-            selectKeys(keys, Role.AssetsOp),
+            selectKeys(keys, Role.AssetsOp, ASSETS_OP_THRESHOLD),
             wallet,
             {
               key: Wallet.createRandom(),
               timestamp: Math.ceil(Date.now() / 1000) + 10000,
               weight: 100,
-            }
+            },
+            txParams
           );
           results.push(tx.gasUsed);
         }
