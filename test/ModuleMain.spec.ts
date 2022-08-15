@@ -1,11 +1,5 @@
 import { expect } from "chai";
-import {
-  BigNumber,
-  Contract,
-  ContractFactory,
-  Overrides,
-  Wallet,
-} from "ethers";
+import { BigNumber, Contract, ContractFactory, Overrides, Wallet } from "ethers";
 import { keccak256, randomBytes, solidityPack } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import * as hre from "hardhat";
@@ -35,7 +29,6 @@ import {
 describe("ModuleMain", function () {
   let moduleMain: Contract;
   let ModuleMain: ContractFactory;
-  let moduleGuest: Contract;
   let ModuleMainUpgradable: ContractFactory;
   let proxyModuleMain: Contract;
   let deployer: Deployer;
@@ -66,27 +59,12 @@ describe("ModuleMain", function () {
 
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     dkimKeysAdmin = Wallet.createRandom().connect(signer.provider!);
-    await transferEth(dkimKeysAdmin.address, 10);
+    await transferEth(dkimKeysAdmin.address, 1);
 
-    dkimKeys = await deployer.deployContract(
-      DkimKeys,
-      0,
-      txParams,
-      dkimKeysAdmin.address
-    );
+    dkimKeys = await deployer.deployContract(DkimKeys, 0, txParams, dkimKeysAdmin.address);
 
-    const ModuleGuest = await ethers.getContractFactory("ModuleGuest");
-    moduleGuest = await deployer.deployContract(ModuleGuest, 0, txParams);
-
-    ModuleMainUpgradable = await ethers.getContractFactory(
-      "ModuleMainUpgradable"
-    );
-    const moduleMainUpgradable = await deployer.deployContract(
-      ModuleMainUpgradable,
-      0,
-      txParams,
-      dkimKeys.address
-    );
+    ModuleMainUpgradable = await ethers.getContractFactory("ModuleMainUpgradable");
+    const moduleMainUpgradable = await deployer.deployContract(ModuleMainUpgradable, 0, txParams, dkimKeys.address);
     ModuleMain = await ethers.getContractFactory("ModuleMain");
     moduleMain = await deployer.deployContract(
       ModuleMain,
@@ -112,10 +90,7 @@ describe("ModuleMain", function () {
       await dkimKeys
         .connect(dkimKeysAdmin)
         .updateDKIMKey(
-          solidityPack(
-            ["bytes", "bytes"],
-            [Buffer.from("s2055"), Buffer.from("uipass.com")]
-          ),
+          solidityPack(["bytes", "bytes"], [Buffer.from("s2055"), Buffer.from("unipass.com")]),
           privateKey.exportKey("components-public").n.subarray(1)
         )
     ).wait();
@@ -126,12 +101,7 @@ describe("ModuleMain", function () {
     keys = randomKeys(10, unipassPrivateKey);
     keysetHash = getKeysetHash(keys);
 
-    proxyModuleMain = await deployer.deployProxyContract(
-      moduleMain.interface,
-      moduleMain.address,
-      keysetHash,
-      txParams
-    );
+    proxyModuleMain = await deployer.deployProxyContract(moduleMain.interface, moduleMain.address, keysetHash, txParams);
     const txRet = await (
       await ethers.getSigners()
     )[0].sendTransaction({
@@ -141,65 +111,35 @@ describe("ModuleMain", function () {
     expect((await txRet.wait()).status).to.equal(1);
 
     value = 100;
-    let ret = await (
-      await testErc20Token.mint(proxyModuleMain.address, value)
-    ).wait();
+    let ret = await (await testErc20Token.mint(proxyModuleMain.address, value)).wait();
     expect(ret.status).to.equal(1);
-    expect(await testErc20Token.balanceOf(proxyModuleMain.address)).to.equal(
-      value
-    );
+    expect(await testErc20Token.balanceOf(proxyModuleMain.address)).to.equal(value);
 
     ret = await (await testERC721.safeMint(proxyModuleMain.address)).wait();
     expect(ret.status).to.equal(1);
     expect(await testERC721.balanceOf(proxyModuleMain.address)).to.equal(1);
-    ERC721TokenId = await testERC721.tokenOfOwnerByIndex(
-      proxyModuleMain.address,
-      0
-    );
+    ERC721TokenId = await testERC721.tokenOfOwnerByIndex(proxyModuleMain.address, 0);
 
     ERC1155TokenId = `0x${Buffer.from(randomBytes(32)).toString("hex")}`;
-    ret = await (
-      await testERC1155.mint(
-        proxyModuleMain.address,
-        ERC1155TokenId,
-        value,
-        "0x"
-      )
-    ).wait();
+    ret = await (await testERC1155.mint(proxyModuleMain.address, ERC1155TokenId, value, "0x")).wait();
     expect(ret.status).to.equal(1);
-    expect(
-      await testERC1155.balanceOf(proxyModuleMain.address, ERC1155TokenId)
-    ).to.equal(value);
+    expect(await testERC1155.balanceOf(proxyModuleMain.address, ERC1155TokenId)).to.equal(value);
     metaNonce = 1;
     nonce = 1;
   });
 
   it("Test Get Signature Weight From Call Data For ModuleMain", async () => {
-    for (const [func, funcFragment] of Object.entries(
-      moduleMain.interface.functions
-    )) {
-      if (
-        funcFragment.stateMutability !== "pure" &&
-        funcFragment.stateMutability !== "view"
-      ) {
-        await moduleMain.getRoleOfPermission(
-          keccak256(Buffer.from(func, "utf-8")).slice(0, 10)
-        );
+    for (const [func, funcFragment] of Object.entries(moduleMain.interface.functions)) {
+      if (funcFragment.stateMutability !== "pure" && funcFragment.stateMutability !== "view") {
+        await moduleMain.getRoleOfPermission(keccak256(Buffer.from(func, "utf-8")).slice(0, 10));
       }
     }
   });
 
   it("Test Get Signature Weight From Call Data For ModuleMainUpgradable", async () => {
-    for (const [func, funcFragment] of Object.entries(
-      ModuleMainUpgradable.interface.functions
-    )) {
-      if (
-        funcFragment.stateMutability !== "pure" &&
-        funcFragment.stateMutability !== "view"
-      ) {
-        await moduleMain.getRoleOfPermission(
-          keccak256(Buffer.from(func, "utf-8")).slice(0, 10)
-        );
+    for (const [func, funcFragment] of Object.entries(ModuleMainUpgradable.interface.functions)) {
+      if (funcFragment.stateMutability !== "pure" && funcFragment.stateMutability !== "view") {
+        await moduleMain.getRoleOfPermission(keccak256(Buffer.from(func, "utf-8")).slice(0, 10));
       }
     }
   });
@@ -212,22 +152,14 @@ describe("ModuleMain", function () {
       keys = randomKeys(10, unipassPrivateKey);
       keysetHash = getKeysetHash(keys);
 
-      userAddress = deployer.getProxyContractAddress(
-        moduleMain.address,
-        keysetHash
-      );
+      userAddress = deployer.getProxyContractAddress(moduleMain.address, keysetHash);
 
       const code = await moduleMain.provider.getCode(userAddress);
       expect(code).to.equal("0x");
     });
 
     it("User Registered", async () => {
-      await deployer.deployProxyContract(
-        moduleMain.interface,
-        moduleMain.address,
-        keysetHash,
-        txParams
-      );
+      await deployer.deployProxyContract(moduleMain.interface, moduleMain.address, keysetHash, txParams);
       const code = await moduleMain.provider.getCode(userAddress);
       expect(code).to.not.equal("0x");
     });
@@ -235,28 +167,10 @@ describe("ModuleMain", function () {
 
   it("Test Account Recovery", async () => {
     const newKeysetHash = `0x${Buffer.from(randomBytes(32)).toString("hex")}`;
-    const selectedKeys = selectKeys(
-      keys,
-      Role.Guardian,
-      GUARDIAN_TIMELOCK_THRESHOLD
-    );
-    const tx = await generateUpdateKeysetHashTx(
-      proxyModuleMain,
-      metaNonce,
-      newKeysetHash,
-      true,
-      selectedKeys
-    );
+    const selectedKeys = selectKeys(keys, Role.Guardian, GUARDIAN_TIMELOCK_THRESHOLD);
+    const tx = await generateUpdateKeysetHashTx(proxyModuleMain, metaNonce, newKeysetHash, true, selectedKeys);
 
-    const ret = await executeCall(
-      [tx],
-      chainId,
-      nonce,
-      [],
-      proxyModuleMain,
-      undefined,
-      txParams
-    );
+    const ret = await executeCall([tx], chainId, nonce, [], proxyModuleMain, undefined, txParams);
     expect(ret.status).to.equal(1);
     expect(await proxyModuleMain.lockedKeysetHash()).to.equal(newKeysetHash);
     metaNonce++;
@@ -291,37 +205,16 @@ describe("ModuleMain", function () {
       data: "0x",
     };
 
-    const signature = generateTransactionSig(
-      chainId,
-      [tx1, tx2],
-      nonce,
-      feeToken,
-      feeAmount,
-      selectedKeys,
-      {
-        key: sessionKey,
-        timestamp,
-        weight: 100,
-      }
-    );
+    const signature = generateTransactionSig(chainId, [tx1, tx2], nonce, feeToken, feeAmount, selectedKeys, {
+      key: sessionKey,
+      timestamp,
+      weight: 100,
+    });
 
-    const recipt = await (
-      await proxyModuleMain.execute(
-        [tx1, tx2],
-        nonce,
-        feeToken,
-        feeReceiver,
-        0,
-        signature
-      )
-    ).wait();
+    const recipt = await (await proxyModuleMain.execute([tx1, tx2], nonce, feeToken, feeReceiver, 0, signature)).wait();
     expect(recipt.status).to.equal(1);
-    expect(await proxyModuleMain.provider.getBalance(to1.address)).equal(
-      value1
-    );
-    expect(await proxyModuleMain.provider.getBalance(to2.address)).equal(
-      value2
-    );
+    expect(await proxyModuleMain.provider.getBalance(to1.address)).equal(value1);
+    expect(await proxyModuleMain.provider.getBalance(to2.address)).equal(value2);
     expect(await proxyModuleMain.getNonce()).to.equal(nonce);
     nonce++;
   });
@@ -339,14 +232,8 @@ describe("ModuleMain", function () {
     const to2 = Wallet.createRandom();
     const value1 = 10;
     const value2 = 20;
-    const data1 = testErc20Token.interface.encodeFunctionData("transfer", [
-      to1.address,
-      value1,
-    ]);
-    const data2 = testErc20Token.interface.encodeFunctionData("transfer", [
-      to2.address,
-      value2,
-    ]);
+    const data1 = testErc20Token.interface.encodeFunctionData("transfer", [to1.address, value1]);
+    const data2 = testErc20Token.interface.encodeFunctionData("transfer", [to2.address, value2]);
     const tx1 = {
       callType: CallType.Call,
       gasLimit: ethers.constants.Zero,
@@ -362,26 +249,13 @@ describe("ModuleMain", function () {
       data: data2,
     };
 
-    const signature = generateTransactionSig(
-      chainId,
-      [tx1, tx2],
-      nonce,
-      feeToken,
-      feeAmount,
-      selectedKeys,
-      { key: sessionKey, timestamp, weight: 100 }
-    );
+    const signature = generateTransactionSig(chainId, [tx1, tx2], nonce, feeToken, feeAmount, selectedKeys, {
+      key: sessionKey,
+      timestamp,
+      weight: 100,
+    });
 
-    const recipt = await (
-      await proxyModuleMain.execute(
-        [tx1, tx2],
-        nonce,
-        feeToken,
-        feeReceiver,
-        0,
-        signature
-      )
-    ).wait();
+    const recipt = await (await proxyModuleMain.execute([tx1, tx2], nonce, feeToken, feeReceiver, 0, signature)).wait();
     expect(recipt.status).to.equal(1);
     expect(await testErc20Token.balanceOf(to1.address)).equal(value1);
     expect(await testErc20Token.balanceOf(to2.address)).equal(value2);
@@ -399,11 +273,7 @@ describe("ModuleMain", function () {
     const selectedKeys = selectKeys(keys, Role.AssetsOp, ASSETS_OP_THRESHOLD);
 
     const to1 = Wallet.createRandom();
-    const data1 = testERC721.interface.encodeFunctionData("transferFrom", [
-      proxyModuleMain.address,
-      to1.address,
-      ERC721TokenId,
-    ]);
+    const data1 = testERC721.interface.encodeFunctionData("transferFrom", [proxyModuleMain.address, to1.address, ERC721TokenId]);
 
     const tx1 = {
       callType: CallType.Call,
@@ -413,26 +283,13 @@ describe("ModuleMain", function () {
       data: data1,
     };
 
-    const signature = generateTransactionSig(
-      chainId,
-      [tx1],
-      nonce,
-      feeToken,
-      feeAmount,
-      selectedKeys,
-      { key: sessionKey, timestamp, weight: 100 }
-    );
+    const signature = generateTransactionSig(chainId, [tx1], nonce, feeToken, feeAmount, selectedKeys, {
+      key: sessionKey,
+      timestamp,
+      weight: 100,
+    });
 
-    const recipt = await (
-      await proxyModuleMain.execute(
-        [tx1],
-        nonce,
-        feeToken,
-        feeReceiver,
-        0,
-        signature
-      )
-    ).wait();
+    const recipt = await (await proxyModuleMain.execute([tx1], nonce, feeToken, feeReceiver, 0, signature)).wait();
     expect(recipt.status).to.equal(1);
     expect(await testERC721.ownerOf(ERC721TokenId)).equal(to1.address);
     expect(await proxyModuleMain.getNonce()).to.equal(nonce);
@@ -481,33 +338,16 @@ describe("ModuleMain", function () {
       data: data2,
     };
 
-    const signature = generateTransactionSig(
-      chainId,
-      [tx1, tx2],
-      nonce,
-      feeToken,
-      feeAmount,
-      selectedKeys,
-      { key: sessionKey, timestamp, weight: 100 }
-    );
+    const signature = generateTransactionSig(chainId, [tx1, tx2], nonce, feeToken, feeAmount, selectedKeys, {
+      key: sessionKey,
+      timestamp,
+      weight: 100,
+    });
 
-    const recipt = await (
-      await proxyModuleMain.execute(
-        [tx1, tx2],
-        nonce,
-        feeToken,
-        feeReceiver,
-        0,
-        signature
-      )
-    ).wait();
+    const recipt = await (await proxyModuleMain.execute([tx1, tx2], nonce, feeToken, feeReceiver, 0, signature)).wait();
     expect(recipt.status).to.equal(1);
-    expect(await testERC1155.balanceOf(to1.address, ERC1155TokenId)).equal(
-      value1
-    );
-    expect(await testERC1155.balanceOf(to2.address, ERC1155TokenId)).equal(
-      value2
-    );
+    expect(await testERC1155.balanceOf(to1.address, ERC1155TokenId)).equal(value1);
+    expect(await testERC1155.balanceOf(to2.address, ERC1155TokenId)).equal(value2);
     expect(await proxyModuleMain.getNonce()).to.equal(nonce);
     nonce++;
   });
@@ -525,31 +365,16 @@ describe("ModuleMain", function () {
       localDeployer = await new Deployer(signer).init();
 
       const DkimKeys = await ethers.getContractFactory("DkimKeys");
-      await transferEth(dkimKeysAdmin.address, 10);
+      await transferEth(dkimKeysAdmin.address, 1);
 
-      localDkimKeys = await localDeployer.deployContract(
-        DkimKeys,
-        0,
-        txParams,
-        dkimKeysAdmin.address
-      );
+      localDkimKeys = await localDeployer.deployContract(DkimKeys, 0, txParams, dkimKeysAdmin.address);
+      dkimKeysAdmin = dkimKeysAdmin.connect(signer.provider!);
 
       const ModuleGuest = await ethers.getContractFactory("ModuleGuest");
-      localModuleGuest = await localDeployer.deployContract(
-        ModuleGuest,
-        0,
-        txParams
-      );
+      localModuleGuest = await localDeployer.deployContract(ModuleGuest, 0, txParams);
 
-      const ModuleMainUpgradable = await ethers.getContractFactory(
-        "ModuleMainUpgradable"
-      );
-      const moduleMainUpgradable = await localDeployer.deployContract(
-        ModuleMainUpgradable,
-        0,
-        txParams,
-        localDkimKeys.address
-      );
+      const ModuleMainUpgradable = await ethers.getContractFactory("ModuleMainUpgradable");
+      const moduleMainUpgradable = await localDeployer.deployContract(ModuleMainUpgradable, 0, txParams, localDkimKeys.address);
       const ModuleMain = await ethers.getContractFactory("ModuleMain");
       localModuleMain = await localDeployer.deployContract(
         ModuleMain,
@@ -564,10 +389,7 @@ describe("ModuleMain", function () {
         await localDkimKeys
           .connect(dkimKeysAdmin)
           .updateDKIMKey(
-            solidityPack(
-              ["bytes", "bytes"],
-              [Buffer.from("s2055"), Buffer.from("uipass.com")]
-            ),
+            solidityPack(["bytes", "bytes"], [Buffer.from("s2055"), Buffer.from("unipass.com")]),
             privateKey.exportKey("components-public").n.subarray(1)
           )
       ).wait();
@@ -579,53 +401,18 @@ describe("ModuleMain", function () {
       let selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
       keys = randomKeys(10, unipassPrivateKey);
       keysetHash = getKeysetHash(keys);
-      const tx1 = await generateUpdateKeysetHashTx(
-        proxyModuleMain,
-        metaNonce,
-        keysetHash,
-        false,
-        selectedKeys
-      );
-      await executeCall(
-        [tx1],
-        chainId,
-        nonce,
-        [],
-        proxyModuleMain,
-        undefined,
-        txParams
-      );
+      const tx1 = await generateUpdateKeysetHashTx(proxyModuleMain, metaNonce, keysetHash, false, selectedKeys);
+      await executeCall([tx1], chainId, nonce, [], proxyModuleMain, undefined, txParams);
       nonce++;
       metaNonce++;
       const timeLockDuring = 3;
       selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
-      const tx2 = await generateUpdateTimeLockDuringTx(
-        proxyModuleMain,
-        metaNonce,
-        timeLockDuring,
-        selectedKeys
-      );
-      await executeCall(
-        [tx2],
-        chainId,
-        nonce,
-        [],
-        proxyModuleMain,
-        undefined,
-        txParams
-      );
+      const tx2 = await generateUpdateTimeLockDuringTx(proxyModuleMain, metaNonce, timeLockDuring, selectedKeys);
+      await executeCall([tx2], chainId, nonce, [], proxyModuleMain, undefined, txParams);
       nonce++;
       metaNonce++;
-      selectedKeys = selectKeys(
-        keys,
-        Role.Guardian,
-        GUARDIAN_TIMELOCK_THRESHOLD
-      );
-      const tx3 = await generateTransferTx(
-        dkimKeysAdmin.address,
-        ethers.constants.Zero,
-        ethers.utils.parseEther("0.01")
-      );
+      selectedKeys = selectKeys(keys, Role.Guardian, GUARDIAN_TIMELOCK_THRESHOLD);
+      const tx3 = await generateTransferTx(dkimKeysAdmin.address, ethers.constants.Zero, ethers.utils.parseEther("0.01"));
       selectedKeys = selectKeys(keys, Role.AssetsOp, ASSETS_OP_THRESHOLD);
       await executeCall(
         [tx3],
@@ -642,11 +429,10 @@ describe("ModuleMain", function () {
       );
       nonce++;
 
-      const deployTxData =
-        localDeployer.singleFactoryContract.interface.encodeFunctionData(
-          "deploy",
-          [Deployer.getInitCode(moduleMain.address), initKeysetHash]
-        );
+      const deployTxData = localDeployer.singleFactoryContract.interface.encodeFunctionData("deploy", [
+        Deployer.getInitCode(moduleMain.address),
+        initKeysetHash,
+      ]);
       const deployTx = {
         callType: CallType.Call,
         gasLimit: ethers.constants.Zero,
@@ -654,17 +440,14 @@ describe("ModuleMain", function () {
         value: ethers.constants.Zero,
         data: deployTxData,
       };
-      const executeTxData = localModuleMain.interface.encodeFunctionData(
-        "execute",
-        [
-          [tx1, tx2],
-          1,
-          ethers.constants.AddressZero,
-          ethers.constants.AddressZero,
-          0,
-          "0x",
-        ]
-      );
+      const executeTxData = localModuleMain.interface.encodeFunctionData("execute", [
+        [tx1, tx2],
+        1,
+        ethers.constants.AddressZero,
+        ethers.constants.AddressZero,
+        0,
+        "0x",
+      ]);
       const executeTx = {
         callType: CallType.Call,
         gasLimit: ethers.constants.Zero,
@@ -681,15 +464,12 @@ describe("ModuleMain", function () {
           ethers.constants.AddressZero,
           ethers.constants.AddressZero,
           0,
-          "0x"
+          "0x",
+          txParams
         )
       ).wait();
       const [signer] = await ethers.getSigners();
-      proxyModuleMain = new Contract(
-        proxyModuleMain.address,
-        ModuleMain.interface,
-        signer
-      );
+      proxyModuleMain = new Contract(proxyModuleMain.address, ModuleMain.interface, signer);
       expect(ret.status).to.equals(1);
       expect(await proxyModuleMain.getNonce()).to.equals(1);
       expect(await proxyModuleMain.getMetaNonce()).to.equals(metaNonce - 1);
@@ -703,73 +483,24 @@ describe("ModuleMain", function () {
       let selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
       keys = randomKeys(10, unipassPrivateKey);
       keysetHash = getKeysetHash(keys);
-      const tx1 = await generateUpdateKeysetHashTx(
-        proxyModuleMain,
-        metaNonce,
-        keysetHash,
-        false,
-        selectedKeys
-      );
-      await executeCall(
-        [tx1],
-        chainId,
-        nonce,
-        [],
-        proxyModuleMain,
-        undefined,
-        txParams
-      );
+      const tx1 = await generateUpdateKeysetHashTx(proxyModuleMain, metaNonce, keysetHash, false, selectedKeys);
+      await executeCall([tx1], chainId, nonce, [], proxyModuleMain, undefined, txParams);
       nonce++;
       metaNonce++;
       const timeLockDuring = 3;
       selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
-      const tx2 = await generateUpdateTimeLockDuringTx(
-        proxyModuleMain,
-        metaNonce,
-        timeLockDuring,
-        selectedKeys
-      );
-      await executeCall(
-        [tx2],
-        chainId,
-        nonce,
-        [],
-        proxyModuleMain,
-        undefined,
-        txParams
-      );
+      const tx2 = await generateUpdateTimeLockDuringTx(proxyModuleMain, metaNonce, timeLockDuring, selectedKeys);
+      await executeCall([tx2], chainId, nonce, [], proxyModuleMain, undefined, txParams);
       nonce++;
       metaNonce++;
-      selectedKeys = selectKeys(
-        keys,
-        Role.Guardian,
-        GUARDIAN_TIMELOCK_THRESHOLD
-      );
+      selectedKeys = selectKeys(keys, Role.Guardian, GUARDIAN_TIMELOCK_THRESHOLD);
       const newKeys = randomKeys(10, unipassPrivateKey);
       const newKeysetHash = getKeysetHash(keys);
-      const tx3 = await generateUpdateKeysetHashTx(
-        proxyModuleMain,
-        metaNonce,
-        newKeysetHash,
-        true,
-        selectedKeys
-      );
-      await executeCall(
-        [tx3],
-        chainId,
-        nonce,
-        [],
-        proxyModuleMain,
-        undefined,
-        txParams
-      );
+      const tx3 = await generateUpdateKeysetHashTx(proxyModuleMain, metaNonce, newKeysetHash, true, selectedKeys);
+      await executeCall([tx3], chainId, nonce, [], proxyModuleMain, undefined, txParams);
       nonce++;
       metaNonce++;
-      const tx4 = await generateTransferTx(
-        dkimKeysAdmin.address,
-        ethers.constants.Zero,
-        ethers.utils.parseEther("0.01")
-      );
+      const tx4 = await generateTransferTx(dkimKeysAdmin.address, ethers.constants.Zero, ethers.utils.parseEther("0.01"));
       selectedKeys = selectKeys(keys, Role.AssetsOp, ASSETS_OP_THRESHOLD);
       await executeCall(
         [tx4],
@@ -787,23 +518,14 @@ describe("ModuleMain", function () {
       nonce++;
       await new Promise((resolve) => setTimeout(resolve, 3000));
       const tx5 = await generateUnlockKeysetHashTx(proxyModuleMain, metaNonce);
-      await executeCall(
-        [tx5],
-        chainId,
-        nonce,
-        [],
-        proxyModuleMain,
-        undefined,
-        txParams
-      );
+      await executeCall([tx5], chainId, nonce, [], proxyModuleMain, undefined, txParams);
       keys = newKeys;
       keysetHash = newKeysetHash;
 
-      const deployTxData =
-        localDeployer.singleFactoryContract.interface.encodeFunctionData(
-          "deploy",
-          [Deployer.getInitCode(moduleMain.address), initKeysetHash]
-        );
+      const deployTxData = localDeployer.singleFactoryContract.interface.encodeFunctionData("deploy", [
+        Deployer.getInitCode(moduleMain.address),
+        initKeysetHash,
+      ]);
       const deployTx = {
         callType: CallType.Call,
         gasLimit: ethers.constants.Zero,
@@ -817,17 +539,14 @@ describe("ModuleMain", function () {
         keysetHash,
         selectKeys(initKeys, Role.Owner, OWNER_THRESHOLD)
       );
-      const executeTxData = localModuleMain.interface.encodeFunctionData(
-        "execute",
-        [
-          [syncAccountTx],
-          1,
-          ethers.constants.AddressZero,
-          ethers.constants.AddressZero,
-          0,
-          "0x",
-        ]
-      );
+      const executeTxData = localModuleMain.interface.encodeFunctionData("execute", [
+        [syncAccountTx],
+        1,
+        ethers.constants.AddressZero,
+        ethers.constants.AddressZero,
+        0,
+        "0x",
+      ]);
       const executeTx = {
         callType: CallType.Call,
         gasLimit: ethers.constants.Zero,
@@ -848,11 +567,7 @@ describe("ModuleMain", function () {
         )
       ).wait();
       const [signer] = await ethers.getSigners();
-      proxyModuleMain = new Contract(
-        proxyModuleMain.address,
-        ModuleMain.interface,
-        signer
-      );
+      proxyModuleMain = new Contract(proxyModuleMain.address, ModuleMain.interface, signer);
       expect(ret.status).to.equals(1);
       expect(await proxyModuleMain.getNonce()).to.equals(1);
       expect(await proxyModuleMain.getMetaNonce()).to.equals(metaNonce - 1);

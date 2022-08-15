@@ -8,6 +8,8 @@ import "hardhat/console.sol";
 contract ModuleDkimAuth {
     IDkimKeys public immutable dkimKeys;
 
+    error DkimFailed(bytes reason);
+
     constructor(IDkimKeys _dkimKeys) {
         require(address(_dkimKeys) != address(0), "constructor: ZERO");
         dkimKeys = _dkimKeys;
@@ -21,12 +23,21 @@ contract ModuleDkimAuth {
         internal
         view
         returns (
+            bool,
+            bytes32,
+            bytes memory,
+            uint256
+        )
+    {
+        try dkimKeys.dkimVerify(_data, _index, inputEmailFrom) returns (
             bool ret,
             bytes32 emailHash,
             bytes memory sigHashHex,
             uint256 index
-        )
-    {
-        (ret, emailHash, sigHashHex, index) = dkimKeys.dkimVerify(_data, _index, inputEmailFrom);
+        ) {
+            return (ret, emailHash, sigHashHex, index);
+        } catch (bytes memory reason) {
+            revert DkimFailed(reason);
+        }
     }
 }

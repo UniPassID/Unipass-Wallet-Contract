@@ -27,11 +27,6 @@ contract ModuleGuest {
 
     event TxExecuted(bytes32 txHash);
 
-    uint256 private constant SIG_MASTER_KEY = 0;
-    uint256 private constant SIG_MASTER_KEY_WITH_RECOVERY_EMAILS = 2;
-    uint256 private constant SIG_SESSION_KEY = 3;
-    uint256 private constant SIG_NONE = 4;
-
     function execute(
         Transaction[] calldata _txs,
         uint256 _nonce,
