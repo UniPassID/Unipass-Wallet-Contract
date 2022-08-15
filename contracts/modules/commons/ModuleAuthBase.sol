@@ -103,17 +103,21 @@ abstract contract ModuleAuthBase is
     function syncAccount(
         uint32 _metaNonce,
         bytes32 _keysetHash,
+        uint32 _newTimeLockDuring,
         bytes calldata _signature
     ) external override onlySelf {
         uint256 metaNonce = getMetaNonce();
         require(metaNonce < _metaNonce && metaNonce + 100 > _metaNonce, "syncAccount: INVALID_METANONCE");
-        bytes32 digestHash = keccak256(abi.encodePacked(_metaNonce, address(this), uint8(SYNC_ACCOUNT), _keysetHash));
+        bytes32 digestHash = keccak256(
+            abi.encodePacked(_metaNonce, address(this), uint8(SYNC_ACCOUNT), _keysetHash, _newTimeLockDuring)
+        );
 
         (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
         require(success, "syncAccount: INVALID_SIG");
 
         require(roleWeight.ownerWeight >= LibRole.OWNER_THRESHOLD, "syncAccount: INVALID_WEIGHT");
         _updateKeysetHash(_keysetHash);
+        _setLockDuring(_newTimeLockDuring);
         _writeMetaNonce(_metaNonce);
     }
 
@@ -381,9 +385,9 @@ abstract contract ModuleAuthBase is
                 (key, index) = _signature.cReadAddress(index);
             }
         } else if (keyType == KeyType.ERC1271Wallet) {
-            (key, index) = _signature.cReadAddress(index);
             isSig = _signature.mcReadUint8(index) == 1;
             index++;
+            (key, index) = _signature.cReadAddress(index);
             if (isSig) {
                 uint32 sigLen;
                 (sigLen, index) = _signature.cReadUint32(index);

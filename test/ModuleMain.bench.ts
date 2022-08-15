@@ -13,12 +13,7 @@ import {
 } from "./utils/common";
 import { Deployer } from "./utils/deployer";
 import { randomKeys, selectKeys } from "./utils/key";
-import {
-  executeCall,
-  generateTransferTx,
-  generateUpdateKeysetHashTx,
-  Role,
-} from "./utils/sigPart";
+import { executeCall, generateTransferTx, generateUpdateKeysetHashTx, Role } from "./utils/sigPart";
 
 const runs = 256;
 
@@ -31,9 +26,7 @@ function report(test: string, values: number[]) {
     .div(values.length)
     .toNumber();
 
-  console.info(
-    ` -> ${test} runs: ${values.length} cost min: ${min} max: ${max} avg: ${avg}`
-  );
+  console.info(` -> ${test} runs: ${values.length} cost min: ${min} max: ${max} avg: ${avg}`);
 }
 
 describe("ModuleMain Benchmark", function () {
@@ -44,7 +37,9 @@ describe("ModuleMain Benchmark", function () {
   let chainId: number;
   let txParams: Overrides;
   let unipassPrivateKey: string;
+  let testERC1271Wallet: [Contract, Wallet][] = [];
   this.beforeAll(async () => {
+    const TestERC1271Wallet = await ethers.getContractFactory("TestERC1271Wallet");
     const [signer] = await ethers.getSigners();
     deployer = await new Deployer(signer).init();
     txParams = {
@@ -54,25 +49,18 @@ describe("ModuleMain Benchmark", function () {
 
     const instance = 0;
 
+    for (let i = 0; i < 10; i++) {
+      const wallet = Wallet.createRandom();
+      testERC1271Wallet.push([await deployer.deployContract(TestERC1271Wallet, i, txParams, wallet.address), wallet]);
+    }
+
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     const dkimKeysAdmin = Wallet.createRandom().connect(signer.provider!);
     await transferEth(dkimKeysAdmin.address, 10);
-    dkimKeys = await deployer.deployContract(
-      DkimKeys,
-      instance,
-      txParams,
-      dkimKeysAdmin.address
-    );
+    dkimKeys = await deployer.deployContract(DkimKeys, instance, txParams, dkimKeysAdmin.address);
 
-    const ModuleMainUpgradable = await ethers.getContractFactory(
-      "ModuleMainUpgradable"
-    );
-    const moduleMainUpgradable = await deployer.deployContract(
-      ModuleMainUpgradable,
-      instance,
-      txParams,
-      dkimKeys.address
-    );
+    const ModuleMainUpgradable = await ethers.getContractFactory("ModuleMainUpgradable");
+    const moduleMainUpgradable = await deployer.deployContract(ModuleMainUpgradable, instance, txParams, dkimKeys.address);
 
     ModuleMain = await ethers.getContractFactory("ModuleMain");
     moduleMain = await deployer.deployContract(
@@ -91,10 +79,7 @@ describe("ModuleMain Benchmark", function () {
       await dkimKeys
         .connect(dkimKeysAdmin)
         .updateDKIMKey(
-          solidityPack(
-            ["bytes", "bytes"],
-            [Buffer.from("s2055"), Buffer.from("unipass.com")]
-          ),
+          solidityPack(["bytes", "bytes"], [Buffer.from("s2055"), Buffer.from("unipass.com")]),
           privateKey.exportKey("components-public").n.subarray(1)
         )
     ).wait();
@@ -110,11 +95,7 @@ describe("ModuleMain Benchmark", function () {
         for (let i = 0; i < runs; i++) {
           const salt = ethers.utils.hexlify(randomBytes(32));
           const ret = await (
-            await deployer.singleFactoryContract.deploy(
-              Deployer.getInitCode(moduleMain.address),
-              salt,
-              txParams
-            )
+            await deployer.singleFactoryContract.deploy(Deployer.getInitCode(moduleMain.address), salt, txParams)
           ).wait();
           results.push(ret.gasUsed);
         }
@@ -131,14 +112,9 @@ describe("ModuleMain Benchmark", function () {
         ]) {
           const results: number[] = [];
           for (let i = 0; i < runs; i++) {
-            const keys = randomKeys(10, unipassPrivateKey);
+            const keys = await randomKeys(10, unipassPrivateKey, testERC1271Wallet);
             const keysetHash = getKeysetHash(keys);
-            const wallet = await deployer.deployProxyContract(
-              moduleMain.interface,
-              moduleMain.address,
-              keysetHash,
-              txParams
-            );
+            const wallet = await deployer.deployProxyContract(moduleMain.interface, moduleMain.address, keysetHash, txParams);
 
             const transaction = await generateUpdateKeysetHashTx(
               wallet,
@@ -148,15 +124,7 @@ describe("ModuleMain Benchmark", function () {
               selectKeys(keys, role as Role, threshold as number)
             );
 
-            const tx = await executeCall(
-              [transaction],
-              chainId,
-              1,
-              [],
-              wallet,
-              undefined,
-              txParams
-            );
+            const tx = await executeCall([transaction], chainId, 1, [], wallet, undefined, txParams);
             results.push(tx.gasUsed);
           }
 
@@ -167,14 +135,9 @@ describe("ModuleMain Benchmark", function () {
       it("Relay 1/1 Transfer Eth transaction", async () => {
         const results: number[] = [];
         for (let i = 0; i < runs; i++) {
-          const keys = randomKeys(10, unipassPrivateKey);
+          const keys = await randomKeys(10, unipassPrivateKey, testERC1271Wallet);
           const keysetHash = getKeysetHash(keys);
-          const wallet = await deployer.deployProxyContract(
-            moduleMain.interface,
-            moduleMain.address,
-            keysetHash,
-            txParams
-          );
+          const wallet = await deployer.deployProxyContract(moduleMain.interface, moduleMain.address, keysetHash, txParams);
           await transferEth(wallet.address, 1);
 
           const transaction = await generateTransferTx(
