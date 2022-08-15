@@ -12,6 +12,7 @@ interface IModuleAuth {
     function syncAccount(
         uint32 _metaNonce,
         bytes32 _keysetHash,
+        uint32 _newTimeLockDuring,
         bytes calldata _signature
     ) external;
 

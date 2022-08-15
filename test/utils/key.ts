@@ -1,5 +1,5 @@
-import { BytesLike, Wallet } from "ethers";
-import { randomBytes, solidityPack } from "ethers/lib/utils";
+import { BytesLike, Contract, ContractFactory, Wallet } from "ethers";
+import { arrayify, joinSignature, randomBytes, solidityPack } from "ethers/lib/utils";
 import { getSignEmailWithDkim, parseEmailParams, pureEmailHash, SerializeDkimParams } from "./email";
 import { Role, signerSign } from "./sigPart";
 
@@ -88,46 +88,39 @@ export class KeyEmailAddress extends KeyBase {
   }
 }
 
-// export class KeyWallet extends KeyBase {
-//   constructor(readonly walletAddr: string, roleWeight: RoleWeight) {
-//     super(roleWeight);
-//   }
-//   public async generateSignature(digestHash: string): Promise<string> {
-//     let email = await getSignEmailWithDkim(digestHash, this.emailAddress, "test@unipass.me", this.unipassPrivateKey);
-//     let { params } = await parseEmailParams(email);
-//     return solidityPack(
-//       ["uint8", "uint8", "uint32", "bytes", "bytes", "bytes"],
-//       [
-//         KeyType.EmailAddress,
-//         1,
-//         this.emailAddress.length,
-//         Buffer.from(this.emailAddress, "utf-8"),
-//         SerializeDkimParams(params),
-//         this.serializeRoleWeight(),
-//       ]
-//     );
-//   }
-//   public async generateKey(): Promise<string> {
-//     return solidityPack(
-//       ["uint8", "uint8", "uint32", "bytes", "bytes"],
-//       [KeyType.EmailAddress, 0, this.emailAddress.length, Buffer.from(this.emailAddress, "utf-8"), this.serializeRoleWeight()]
-//     );
-//   }
-//   public serialize(): string {
-//     return solidityPack(
-//       ["uint8", "bytes32", "bytes"],
-//       [KeyType.EmailAddress, pureEmailHash(this.emailAddress), this.serializeRoleWeight()]
-//     );
-//   }
-// }
+export class KeyERC1271Wallet extends KeyBase {
+  constructor(readonly walletAddr: BytesLike, readonly inner: Wallet, roleWeight: RoleWeight) {
+    super(roleWeight);
+  }
 
-export function randomKeys(len: number, unipassPrivateKey: string): KeyBase[] {
+  public async generateSignature(digestHash: string): Promise<string> {
+    const sig = joinSignature(this.inner._signingKey().signDigest(arrayify(digestHash)));
+    return solidityPack(
+      ["uint8", "uint8", "address", "uint32", "bytes", "bytes"],
+      [KeyType.ERC1271Wallet, 1, this.walletAddr, sig.length / 2 - 1, sig, this.serializeRoleWeight()]
+    );
+  }
+
+  public async generateKey(): Promise<string> {
+    return solidityPack(
+      ["uint8", "uint8", "address", "bytes"],
+      [KeyType.ERC1271Wallet, 0, this.walletAddr, this.serializeRoleWeight()]
+    );
+  }
+  public serialize(): string {
+    return solidityPack(["uint8", "address", "bytes"], [KeyType.ERC1271Wallet, this.walletAddr, this.serializeRoleWeight()]);
+  }
+}
+
+export async function randomKeys(len: number, unipassPrivateKey: string, contracts: [Contract, Wallet][]): Promise<KeyBase[]> {
   let ret: KeyBase[] = [];
   for (let i = 0; i < len; i++) {
     for (const role of [Role.Owner, Role.AssetsOp, Role.Guardian]) {
-      let random = randomInt(1);
+      let random = randomInt(2);
       if (random === 0) {
         ret.push(new KeySecp256k1(Wallet.createRandom(), randomRoleWeight(role)));
+      } else if (random === 1) {
+        ret.push(new KeyERC1271Wallet(contracts[i][0].address, contracts[i][1], randomRoleWeight(role)));
       } else {
         ret.push(
           new KeyEmailAddress(
