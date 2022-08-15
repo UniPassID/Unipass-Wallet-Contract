@@ -1,11 +1,6 @@
-import { randomInt } from "crypto";
 import { BytesLike, Wallet } from "ethers";
 import { randomBytes, solidityPack } from "ethers/lib/utils";
-import {
-  getSignEmailWithDkim,
-  parseEmailParams,
-  SerializeDkimParams,
-} from "./email";
+import { getSignEmailWithDkim, parseEmailParams, pureEmailHash, SerializeDkimParams } from "./email";
 import { Role, signerSign } from "./sigPart";
 
 export enum KeyType {
@@ -20,6 +15,10 @@ export interface RoleWeight {
   guardianWeight: number;
 }
 
+function randomInt(max: number) {
+  return Math.ceil(Math.random() * (max + 1));
+}
+
 export abstract class KeyBase {
   constructor(readonly roleWeight: RoleWeight) {}
   public abstract generateSignature(digestHash: BytesLike): Promise<string>;
@@ -28,11 +27,7 @@ export abstract class KeyBase {
   public serializeRoleWeight(): string {
     return solidityPack(
       ["uint32", "uint32", "uint32"],
-      [
-        this.roleWeight.ownerWeight,
-        this.roleWeight.assetsOpWeight,
-        this.roleWeight.guardianWeight,
-      ]
+      [this.roleWeight.ownerWeight, this.roleWeight.assetsOpWeight, this.roleWeight.guardianWeight]
     );
   }
 }
@@ -45,12 +40,7 @@ export class KeySecp256k1 extends KeyBase {
   public async generateSignature(digestHash: string): Promise<string> {
     return solidityPack(
       ["uint8", "uint8", "bytes", "bytes"],
-      [
-        KeyType.Secp256k1,
-        1,
-        await signerSign(digestHash, this.inner),
-        this.serializeRoleWeight(),
-      ]
+      [KeyType.Secp256k1, 1, await signerSign(digestHash, this.inner), this.serializeRoleWeight()]
     );
   }
 
@@ -61,28 +51,16 @@ export class KeySecp256k1 extends KeyBase {
     );
   }
   public serialize(): string {
-    return solidityPack(
-      ["uint8", "address", "bytes"],
-      [KeyType.Secp256k1, this.inner.address, this.serializeRoleWeight()]
-    );
+    return solidityPack(["uint8", "address", "bytes"], [KeyType.Secp256k1, this.inner.address, this.serializeRoleWeight()]);
   }
 }
 
 export class KeyEmailAddress extends KeyBase {
-  constructor(
-    readonly emailAddress: string,
-    readonly unipassPrivateKey: string,
-    roleWeight: RoleWeight
-  ) {
+  constructor(readonly emailAddress: string, readonly unipassPrivateKey: string, roleWeight: RoleWeight) {
     super(roleWeight);
   }
   public async generateSignature(digestHash: string): Promise<string> {
-    let email = await getSignEmailWithDkim(
-      digestHash,
-      this.emailAddress,
-      "test@unipass.me",
-      this.unipassPrivateKey
-    );
+    let email = await getSignEmailWithDkim(digestHash, this.emailAddress, "test@unipass.me", this.unipassPrivateKey);
     let { params } = await parseEmailParams(email);
     return solidityPack(
       ["uint8", "uint8", "uint32", "bytes", "bytes", "bytes"],
@@ -99,27 +77,49 @@ export class KeyEmailAddress extends KeyBase {
   public async generateKey(): Promise<string> {
     return solidityPack(
       ["uint8", "uint8", "uint32", "bytes", "bytes"],
-      [
-        KeyType.EmailAddress,
-        0,
-        this.emailAddress.length,
-        Buffer.from(this.emailAddress, "utf-8"),
-        this.serializeRoleWeight(),
-      ]
+      [KeyType.EmailAddress, 0, this.emailAddress.length, Buffer.from(this.emailAddress, "utf-8"), this.serializeRoleWeight()]
     );
   }
   public serialize(): string {
     return solidityPack(
-      ["uint8", "uint32", "bytes", "bytes"],
-      [
-        KeyType.EmailAddress,
-        this.emailAddress.length,
-        Buffer.from(this.emailAddress, "utf-8"),
-        this.serializeRoleWeight(),
-      ]
+      ["uint8", "bytes32", "bytes"],
+      [KeyType.EmailAddress, pureEmailHash(this.emailAddress), this.serializeRoleWeight()]
     );
   }
 }
+
+// export class KeyWallet extends KeyBase {
+//   constructor(readonly walletAddr: string, roleWeight: RoleWeight) {
+//     super(roleWeight);
+//   }
+//   public async generateSignature(digestHash: string): Promise<string> {
+//     let email = await getSignEmailWithDkim(digestHash, this.emailAddress, "test@unipass.me", this.unipassPrivateKey);
+//     let { params } = await parseEmailParams(email);
+//     return solidityPack(
+//       ["uint8", "uint8", "uint32", "bytes", "bytes", "bytes"],
+//       [
+//         KeyType.EmailAddress,
+//         1,
+//         this.emailAddress.length,
+//         Buffer.from(this.emailAddress, "utf-8"),
+//         SerializeDkimParams(params),
+//         this.serializeRoleWeight(),
+//       ]
+//     );
+//   }
+//   public async generateKey(): Promise<string> {
+//     return solidityPack(
+//       ["uint8", "uint8", "uint32", "bytes", "bytes"],
+//       [KeyType.EmailAddress, 0, this.emailAddress.length, Buffer.from(this.emailAddress, "utf-8"), this.serializeRoleWeight()]
+//     );
+//   }
+//   public serialize(): string {
+//     return solidityPack(
+//       ["uint8", "bytes32", "bytes"],
+//       [KeyType.EmailAddress, pureEmailHash(this.emailAddress), this.serializeRoleWeight()]
+//     );
+//   }
+// }
 
 export function randomKeys(len: number, unipassPrivateKey: string): KeyBase[] {
   let ret: KeyBase[] = [];
@@ -127,13 +127,11 @@ export function randomKeys(len: number, unipassPrivateKey: string): KeyBase[] {
     for (const role of [Role.Owner, Role.AssetsOp, Role.Guardian]) {
       let random = randomInt(1);
       if (random === 0) {
-        ret.push(
-          new KeySecp256k1(Wallet.createRandom(), randomRoleWeight(role))
-        );
+        ret.push(new KeySecp256k1(Wallet.createRandom(), randomRoleWeight(role)));
       } else {
         ret.push(
           new KeyEmailAddress(
-            Buffer.from(randomBytes(10)).toString("hex"),
+            `${Buffer.from(randomBytes(10)).toString("hex")}@unipass.com`,
             unipassPrivateKey,
             randomRoleWeight(role)
           )
@@ -168,11 +166,7 @@ export function randomRoleWeight(role: Role): RoleWeight {
   }
 }
 
-export function selectKeys(
-  keys: KeyBase[],
-  role: Role,
-  threshold: number
-): [KeyBase, boolean][] {
+export function selectKeys(keys: KeyBase[], role: Role, threshold: number): [KeyBase, boolean][] {
   let indexes: number[] = [];
   let sum = 0;
   keys

@@ -47,7 +47,6 @@ abstract contract ModuleAuthBase is
     uint256 private constant CANCEL_LOCK_KEYSET_HASH = 2;
     uint256 private constant UPDATE_TIMELOCK_DURING = 3;
     uint256 private constant UPDATE_IMPLEMENTATION = 4;
-    uint256 private constant UPDATE_ENTRY_POINT = 5;
     uint256 private constant SYNC_ACCOUNT = 6;
 
     bytes4 private constant SELECTOR_ERC1271_BYTES32_BYTES = 0x1626ba7e;
@@ -79,42 +78,6 @@ abstract contract ModuleAuthBase is
         return metaNonce;
     }
 
-    function _parseRecoveryEmail(
-        bytes32 _hash,
-        bytes calldata _signature,
-        uint256 _index
-    )
-        internal
-        view
-        returns (
-            bool validated,
-            bytes32 emailHash,
-            uint256 newIndex
-        )
-    {
-        uint8 withDkimParams;
-        newIndex = _index;
-        withDkimParams = _signature.mcReadUint8(newIndex);
-        newIndex++;
-        uint8 inputEmailFromLen = _signature.mcReadUint8(newIndex);
-        newIndex++;
-        bytes memory inputEmailFrom = _signature[newIndex:newIndex + inputEmailFromLen];
-        newIndex += inputEmailFromLen;
-        if (withDkimParams == 1) {
-            bool succ;
-            bytes memory sigHashHex;
-            (succ, emailHash, sigHashHex, newIndex) = _dkimVerify(_signature, newIndex, inputEmailFrom);
-            require(succ, "_parseRecoveryEmail: VALIDATE_FAILED");
-            require(
-                keccak256(LibBytes.toHex(uint256(_hash), 32)) == keccak256(sigHashHex),
-                "_parseRecoveryEmail: INVALID_SIG_HASH"
-            );
-            validated = true;
-        } else {
-            emailHash = LibDkimValidator.emailAddressHash(inputEmailFrom);
-        }
-    }
-
     function _requireMetaNonce(uint256 _nonce) internal view {
         require(_isValidNonce(_nonce), "_requireMetaNonce: INVALID_META_NONCE");
     }
@@ -124,86 +87,12 @@ abstract contract ModuleAuthBase is
         succ = _nonce == metaNonce + 1;
     }
 
-    function _validateSigMasterKey(
-        bytes32 _digestHash,
-        bytes calldata _signature,
-        uint256 _index
-    ) internal view returns (bool success) {
-        address masterKey = recoverSigner(_digestHash, _signature[_index:_index + 66]);
-        _index += 66;
-        uint16 threshold;
-        bytes32 recoveryEmail;
-        (threshold, _index) = _signature.cReadUint16(_index);
-
-        bytes32 keysetHash = keccak256(abi.encodePacked(masterKey, threshold));
-        while (_index < _signature.length - 1) {
-            recoveryEmail = _signature.mcReadBytes32(_index);
-            _index += 32;
-            keysetHash = keccak256(abi.encodePacked(keysetHash, recoveryEmail));
-        }
-
-        success = isValidKeysetHash(keysetHash);
-    }
-
     function _toLockKeysetHash(bytes32 _keysetHash, uint256 _lockDuring) private {
         if (_lockDuring == 0) {
             _updateKeysetHash(_keysetHash);
         } else {
             _lockKeysetHash(_keysetHash);
         }
-    }
-
-    function _validateSigRecoveryEmail(
-        bytes32 _digestHash,
-        bytes calldata _signature,
-        uint256 _index
-    ) internal view returns (bool success) {
-        address masterKey;
-        (masterKey, _index) = _signature.cReadAddress(_index);
-        uint16 threshold;
-        bytes32 recoveryEmail;
-        (threshold, _index) = _signature.cReadUint16(_index);
-
-        bytes32 keysetHash = keccak256(abi.encodePacked(masterKey, threshold));
-        bool validated;
-        uint256 counts = 0;
-        while (_index < _signature.length - 1) {
-            (validated, recoveryEmail, _index) = _parseRecoveryEmail(_digestHash, _signature, _index);
-            if (validated) {
-                counts++;
-            }
-            keysetHash = keccak256(abi.encodePacked(keysetHash, recoveryEmail));
-        }
-
-        require(threshold <= counts, "_validateSigRecoveryEmail: NOT_ENOUGH_RECOVERY_EMAIL");
-        success = isValidKeysetHash(keysetHash);
-    }
-
-    function _validateSigMasterKeyWithRecoveryEmail(
-        bytes32 _digestHash,
-        bytes calldata _signature,
-        uint256 _index
-    ) internal view returns (bool success) {
-        address masterKey = recoverSigner(_digestHash, _signature[_index:_index + 66]);
-        _index += 66;
-        uint16 threshold;
-        bytes32 recoveryEmail;
-        (threshold, _index) = _signature.cReadUint16(_index);
-
-        bytes32 keysetHash = keccak256(abi.encodePacked(masterKey, threshold));
-        bool validated;
-        uint256 counts = 0;
-        while (_index < _signature.length - 1) {
-            (validated, recoveryEmail, _index) = _parseRecoveryEmail(_digestHash, _signature, _index);
-            if (validated) {
-                counts++;
-            }
-            keysetHash = keccak256(abi.encodePacked(keysetHash, recoveryEmail));
-        }
-
-        require(threshold <= counts, "_validateSigMasterKeyWithRecoveryEmail: NOT_ENOUGH_RECOVERY_EMAIL");
-
-        success = isValidKeysetHash(keysetHash);
     }
 
     /**
@@ -511,6 +400,7 @@ abstract contract ModuleAuthBase is
             uint32 emailFromLen;
             (emailFromLen, index) = _signature.cReadUint32(index);
             bytes calldata emailFrom = _signature[index:index + emailFromLen];
+            index += emailFromLen;
             if (isSig) {
                 bool succ;
                 bytes memory sigHashHex;

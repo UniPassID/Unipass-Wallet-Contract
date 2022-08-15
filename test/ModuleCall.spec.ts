@@ -93,7 +93,7 @@ describe("ModuleCall", function () {
         .updateDKIMKey(
           solidityPack(
             ["bytes", "bytes"],
-            [Buffer.from("s2055"), Buffer.from("uipass.com")]
+            [Buffer.from("s2055"), Buffer.from("unipass.com")]
           ),
           privateKey.exportKey("components-public").n.subarray(1)
         )
