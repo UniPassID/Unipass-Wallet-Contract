@@ -1,7 +1,6 @@
 import { BigNumber, Contract, Overrides, utils, Wallet } from "ethers";
 import { arrayify, BytesLike, keccak256, solidityPack } from "ethers/lib/utils";
 import { ethers } from "hardhat";
-import { DkimParams, pureEmailHash, SerializeDkimParams } from "./email";
 import { KeyBase } from "./key";
 
 export enum ActionType {
