@@ -218,7 +218,7 @@ abstract contract ModuleAuthBase is
         (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
         require(success, "updateTimeLockDuring: INVALID_SIG");
 
-        require(roleWeight.ownerWeight > LibRole.OWNER_THRESHOLD, "updateTimeLockDuring: INVALID_WEIGHT");
+        require(roleWeight.ownerWeight >= LibRole.OWNER_THRESHOLD, "updateTimeLockDuring: INVALID_WEIGHT");
         _setLockDuring(_newTimeLockDuring);
         _writeMetaNonce(_metaNonce);
     }
@@ -244,7 +244,7 @@ abstract contract ModuleAuthBase is
         (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
         require(success, "updateImplementation: INVALID_SIG");
 
-        require(roleWeight.ownerWeight > LibRole.OWNER_THRESHOLD, "updateImplementation: INVALID_WEIGHT");
+        require(roleWeight.ownerWeight >= LibRole.OWNER_THRESHOLD, "updateImplementation: INVALID_WEIGHT");
         _setImplementation(_newImplementation);
         _writeMetaNonce(_metaNonce);
     }
