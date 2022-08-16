@@ -11,14 +11,22 @@ import "../../interfaces/IERC1155Receiver.sol";
 import "../../interfaces/IERC721Receiver.sol";
 import "../../interfaces/IERC223Receiver.sol";
 import "../../interfaces/IModuleHooks.sol";
+import "../../interfaces/IModuleWhiteList.sol";
 import "../../utils/LibBytes.sol";
 
 import "hardhat/console.sol";
 
-contract ModuleHooks is ModuleSelfAuth, IERC1155Receiver, IERC721Receiver, IModuleHooks, ModuleERC165 {
+abstract contract ModuleHooks is ModuleSelfAuth, IERC1155Receiver, IERC721Receiver, IModuleHooks, ModuleERC165 {
     using LibBytes for bytes;
     //                       HOOKS_KEY = keccak256("org.arcadeum.module.hooks.hooks");
     bytes32 private constant HOOKS_KEY = bytes32(0xbe27a319efc8734e89e26ba4bc95f5c788584163b959f03fa04e2d7ab4b9a120);
+
+    error IsHooksWhiteListRevert(bytes reason);
+
+    event AddHook(bytes4 _signature, address _hook);
+    event RemoveHook(bytes4 _signature);
+
+    function _requireHookWhiteList(address _addr) internal view virtual;
 
     /**
      * @notice Reads the implementation hook of a signature
@@ -32,12 +40,13 @@ contract ModuleHooks is ModuleSelfAuth, IERC1155Receiver, IERC721Receiver, IModu
     /**
      * @notice Adds a new hook to handle a given function selector
      * @param _signature Signature function linked to the hook
-     * @param _implementation Hook implementation contract
+     * @param _hook Hook implementation contract
      * @dev Can't overwrite hooks that are part of the mainmodule (those defined below)
      */
-    function addHook(bytes4 _signature, address _implementation) external override onlySelf {
+    function addHook(bytes4 _signature, address _hook) external override onlySelf {
         if (_readHook(_signature) != address(0)) revert HookAlreadyExists(_signature);
-        _writeHook(_signature, _implementation);
+        _writeHook(_signature, _hook);
+        emit AddHook(_signature, _hook);
     }
 
     /**
@@ -49,6 +58,7 @@ contract ModuleHooks is ModuleSelfAuth, IERC1155Receiver, IERC721Receiver, IModu
     function removeHook(bytes4 _signature) external override onlySelf {
         if (_readHook(_signature) == address(0)) revert HookDoesNotExist(_signature);
         _writeHook(_signature, address(0));
+        emit RemoveHook(_signature);
     }
 
     /**
@@ -66,6 +76,7 @@ contract ModuleHooks is ModuleSelfAuth, IERC1155Receiver, IERC721Receiver, IModu
      * @param _implementation Hook implementation contract
      */
     function _writeHook(bytes4 _signature, address _implementation) private {
+        if (_implementation != address(0)) _requireHookWhiteList(_implementation);
         ModuleStorage.writeBytes32Map(HOOKS_KEY, _signature, bytes32(uint256(uint160(_implementation))));
     }
 

@@ -39,6 +39,9 @@ describe("GasEstimation", function () {
   let nonce: number;
   let unipassPrivateKey: string;
   let testERC1271Wallet: [Contract, Wallet][] = [];
+  let Greeter: ContractFactory;
+  let greeter1: Contract;
+  let greeter2: Contract;
   this.beforeAll(async function () {
     const [signer] = await ethers.getSigners();
     deployer = await new Deployer(signer).init();
@@ -55,13 +58,32 @@ describe("GasEstimation", function () {
       testERC1271Wallet.push([contract, wallet]);
     }
 
+    Greeter = await ethers.getContractFactory("Greeter");
+    greeter1 = await Greeter.deploy();
+    greeter2 = await Greeter.deploy();
+
+    const moduleWhiteListAdmin: Wallet = Wallet.createRandom();
+    await transferEth(moduleWhiteListAdmin.address, 1);
+    const ModuleWhiteList = await ethers.getContractFactory("ModuleWhiteList");
+    const moduleWhiteList = await ModuleWhiteList.deploy(moduleWhiteListAdmin.address);
+    let ret = await (await moduleWhiteList.updateImplementationWhiteList(greeter1.address, true)).wait();
+    expect(ret.status).to.equals(1);
+    ret = await (await moduleWhiteList.updateHookWhiteList(greeter2.address, true)).wait();
+    expect(ret.status).to.equals(1);
+
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     dkimKeysAdmin = Wallet.createRandom().connect(signer.provider!);
     await transferEth(dkimKeysAdmin.address, 10);
     dkimKeys = await deployer.deployContract(DkimKeys, 0, txParams, dkimKeysAdmin.address);
 
     const ModuleMainUpgradable = await ethers.getContractFactory("ModuleMainUpgradable");
-    const moduleMainUpgradable = await deployer.deployContract(ModuleMainUpgradable, 0, txParams, dkimKeys.address);
+    const moduleMainUpgradable = await deployer.deployContract(
+      ModuleMainUpgradable,
+      0,
+      txParams,
+      dkimKeys.address,
+      moduleWhiteList.address
+    );
 
     ModuleMain = await ethers.getContractFactory("ModuleMain");
     moduleMain = await deployer.deployContract(
@@ -70,8 +92,11 @@ describe("GasEstimation", function () {
       txParams,
       deployer.singleFactoryContract.address,
       moduleMainUpgradable.address,
-      dkimKeys.address
+      dkimKeys.address,
+      moduleWhiteList.address
     );
+
+    ret = await (await moduleWhiteList.updateImplementationWhiteList(moduleMainUpgradable.address, true)).wait();
 
     const GasEstimation = await ethers.getContractFactory("GasEstimator");
     gasEstimation = await deployer.deployContract(GasEstimation, 0, txParams);
@@ -81,7 +106,7 @@ describe("GasEstimation", function () {
 
     const privateKey = new NodeRSA({ b: 2048 });
     unipassPrivateKey = privateKey.exportKey("pkcs1");
-    const ret = await (
+    ret = await (
       await dkimKeys
         .connect(dkimKeysAdmin)
         .updateDKIMKey(

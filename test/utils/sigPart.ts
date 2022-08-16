@@ -40,15 +40,13 @@ export async function signerSign(hash: string, signer: Wallet): Promise<string> 
   return solidityPack(["bytes", "uint8"], [await signer.signMessage(arrayify(hash)), SignerType.EthSign]);
 }
 
-export async function generateTransactionSig(
+export function generateTransactionHash(
   chainId: number,
   tx: Transaction[],
   nonce: number,
   feeToken: string,
-  feeAmount: number,
-  keys: [KeyBase, boolean][],
-  sessionKey: SessionKey | undefined
-): Promise<string> {
+  feeAmount: number
+): string {
   const digestHash = keccak256(
     solidityPack(
       ["uint256", "bytes32", "address", "uint256"],
@@ -65,6 +63,19 @@ export async function generateTransactionSig(
       ]
     )
   );
+  return digestHash;
+}
+
+export async function generateTransactionSig(
+  chainId: number,
+  tx: Transaction[],
+  nonce: number,
+  feeToken: string,
+  feeAmount: number,
+  keys: [KeyBase, boolean][],
+  sessionKey: SessionKey | undefined
+): Promise<string> {
+  const digestHash = generateTransactionHash(chainId, tx, nonce, feeToken, feeAmount);
   let sig: string = await generateSignature(digestHash, keys, sessionKey);
 
   return sig;

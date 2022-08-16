@@ -17,9 +17,7 @@ describe("ModuleDkimAuth", function () {
     dkimAuth = await DkimAuth.deploy(dkimKeys.address);
     const files = await fs.promises.readdir(__dirname + "/emails/emails");
     for (const emailFile of files) {
-      const email = await fs.promises.readFile(
-        __dirname + `/emails/emails/${emailFile}`
-      );
+      const email = await fs.promises.readFile(__dirname + `/emails/emails/${emailFile}`);
       const params = await parseEmailParams(email.toString());
       emails.push(params);
     }

@@ -49,6 +49,11 @@ describe("ModuleMain", function () {
   let privateKey: NodeRSA;
   let nonce: number;
   let metaNonce: number;
+  let Greeter: ContractFactory;
+  let greeter1: Contract;
+  let greeter2: Contract;
+  let moduleWhiteListAdmin: Wallet;
+  let hooksWhiteList: Contract;
   this.beforeAll(async function () {
     const TestERC1271Wallet = await ethers.getContractFactory("TestERC1271Wallet");
     const [signer] = await ethers.getSigners();
@@ -64,6 +69,19 @@ describe("ModuleMain", function () {
       testERC1271Wallet.push([await deployer.deployContract(TestERC1271Wallet, i, txParams, wallet.address), wallet]);
     }
 
+    Greeter = await ethers.getContractFactory("Greeter");
+    greeter1 = await deployer.deployContract(Greeter, 1, txParams);
+    greeter2 = await deployer.deployContract(Greeter, 2, txParams);
+
+    moduleWhiteListAdmin = Wallet.createRandom();
+    await transferEth(moduleWhiteListAdmin.address, 1);
+    const ModuleWhiteList = await ethers.getContractFactory("ModuleWhiteList");
+    const moduleWhiteList = await deployer.deployContract(ModuleWhiteList, 0, txParams, moduleWhiteListAdmin.address);
+    let ret = await (await moduleWhiteList.updateImplementationWhiteList(greeter1.address, true)).wait();
+    expect(ret.status).to.equals(1);
+    ret = await (await moduleWhiteList.updateHookWhiteList(greeter2.address, true)).wait();
+    expect(ret.status).to.equals(1);
+
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     dkimKeysAdmin = Wallet.createRandom().connect(signer.provider!);
     await transferEth(dkimKeysAdmin.address, 1);
@@ -71,7 +89,15 @@ describe("ModuleMain", function () {
     dkimKeys = await deployer.deployContract(DkimKeys, 0, txParams, dkimKeysAdmin.address);
 
     ModuleMainUpgradable = await ethers.getContractFactory("ModuleMainUpgradable");
-    const moduleMainUpgradable = await deployer.deployContract(ModuleMainUpgradable, 0, txParams, dkimKeys.address);
+    const moduleMainUpgradable = await deployer.deployContract(
+      ModuleMainUpgradable,
+      0,
+      txParams,
+      dkimKeys.address,
+      moduleWhiteList.address
+    );
+    ret = await (await moduleWhiteList.updateImplementationWhiteList(moduleMainUpgradable.address, true)).wait();
+    expect(ret.status).to.equals(1);
     ModuleMain = await ethers.getContractFactory("ModuleMain");
     moduleMain = await deployer.deployContract(
       ModuleMain,
@@ -79,7 +105,8 @@ describe("ModuleMain", function () {
       txParams,
       deployer.singleFactoryContract.address,
       moduleMainUpgradable.address,
-      dkimKeys.address
+      dkimKeys.address,
+      moduleWhiteList.address
     );
 
     const TestErc20Token = await ethers.getContractFactory("TestERC20");
@@ -93,7 +120,7 @@ describe("ModuleMain", function () {
 
     privateKey = new NodeRSA({ b: 2048 });
     unipassPrivateKey = privateKey.exportKey("pkcs1");
-    const ret = await (
+    ret = await (
       await dkimKeys
         .connect(dkimKeysAdmin)
         .updateDKIMKey(
@@ -364,11 +391,10 @@ describe("ModuleMain", function () {
     let localDeployer: Deployer;
     let localDkimKeys: Contract;
     let localModuleGuest: Contract;
-    let localChainId: number;
+    let localGreeter1: Contract;
     this.beforeAll(async () => {
       hre.changeNetwork("local1");
       const [signer] = await ethers.getSigners();
-      localChainId = (await signer.provider!.getNetwork()).chainId;
       localDeployer = await new Deployer(signer).init();
 
       const TestERC1271Wallet = await ethers.getContractFactory("TestERC1271Wallet");
@@ -387,8 +413,27 @@ describe("ModuleMain", function () {
       const ModuleGuest = await ethers.getContractFactory("ModuleGuest");
       localModuleGuest = await localDeployer.deployContract(ModuleGuest, 0, txParams);
 
+      localGreeter1 = await localDeployer.deployContract(Greeter, 1, txParams);
+      const localGreeter2 = await localDeployer.deployContract(Greeter, 2, txParams);
+
+      await transferEth(moduleWhiteListAdmin.address, 1);
+      const ModuleWhiteList = await ethers.getContractFactory("ModuleWhiteList");
+      const moduleWhiteList = await localDeployer.deployContract(ModuleWhiteList, 0, txParams, moduleWhiteListAdmin.address);
+      let ret = await (await moduleWhiteList.updateImplementationWhiteList(localGreeter1.address, true)).wait();
+      expect(ret.status).to.equals(1);
+      ret = await (await moduleWhiteList.updateHookWhiteList(localGreeter2.address, true)).wait();
+      expect(ret.status).to.equals(1);
+
       const ModuleMainUpgradable = await ethers.getContractFactory("ModuleMainUpgradable");
-      const moduleMainUpgradable = await localDeployer.deployContract(ModuleMainUpgradable, 0, txParams, localDkimKeys.address);
+      const moduleMainUpgradable = await localDeployer.deployContract(
+        ModuleMainUpgradable,
+        0,
+        txParams,
+        localDkimKeys.address,
+        moduleWhiteList.address
+      );
+      ret = await (await moduleWhiteList.updateImplementationWhiteList(moduleMainUpgradable.address, true)).wait();
+      expect(ret.status).to.equals(1);
       const ModuleMain = await ethers.getContractFactory("ModuleMain");
       localModuleMain = await localDeployer.deployContract(
         ModuleMain,
@@ -396,10 +441,11 @@ describe("ModuleMain", function () {
         txParams,
         deployer.singleFactoryContract.address,
         moduleMainUpgradable.address,
-        localDkimKeys.address
+        localDkimKeys.address,
+        moduleWhiteList.address
       );
 
-      const ret = await (
+      ret = await (
         await localDkimKeys
           .connect(dkimKeysAdmin)
           .updateDKIMKey(

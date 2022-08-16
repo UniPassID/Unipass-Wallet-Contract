@@ -29,7 +29,6 @@ abstract contract ModuleAuthFixed is ModuleAuthBase {
     function _updateKeysetHash(bytes32 _keysetHash) internal override {
         require(_keysetHash != bytes32(0), "updateKeysetHash INVALID_KEYSET");
         _writeKeysetHash(_keysetHash);
-        emit KeysetHashUpdated(_keysetHash);
 
         _setImplementation(MODULE_MAIN_UPGRADABLE);
     }

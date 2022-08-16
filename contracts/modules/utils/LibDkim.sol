@@ -111,13 +111,12 @@ library LibDkimValidator {
             bytes memory selector
         )
     {
-        // see https://www.rfc-editor.org/rfc/rfc2822#section-3.4.1
-        require(self.fromIndex + 4 < self.fromLeftIndex && self.fromLeftIndex < self.fromRightIndex, "LE");
         if (self.fromIndex != 0) {
             require(self.emailHeader.readBytesN(self.fromIndex - 2, 7) == bytes32("\r\nfrom:"), "FE");
         } else {
             require(self.emailHeader.readBytesN(self.fromIndex, 5) == bytes32("from:"), "FE");
         }
+        // see https://www.rfc-editor.org/rfc/rfc2822#section-3.4.1
         require(self.fromIndex + 4 < self.fromLeftIndex && self.fromLeftIndex < self.fromRightIndex, "LE");
         if (self.emailHeader[self.fromLeftIndex - 1] == "<" && self.emailHeader[self.fromRightIndex + 1] == ">") {
             for (uint256 i = self.fromLeftIndex - 1; i > self.fromIndex + 4; i--) {
@@ -126,8 +125,8 @@ library LibDkimValidator {
         } else {
             require(self.fromLeftIndex == self.fromIndex + 5, "AE");
         }
-        // see https://datatracker.ietf.org/doc/html/rfc5322#section-2.2
 
+        // see https://datatracker.ietf.org/doc/html/rfc5322#section-2.2
         if (self.subjectIndex != 0) {
             require(self.emailHeader.readBytesN(self.subjectIndex - 2, 10) == bytes32("\r\nsubject:"), "FE");
         } else {

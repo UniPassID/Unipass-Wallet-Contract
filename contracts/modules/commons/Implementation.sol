@@ -1,10 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
+import "../../interfaces/IModuleWhiteList.sol";
+
 /**
  * @dev Allows modules to access the implementation slot
  */
-contract Implementation {
+abstract contract Implementation {
+    error IsImplementationWhiteListRevert(bytes reason);
+
+    function _requireImplementationWhiteList(address _addr) internal view virtual;
+
     /**
      * @notice Updates the Wallet implementation
      * @param _imp New implementation address
@@ -14,6 +20,8 @@ contract Implementation {
      *   must be confident that the new implementation is safe.
      */
     function _setImplementation(address _imp) internal {
+        _requireImplementationWhiteList(_imp);
+
         assembly {
             sstore(address(), _imp)
         }

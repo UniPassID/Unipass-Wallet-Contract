@@ -51,7 +51,12 @@ abstract contract ModuleAuthBase is
 
     bytes4 private constant SELECTOR_ERC1271_BYTES32_BYTES = 0x1626ba7e;
 
-    event KeysetHashUpdated(bytes32 newKeysetHash);
+    event UpdateKeysetHash(uint256 _metaNonce, bytes32 newKeysetHash);
+    event UpdateKeysetHashWithTimeLock(uint256 _metaNonce, bytes32 newKeysetHash);
+    event UnlockKeysetHash(uint256 _metaNonce);
+    event CancelLockKeysetHsah(uint256 _metaNonce);
+    event UpdateTimeLockDuring(uint256 _metaNonce, uint32 _newTimeLockDuring);
+    event UpdateImplementation(uint256 _metaNonce, address _newImplementation);
 
     error InvalidActionType(uint256 _actionType);
     error InvalidImplementation(address _implementation);
@@ -145,6 +150,7 @@ abstract contract ModuleAuthBase is
 
         _updateKeysetHash(_newKeysetHash);
         _writeMetaNonce(_metaNonce);
+        emit UpdateKeysetHash(_metaNonce, _newKeysetHash);
     }
 
     /**
@@ -168,6 +174,8 @@ abstract contract ModuleAuthBase is
 
         _toLockKeysetHash(_newKeysetHash, getLockDuring());
         _writeMetaNonce(_metaNonce);
+
+        emit UpdateKeysetHashWithTimeLock(_metaNonce, _newKeysetHash);
     }
 
     /**
@@ -179,6 +187,8 @@ abstract contract ModuleAuthBase is
         _updateKeysetHash(lockedKeysetHash);
         _unlockKeysetHash();
         _writeMetaNonce(_metaNonce);
+
+        emit UnlockKeysetHash(_metaNonce);
     }
 
     /**
@@ -197,6 +207,8 @@ abstract contract ModuleAuthBase is
 
         _unlockKeysetHash();
         _writeMetaNonce(_metaNonce);
+
+        emit CancelLockKeysetHsah(_metaNonce);
     }
 
     /**
@@ -221,6 +233,8 @@ abstract contract ModuleAuthBase is
         require(roleWeight.ownerWeight >= LibRole.OWNER_THRESHOLD, "updateTimeLockDuring: INVALID_WEIGHT");
         _setLockDuring(_newTimeLockDuring);
         _writeMetaNonce(_metaNonce);
+
+        emit UpdateTimeLockDuring(_metaNonce, _newTimeLockDuring);
     }
 
     /**
@@ -247,6 +261,8 @@ abstract contract ModuleAuthBase is
         require(roleWeight.ownerWeight >= LibRole.OWNER_THRESHOLD, "updateImplementation: INVALID_WEIGHT");
         _setImplementation(_newImplementation);
         _writeMetaNonce(_metaNonce);
+
+        emit UpdateImplementation(_metaNonce, _newImplementation);
     }
 
     /**

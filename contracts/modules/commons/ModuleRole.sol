@@ -16,6 +16,8 @@ contract ModuleRole is ModuleSelfAuth {
     mapping(bytes4 => bytes5) public permissions;
 
     error ConstantPermission(bytes4 _permission);
+    event AddPermission(Role _role, bytes4 _permission, uint32 _threshold);
+    event RemovePermission(bytes4 _permission);
 
     function _addPermission(
         Role _role,
@@ -56,6 +58,7 @@ contract ModuleRole is ModuleSelfAuth {
             revert ConstantPermission(_permission);
         }
         _addPermission(_role, _permission, _threshold);
+        emit AddPermission(_role, _permission, _threshold);
     }
 
     /**
@@ -77,6 +80,7 @@ contract ModuleRole is ModuleSelfAuth {
             revert ConstantPermission(_permission);
         }
         _removePermission(_permission);
+        emit RemovePermission(_permission);
     }
 
     /**
