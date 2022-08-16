@@ -91,7 +91,7 @@ export async function getSignEmailWithDkim(
     from,
     to,
     subject,
-    html: "<b>Unipass Test</b>",
+    html: "<b>UniPass Test</b>",
   });
 
   const dkim = new DKIM({

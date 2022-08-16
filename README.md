@@ -1,4 +1,4 @@
-# Unipass Wallet Contracts
+# UniPass Wallet Contracts
 
 Contracts of unipass wallet based on unipass accounts system.
 
@@ -6,10 +6,10 @@ Contracts of unipass wallet based on unipass accounts system.
 
 Internal Architecture in Contracts:
 
-- ModuleMain is the entrypoint of Unipass-Wallet.
-- Method `execute` in the ModuleCall is the entrypoint of Unipass-Wallet transactions.
+- ModuleMain is the entrypoint of UniPass-Wallet.
+- Method `execute` in the ModuleCall is the entrypoint of UniPass-Wallet transactions.
 - ModuleAuth validates transaction signature and supports account layer transactions.
-- ModuleRole supports authorization weights and executive roles of Unipass-Wallet permissions, whose value is method selectors.
+- ModuleRole supports authorization weights and executive roles of UniPass-Wallet permissions, whose value is method selectors.
 - ModuleHooks supports hooks relative methods. You can delegateCall methods by the hooks.
 
 ```mermaid
@@ -105,7 +105,7 @@ sequenceDiagram
 
 ## ModuleMain
 
-The Entrypoint of Unipass Wallet.
+The Entrypoint of UniPass Wallet.
 
 ### Constructor
 
@@ -127,7 +127,7 @@ Parameters:
 
 ## ModuleMainUpgradable
 
-The Entrypoint of Unipass Wallet.
+The Entrypoint of UniPass Wallet.
 
 ### Constructor
 

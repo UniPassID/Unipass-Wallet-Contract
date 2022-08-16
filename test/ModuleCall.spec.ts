@@ -21,6 +21,7 @@ import {
   generateAddPermissionTx,
   generateCancelLockKeysetHashTx,
   generateSignature,
+  generateTransactionHash,
   generateTransferTx,
   generateUnlockKeysetHashTx,
   generateUpdateEntryPointTx,
@@ -46,6 +47,10 @@ describe("ModuleCall", function () {
   let metaNonce: number;
   let unipassPrivateKey: string;
   let testERC1271Wallet: [Contract, Wallet][] = [];
+  let Greeter: ContractFactory;
+  let greeter1: Contract;
+  let greeter2: Contract;
+  let moduleWhiteList: Contract;
   this.beforeAll(async function () {
     const TestERC1271Wallet = await ethers.getContractFactory("TestERC1271Wallet");
     const [signer] = await ethers.getSigners();
@@ -61,13 +66,34 @@ describe("ModuleCall", function () {
       testERC1271Wallet.push([await deployer.deployContract(TestERC1271Wallet, i, txParams, wallet.address), wallet]);
     }
 
+    Greeter = await ethers.getContractFactory("Greeter");
+    greeter1 = await Greeter.deploy();
+    greeter2 = await Greeter.deploy();
+
+    const moduleWhiteListAdmin: Wallet = Wallet.createRandom();
+    await transferEth(moduleWhiteListAdmin.address, 1);
+    const ModuleWhiteList = await ethers.getContractFactory("ModuleWhiteList");
+    moduleWhiteList = await ModuleWhiteList.deploy(moduleWhiteListAdmin.address);
+    let ret = await (await moduleWhiteList.updateImplementationWhiteList(greeter1.address, true)).wait();
+    expect(ret.status).to.equals(1);
+    ret = await (await moduleWhiteList.updateHookWhiteList(greeter2.address, true)).wait();
+    expect(ret.status).to.equals(1);
+
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     dkimKeysAdmin = Wallet.createRandom().connect(signer.provider!);
     await transferEth(dkimKeysAdmin.address, 10);
     dkimKeys = await deployer.deployContract(DkimKeys, 0, txParams, dkimKeysAdmin.address);
 
     const ModuleMainUpgradable = await ethers.getContractFactory("ModuleMainUpgradable");
-    const moduleMainUpgradable = await deployer.deployContract(ModuleMainUpgradable, 0, txParams, dkimKeys.address);
+    const moduleMainUpgradable = await deployer.deployContract(
+      ModuleMainUpgradable,
+      0,
+      txParams,
+      dkimKeys.address,
+      moduleWhiteList.address
+    );
+    ret = await (await moduleWhiteList.updateImplementationWhiteList(moduleMainUpgradable.address, true)).wait();
+    expect(ret.status).to.equals(1);
 
     TestModuleCall = await ethers.getContractFactory("TestModuleCall");
     testModuleCall = await deployer.deployContract(
@@ -76,13 +102,14 @@ describe("ModuleCall", function () {
       txParams,
       deployer.singleFactoryContract.address,
       moduleMainUpgradable.address,
-      dkimKeys.address
+      dkimKeys.address,
+      moduleWhiteList.address
     );
 
     chainId = (await dkimKeys.provider.getNetwork()).chainId;
     const privateKey = new NodeRSA({ b: 2048 });
     unipassPrivateKey = privateKey.exportKey("pkcs1");
-    const ret = await (
+    ret = await (
       await dkimKeys
         .connect(dkimKeysAdmin)
         .updateDKIMKey(
@@ -267,11 +294,9 @@ describe("ModuleCall", function () {
       });
       it(`Update Implementation For ${module}`, async function () {
         await init();
-        const Greeter = await ethers.getContractFactory("Greeter");
-        const greeter = await Greeter.deploy();
         const selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
 
-        const tx = await generateUpdateImplementationTx(proxyTestModuleCall, metaNonce, greeter.address, selectedKeys);
+        let tx = await generateUpdateImplementationTx(proxyTestModuleCall, metaNonce, greeter1.address, selectedKeys);
         let ret = await executeCall([tx], chainId, nonce, [], proxyTestModuleCall, undefined, txParams);
         expect(ret.status).to.equal(1);
         proxyTestModuleCall = Greeter.attach(proxyTestModuleCall.address);
@@ -292,7 +317,6 @@ describe("ModuleCall", function () {
     let testERC20: Contract;
     let testERC20Admin: Wallet;
     let testERC20Owner1: Wallet;
-    let greeter: Contract;
     this.beforeAll(async function () {
       const TestERC721 = await ethers.getContractFactory("TestERC721");
       testERC721 = await TestERC721.deploy();
@@ -327,10 +351,6 @@ describe("ModuleCall", function () {
       await transferEth(testERC20Admin.address, 100);
       await transferEth(testERC20Owner1.address, 100);
       await testERC20.mint(testERC20Owner1.address, 100);
-    });
-    this.beforeAll(async function () {
-      const Greeter = await ethers.getContractFactory("Greeter");
-      greeter = await Greeter.deploy();
     });
     it("Test ERC721 Transfer", async function () {
       const ret = await (
@@ -370,14 +390,14 @@ describe("ModuleCall", function () {
       );
     });
     it("Test Greeter Hook", async function () {
-      const selector = greeter.interface.getSighash("ret1");
+      const selector = greeter2.interface.getSighash("ret1");
       const selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
-      let tx = generateAddHookTx(proxyTestModuleCall, selector, greeter.address);
+      let tx = generateAddHookTx(proxyTestModuleCall, selector, greeter2.address);
       let ret = await executeCall([tx], chainId, nonce, selectedKeys, proxyTestModuleCall, undefined, txParams);
       expect(ret.status).to.equal(1);
       ret = await proxyTestModuleCall.readHook(selector);
-      expect(ret).to.equal(greeter.address);
-      const data = greeter.interface.encodeFunctionData("ret1");
+      expect(ret).to.equal(greeter2.address);
+      let data = greeter2.interface.encodeFunctionData("ret1");
       ret = await (await ethers.getSigners())[0].call({ to: proxyTestModuleCall.address, data });
       expect(ret).equal(solidityPack(["uint256"], [1]));
       expect(await proxyTestModuleCall.getNonce()).to.equals(nonce);
@@ -390,6 +410,13 @@ describe("ModuleCall", function () {
       expect(ret).to.equal(ethers.constants.AddressZero);
       expect(await proxyTestModuleCall.getNonce()).to.equals(nonce);
       nonce++;
+
+      tx = generateAddHookTx(proxyTestModuleCall, selector, greeter1.address);
+      ret = executeCall([tx], chainId, nonce, selectedKeys, proxyTestModuleCall, undefined, txParams);
+      const txHash = generateTransactionHash(chainId, [tx], nonce, ethers.constants.AddressZero, 0);
+      await expect(ret).to.revertedWith(
+        `VM Exception while processing transaction: reverted with custom error 'TxFailed("${txHash}", "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001c5f7265717569726557686974654c6973743a204e4f545f574849544500000000")'`
+      );
     });
   });
 
@@ -405,6 +432,8 @@ describe("ModuleCall", function () {
       EIP4337Wallet = await ethers.getContractFactory("ModuleHookEIP4337Wallet");
       eip4337Wallet = await EIP4337Wallet.deploy(entryPoint.address);
       entryPoint = entryPoint.connect(eip4337Wallet.provider);
+      const ret = await (await moduleWhiteList.updateHookWhiteList(eip4337Wallet.address, true)).wait();
+      expect(ret.status).to.equals(1);
     });
     this.beforeEach(async () => {
       const tx1 = generateAddHookTx(

@@ -38,6 +38,9 @@ describe("ModuleMain Benchmark", function () {
   let txParams: Overrides;
   let unipassPrivateKey: string;
   let testERC1271Wallet: [Contract, Wallet][] = [];
+  let Greeter: ContractFactory;
+  let greeter1: Contract;
+  let greeter2: Contract;
   this.beforeAll(async () => {
     const TestERC1271Wallet = await ethers.getContractFactory("TestERC1271Wallet");
     const [signer] = await ethers.getSigners();
@@ -59,8 +62,29 @@ describe("ModuleMain Benchmark", function () {
     await transferEth(dkimKeysAdmin.address, 10);
     dkimKeys = await deployer.deployContract(DkimKeys, instance, txParams, dkimKeysAdmin.address);
 
+    Greeter = await ethers.getContractFactory("Greeter");
+    greeter1 = await Greeter.deploy();
+    greeter2 = await Greeter.deploy();
+
+    const moduleWhiteListAdmin: Wallet = Wallet.createRandom();
+    await transferEth(moduleWhiteListAdmin.address, 1);
+    const ModuleWhiteList = await ethers.getContractFactory("ModuleWhiteList");
+    const moduleWhiteList = await ModuleWhiteList.deploy(moduleWhiteListAdmin.address);
+    let ret = await (await moduleWhiteList.updateImplementationWhiteList(greeter1.address, true)).wait();
+    expect(ret.status).to.equals(1);
+    ret = await (await moduleWhiteList.updateHookWhiteList(greeter2.address, true)).wait();
+    expect(ret.status).to.equals(1);
+
     const ModuleMainUpgradable = await ethers.getContractFactory("ModuleMainUpgradable");
-    const moduleMainUpgradable = await deployer.deployContract(ModuleMainUpgradable, instance, txParams, dkimKeys.address);
+    const moduleMainUpgradable = await deployer.deployContract(
+      ModuleMainUpgradable,
+      instance,
+      txParams,
+      dkimKeys.address,
+      moduleWhiteList.address
+    );
+    ret = await (await moduleWhiteList.updateImplementationWhiteList(moduleMainUpgradable.address, true)).wait();
+    expect(ret.status).to.equals(1);
 
     ModuleMain = await ethers.getContractFactory("ModuleMain");
     moduleMain = await deployer.deployContract(
@@ -69,13 +93,14 @@ describe("ModuleMain Benchmark", function () {
       txParams,
       deployer.singleFactoryContract.address,
       moduleMainUpgradable.address,
-      dkimKeys.address
+      dkimKeys.address,
+      moduleWhiteList.address
     );
 
     chainId = await (await moduleMain.provider.getNetwork()).chainId;
     const privateKey = new NodeRSA({ b: 2048 });
     unipassPrivateKey = privateKey.exportKey("pkcs1");
-    const ret = await (
+    ret = await (
       await dkimKeys
         .connect(dkimKeysAdmin)
         .updateDKIMKey(
