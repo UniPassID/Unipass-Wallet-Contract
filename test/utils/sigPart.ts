@@ -86,12 +86,13 @@ export async function generateSyncAccountTx(
   metaNonce: number,
   newKeysetHash: string,
   newTimeLockDuring: number,
+  newImplementation: string,
   keys: [KeyBase, boolean][]
 ) {
   const digestHash = keccak256(
     solidityPack(
-      ["uint32", "address", "uint8", "bytes32", "uint32"],
-      [metaNonce, contract.address, ActionType.SyncAccount, newKeysetHash, newTimeLockDuring]
+      ["uint32", "address", "uint8", "bytes32", "uint32", "address"],
+      [metaNonce, contract.address, ActionType.SyncAccount, newKeysetHash, newTimeLockDuring, newImplementation]
     )
   );
 
@@ -99,6 +100,7 @@ export async function generateSyncAccountTx(
     metaNonce,
     newKeysetHash,
     newTimeLockDuring,
+    newImplementation,
     await generateSignature(digestHash, keys, undefined),
   ]);
 
