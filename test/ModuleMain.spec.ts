@@ -434,6 +434,8 @@ describe("ModuleMain", function () {
       );
       ret = await (await moduleWhiteList.updateImplementationWhiteList(moduleMainUpgradable.address, true)).wait();
       expect(ret.status).to.equals(1);
+      ret = await (await moduleWhiteList.updateImplementationWhiteList(moduleMain.address, true)).wait();
+      expect(ret.status).to.equals(1);
       const ModuleMain = await ethers.getContractFactory("ModuleMain");
       localModuleMain = await localDeployer.deployContract(
         ModuleMain,
@@ -540,47 +542,12 @@ describe("ModuleMain", function () {
     it("Sync Account Should Success", async () => {
       const initKeysetHash = keysetHash;
       const initKeys = keys;
-      let selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
+
+      const timeLockDuring = 3;
       keys = await randomKeys(10, unipassPrivateKey, testERC1271Wallet);
       keysetHash = getKeysetHash(keys);
-      const tx1 = await generateUpdateKeysetHashTx(proxyModuleMain, metaNonce, keysetHash, false, selectedKeys);
-      await executeCall([tx1], chainId, nonce, [], proxyModuleMain, undefined, txParams);
-      nonce++;
-      metaNonce++;
-      const timeLockDuring = 3;
-      selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
-      const tx2 = await generateUpdateTimeLockDuringTx(proxyModuleMain, metaNonce, timeLockDuring, selectedKeys);
-      await executeCall([tx2], chainId, nonce, [], proxyModuleMain, undefined, txParams);
-      nonce++;
-      metaNonce++;
-      selectedKeys = selectKeys(keys, Role.Guardian, GUARDIAN_TIMELOCK_THRESHOLD);
-      const newKeys = await randomKeys(10, unipassPrivateKey, testERC1271Wallet);
-      const newKeysetHash = getKeysetHash(keys);
-      const tx3 = await generateUpdateKeysetHashTx(proxyModuleMain, metaNonce, newKeysetHash, true, selectedKeys);
-      await executeCall([tx3], chainId, nonce, [], proxyModuleMain, undefined, txParams);
-      nonce++;
-      metaNonce++;
-      const tx4 = await generateTransferTx(dkimKeysAdmin.address, ethers.constants.Zero, ethers.utils.parseEther("0.01"));
-      selectedKeys = selectKeys(keys, Role.AssetsOp, ASSETS_OP_THRESHOLD);
-      await executeCall(
-        [tx4],
-        chainId,
-        nonce,
-        selectedKeys,
-        proxyModuleMain,
-        {
-          timestamp: Math.ceil(Date.now() / 1000) + 5000,
-          weight: 100,
-          key: Wallet.createRandom(),
-        },
-        txParams
-      );
-      nonce++;
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      const tx5 = await generateUnlockKeysetHashTx(proxyModuleMain, metaNonce);
-      await executeCall([tx5], chainId, nonce, [], proxyModuleMain, undefined, txParams);
-      keys = newKeys;
-      keysetHash = newKeysetHash;
+
+      metaNonce = 11;
 
       const deployTxData = localDeployer.singleFactoryContract.interface.encodeFunctionData("deploy", [
         Deployer.getInitCode(moduleMain.address),
@@ -598,6 +565,7 @@ describe("ModuleMain", function () {
         metaNonce - 1,
         keysetHash,
         timeLockDuring,
+        moduleMain.address,
         selectKeys(initKeys, Role.Owner, OWNER_THRESHOLD)
       );
       const executeTxData = localModuleMain.interface.encodeFunctionData("execute", [
@@ -634,6 +602,7 @@ describe("ModuleMain", function () {
       expect(await proxyModuleMain.getMetaNonce()).to.equals(metaNonce - 1);
       expect(await proxyModuleMain.getKeysetHash()).to.equals(keysetHash);
       expect(await proxyModuleMain.getLockDuring()).to.equals(timeLockDuring);
+      expect(await proxyModuleMain.getImplementation()).to.equals(moduleMain.address);
       hre.changeNetwork("hardhat");
     });
   });

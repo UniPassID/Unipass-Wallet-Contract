@@ -57,6 +57,7 @@ abstract contract ModuleAuthBase is
     event CancelLockKeysetHsah(uint256 _metaNonce);
     event UpdateTimeLockDuring(uint256 _metaNonce, uint32 _newTimeLockDuring);
     event UpdateImplementation(uint256 _metaNonce, address _newImplementation);
+    event SyncAccount(uint256 _metaNonce, bytes32 _newKeysetHash, uint32 _newTimeLockDuring, address newImplementation);
 
     error InvalidActionType(uint256 _actionType);
     error InvalidImplementation(address _implementation);
@@ -109,21 +110,31 @@ abstract contract ModuleAuthBase is
         uint32 _metaNonce,
         bytes32 _keysetHash,
         uint32 _newTimeLockDuring,
+        address _newImplementation,
         bytes calldata _signature
     ) external override onlySelf {
         uint256 metaNonce = getMetaNonce();
         require(metaNonce < _metaNonce && metaNonce + 100 > _metaNonce, "syncAccount: INVALID_METANONCE");
         bytes32 digestHash = keccak256(
-            abi.encodePacked(_metaNonce, address(this), uint8(SYNC_ACCOUNT), _keysetHash, _newTimeLockDuring)
+            abi.encodePacked(_metaNonce, address(this), uint8(SYNC_ACCOUNT), _keysetHash, _newTimeLockDuring, _newImplementation)
         );
 
         (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
         require(success, "syncAccount: INVALID_SIG");
 
         require(roleWeight.ownerWeight >= LibRole.OWNER_THRESHOLD, "syncAccount: INVALID_WEIGHT");
-        _updateKeysetHash(_keysetHash);
-        _setLockDuring(_newTimeLockDuring);
+        if (!isValidKeysetHash(_keysetHash)) {
+            _updateKeysetHash(_keysetHash);
+        }
+        if (getLockDuring() != _newTimeLockDuring) {
+            _setLockDuring(_newTimeLockDuring);
+        }
+        if (getImplementation() != _newImplementation) {
+            _setImplementation(_newImplementation);
+        }
         _writeMetaNonce(_metaNonce);
+
+        emit SyncAccount(_metaNonce, _keysetHash, _newTimeLockDuring, _newImplementation);
     }
 
     /**

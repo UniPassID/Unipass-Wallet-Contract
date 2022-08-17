@@ -7,8 +7,8 @@ import "./ModuleStorage.sol";
 import "./ModuleERC165.sol";
 import "./ModuleSelfAuth.sol";
 
-import "../../interfaces/IERC1155Receiver.sol";
-import "../../interfaces/IERC721Receiver.sol";
+import "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "../../interfaces/IERC223Receiver.sol";
 import "../../interfaces/IModuleHooks.sol";
 import "../../interfaces/IModuleWhiteList.sol";
@@ -148,7 +148,7 @@ abstract contract ModuleHooks is ModuleSelfAuth, IERC1155Receiver, IERC721Receiv
      * @param _interfaceID The interface identifier, as specified in ERC-165
      * @return `true` if the contract implements `_interfaceID`
      */
-    function supportsInterface(bytes4 _interfaceID) public pure virtual override returns (bool) {
+    function supportsInterface(bytes4 _interfaceID) public pure virtual override(ModuleERC165, IERC165) returns (bool) {
         if (
             _interfaceID == type(IModuleHooks).interfaceId ||
             _interfaceID == type(IERC1155Receiver).interfaceId ||

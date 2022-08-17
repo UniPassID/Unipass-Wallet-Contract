@@ -33,60 +33,29 @@ export interface DkimParams {
  * @returns Params Serializing String
  */
 export function SerializeDkimParams(params: DkimParams): string {
-  let sig = solidityPack(
-    ["uint32", "bytes"],
-    [params.emailHeader.length / 2 - 1, params.emailHeader]
-  );
-  sig = solidityPack(
-    ["bytes", "uint32", "bytes"],
-    [sig, params.dkimSig.length / 2 - 1, params.dkimSig]
-  );
+  let sig = solidityPack(["uint32", "bytes"], [params.emailHeader.length / 2 - 1, params.emailHeader]);
+  sig = solidityPack(["bytes", "uint32", "bytes"], [sig, params.dkimSig.length / 2 - 1, params.dkimSig]);
   sig = solidityPack(
     ["bytes", "uint32", "uint32", "uint32", "uint32", "uint32"],
-    [
-      sig,
-      params.fromIndex,
-      params.fromLeftIndex,
-      params.fromRightIndex,
-      params.subjectIndex,
-      params.subjectRightIndex,
-    ]
+    [sig, params.fromIndex, params.fromLeftIndex, params.fromRightIndex, params.subjectIndex, params.subjectRightIndex]
   );
   sig = solidityPack(["bytes", "uint32"], [sig, params.isSubBase64.length]);
   for (const isBase64 of params.isSubBase64) {
     sig = solidityPack(["bytes", "uint8"], [sig, isBase64 ? 1 : 0]);
   }
-  sig = solidityPack(
-    ["bytes", "uint32", "bytes"],
-    [sig, params.subjectPadding.length, params.subjectPadding]
-  );
+  sig = solidityPack(["bytes", "uint32", "bytes"], [sig, params.subjectPadding.length, params.subjectPadding]);
   sig = solidityPack(["bytes", "uint32"], [sig, params.subject.length]);
   for (const subject of params.subject) {
-    sig = solidityPack(
-      ["bytes", "uint32", "bytes"],
-      [sig, subject.length, subject]
-    );
+    sig = solidityPack(["bytes", "uint32", "bytes"], [sig, subject.length, subject]);
   }
   sig = solidityPack(
     ["bytes", "uint32", "uint32", "uint32", "uint32", "uint32"],
-    [
-      sig,
-      params.dkimHeaderIndex,
-      params.selectorIndex,
-      params.selectorRightIndex,
-      params.sdidIndex,
-      params.sdidRightIndex,
-    ]
+    [sig, params.dkimHeaderIndex, params.selectorIndex, params.selectorRightIndex, params.sdidIndex, params.sdidRightIndex]
   );
   return sig;
 }
 
-export async function getSignEmailWithDkim(
-  subject: string,
-  from: string,
-  to: string,
-  unipassPrivateKey: string
-) {
+export async function getSignEmailWithDkim(subject: string, from: string, to: string, unipassPrivateKey: string) {
   const mail = new MailComposer({
     from,
     to,
@@ -116,10 +85,7 @@ export async function signEmailWithDkim(mail: MailComposer, dkim: DKIM) {
 
 function updateEmail(emailAddress: string) {
   if (!emailAddress) return "";
-  if (
-    emailAddress.length < MIN_EMAIL_LEN ||
-    emailAddress.length > MAX_EMAIL_LEN
-  ) {
+  if (emailAddress.length < MIN_EMAIL_LEN || emailAddress.length > MAX_EMAIL_LEN) {
     throw new Error("Invalid email length");
   }
   emailAddress = emailAddress.toLocaleLowerCase().trim();
@@ -143,11 +109,9 @@ export function emailHash(emailAddress: string): string {
     split[1] == "ptoton.me" ||
     split[1] == "pm.me"
   ) {
-    emailAddress = Buffer.concat([
-      Buffer.from(split[0].replace(".", "")),
-      Buffer.from("@"),
-      Buffer.from(split[1]),
-    ]).toString("utf8");
+    emailAddress = Buffer.concat([Buffer.from(split[0].replace(".", "")), Buffer.from("@"), Buffer.from(split[1])]).toString(
+      "utf8"
+    );
   }
 
   return pureEmailHash(emailAddress);
@@ -159,8 +123,7 @@ export function pureEmailHash(emailAddress: string): string {
   let buf = Buffer.from(emailAddress, "utf-8");
   let i;
   const len = buf.length;
-  for (i = 0; i < FR_EMAIL_LEN * 31 - len; ++i)
-    buf = Buffer.concat([buf, new Uint8Array([0])]);
+  for (i = 0; i < FR_EMAIL_LEN * 31 - len; ++i) buf = Buffer.concat([buf, new Uint8Array([0])]);
   const hash = sha256(Buffer.from(buf));
   const hashRev = hash.reverse();
   hashRev[31] &= 0x1f;
@@ -200,10 +163,7 @@ export function getDkimParams(
     const fromIndex = processedHeader.indexOf("from:");
     const fromEndIndex = processedHeader.indexOf("\r\n", fromIndex);
 
-    let fromLeftIndex = processedHeader.indexOf(
-      "<" + fromHeader + ">",
-      fromIndex
-    );
+    let fromLeftIndex = processedHeader.indexOf("<" + fromHeader + ">", fromIndex);
     if (fromLeftIndex === -1 || fromLeftIndex > fromEndIndex) {
       fromLeftIndex = processedHeader.indexOf(fromHeader);
     } else {
@@ -218,15 +178,9 @@ export function getDkimParams(
 
     const subjectIndex = processedHeader.indexOf("subject:");
     const dkimHeaderIndex = processedHeader.indexOf("dkim-signature:");
-    const sdidIndex = processedHeader.indexOf(
-      signature.domain,
-      dkimHeaderIndex
-    );
+    const sdidIndex = processedHeader.indexOf(signature.domain, processedHeader.indexOf("d=", dkimHeaderIndex));
     const sdidRightIndex = sdidIndex + signature.domain.length;
-    const selectorIndex = processedHeader.indexOf(
-      signature.selector,
-      dkimHeaderIndex
-    );
+    const selectorIndex = processedHeader.indexOf(signature.selector, processedHeader.indexOf("s=", dkimHeaderIndex));
     const selectorRightIndex = selectorIndex + signature.selector.length;
     const params = {
       emailHeader: "0x" + Buffer.from(processedHeader, "utf-8").toString("hex"),
@@ -272,19 +226,11 @@ export async function parseEmailParams(email: string): Promise<EmailParams> {
   });
 
   const from: string = mail.headers.get("from").value[0].address;
-  const results: Dkim.VerifyResult[] = (await verifyDKIMContent(
-    Buffer.from(email, "utf-8")
-  )) as Dkim.VerifyResult[];
+  const results: Dkim.VerifyResult[] = (await verifyDKIMContent(Buffer.from(email, "utf-8"))) as Dkim.VerifyResult[];
   if (from.split("@")[1] === "unipass.id") {
     Dkim.configKey(null);
   }
-  const params = getDkimParams(
-    results,
-    subs.subs,
-    subs.subIsBase64,
-    subs.subjectPadding,
-    from
-  );
+  const params = getDkimParams(results, subs.subs, subs.subIsBase64, subs.subjectPadding, from);
   return { params, from };
 }
 
@@ -320,10 +266,8 @@ function dealSubPart(
         ret.subs.push(
           Buffer.from(
             subPart.slice(
-              subPart.length -
-                ((decodedPart.length - IndexOf0x - remainder) / 3) * 4,
-              subPart.length -
-                ((decodedPart.length - IndexOf0x - ret.subsAllLen) / 3) * 4
+              subPart.length - ((decodedPart.length - IndexOf0x - remainder) / 3) * 4,
+              subPart.length - ((decodedPart.length - IndexOf0x - ret.subsAllLen) / 3) * 4
             ),
             "utf8"
           )
@@ -337,21 +281,14 @@ function dealSubPart(
         if (ret.subsAllLen > 66) {
           ret.subsAllLen = 66;
         }
-        ret.subs.push(
-          Buffer.from(
-            subPart.slice(IndexOf0x, IndexOf0x + ret.subsAllLen),
-            "utf8"
-          )
-        );
+        ret.subs.push(Buffer.from(subPart.slice(IndexOf0x, IndexOf0x + ret.subsAllLen), "utf8"));
         ret.subIsBase64.push(false);
       }
     }
   } else {
     if (subIsBase64[subPartIndex]) {
       const len = Math.min(66 - ret.subsAllLen, (subPart.length / 4) * 3);
-      ret.subs.push(
-        Buffer.from(subPart.slice(0, Math.ceil(len / 3) * 4), "utf8")
-      );
+      ret.subs.push(Buffer.from(subPart.slice(0, Math.ceil(len / 3) * 4), "utf8"));
       ret.subsAllLen += len;
       ret.subIsBase64.push(true);
     } else {

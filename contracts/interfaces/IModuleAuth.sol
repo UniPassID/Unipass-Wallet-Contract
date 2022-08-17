@@ -13,6 +13,7 @@ interface IModuleAuth {
         uint32 _metaNonce,
         bytes32 _keysetHash,
         uint32 _newTimeLockDuring,
+        address _newImplementation,
         bytes calldata _signature
     ) external;
 
