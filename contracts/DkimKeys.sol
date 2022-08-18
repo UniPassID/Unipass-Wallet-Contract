@@ -7,7 +7,12 @@ import "./interfaces/IDkimKeys.sol";
 import "./utils/LibRsa.sol";
 import "./utils/LibBytes.sol";
 
-contract DkimKeys is IDkimKeys, ModuleAdminAuth {
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+
+import "hardhat/console.sol";
+
+contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable {
     using LibDkimValidator for DkimParams;
     using LibSlice for Slice;
     using LibBytes for bytes;
@@ -123,6 +128,12 @@ contract DkimKeys is IDkimKeys, ModuleAdminAuth {
         ] = hex"b1929caebbdbfc48b036f6b8b0d3ec94c4c4599d64534d8ff77d8713f52e40ba71068d783e7ee1f454ce009504b5c0739ab256cb2131d03884ad002d1e2abbf921f3d0614df8eb80e423e1cb3a8df3a383a46078c82e4d8085ead422e86afe9f4d7e722548c561c92c39cb2ad36cd6ea6c29ea40827ce0d4e2de9863199670e5c604af6238e56f5d018adaeba59df46807996ed726e39d28d38274b0b3583e482addce9249d9168f85f118222c039abf85e5a9b7209651d6a77c064285ff1f0c1bc45f47d0c764c4d69e0552dc295a17d1ca588d63cdd10a31e1e30eeace43d110d943fce788572d2a096e05cff6e8ec72dc869473c415ec080508478194d661";
     }
 
+    function initialize() public initializer {
+        __UUPSUpgradeable_init();
+    }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyAdmin {}
+
     function getDKIMKey(bytes calldata _emailServer) public view override returns (bytes memory) {
         return dkimKeys[_emailServer];
     }
@@ -161,7 +172,7 @@ contract DkimKeys is IDkimKeys, ModuleAdminAuth {
         params.isSubBase64 = new bool[](isSubBase64Len);
         for (uint32 i = 0; i < isSubBase64Len; i++) {
             params.isSubBase64[i] = _data.mcReadUint8(newIndex) == 1;
-            newIndex++;
+            ++newIndex;
         }
         uint32 subjectPaddingLen;
         (subjectPaddingLen, newIndex) = _data.cReadUint32(newIndex);

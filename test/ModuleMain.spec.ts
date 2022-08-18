@@ -206,7 +206,9 @@ describe("ModuleMain", function () {
 
     const ret = await executeCall([tx], chainId, nonce, [], proxyModuleMain, undefined, txParams);
     expect(ret.status).to.equal(1);
-    expect(await proxyModuleMain.lockedKeysetHash()).to.equal(newKeysetHash);
+    const lockInfo = await proxyModuleMain.getLockInfo();
+    expect(lockInfo.isLockedRet).to.true;
+    expect(lockInfo.lockedKeysetHashRet).to.equal(newKeysetHash);
     metaNonce++;
     nonce++;
   });
@@ -601,7 +603,8 @@ describe("ModuleMain", function () {
       expect(await proxyModuleMain.getNonce()).to.equals(1);
       expect(await proxyModuleMain.getMetaNonce()).to.equals(metaNonce - 1);
       expect(await proxyModuleMain.getKeysetHash()).to.equals(keysetHash);
-      expect(await proxyModuleMain.getLockDuring()).to.equals(timeLockDuring);
+      const lockInfo = await proxyModuleMain.getLockInfo();
+      expect(lockInfo.lockDuringRet).to.equals(timeLockDuring);
       expect(await proxyModuleMain.getImplementation()).to.equals(moduleMain.address);
       hre.changeNetwork("hardhat");
     });

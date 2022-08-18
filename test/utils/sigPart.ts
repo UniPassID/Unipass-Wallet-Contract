@@ -1,6 +1,6 @@
 import { BigNumber, Contract, Overrides, utils, Wallet } from "ethers";
 import { arrayify, BytesLike, keccak256, solidityPack } from "ethers/lib/utils";
-import { ethers } from "hardhat";
+import { ethers,upgrades } from "hardhat";
 import { KeyBase } from "./key";
 
 export enum ActionType {

@@ -154,7 +154,7 @@ library LibSlice {
 
                 while (ptrdata != needledata) {
                     if (ptr >= end) return selfptr + selflen;
-                    ptr++;
+                    ++ptr;
                     assembly {
                         ptrdata := and(mload(ptr), mask)
                     }
@@ -245,7 +245,7 @@ library LibSlice {
     function count(Slice memory self, Slice memory needle) internal pure returns (uint256 cnt) {
         uint256 ptr = findPtr(self._len, self._ptr, needle._len, needle._ptr) + needle._len;
         while (ptr <= self._ptr + self._len) {
-            cnt++;
+            ++cnt;
             ptr = findPtr(self._len - (ptr - self._ptr), ptr, needle._len, needle._ptr) + needle._len;
         }
     }

@@ -1,4 +1,4 @@
-import { BytesLike, Contract, ContractFactory, Wallet } from "ethers";
+import { BytesLike, Contract, Wallet } from "ethers";
 import { arrayify, joinSignature, randomBytes, solidityPack } from "ethers/lib/utils";
 import { getSignEmailWithDkim, parseEmailParams, pureEmailHash, SerializeDkimParams } from "./email";
 import { Role, signerSign } from "./sigPart";
@@ -132,6 +132,27 @@ export async function randomKeys(len: number, unipassPrivateKey: string, contrac
       }
     }
   }
+  return ret;
+}
+
+export async function randomNewWallet(unipassPrivateKey: string): Promise<KeyBase[]> {
+  let ret: KeyBase[] = [];
+  ret.push(new KeySecp256k1(Wallet.createRandom(), { ownerWeight: 40, assetsOpWeight: 100, guardianWeight: 0 }));
+  ret.push(
+    new KeyEmailAddress(`${Buffer.from(randomBytes(10)).toString("hex")}@unipass.com`, unipassPrivateKey, {
+      ownerWeight: 60,
+      assetsOpWeight: 0,
+      guardianWeight: 60,
+    })
+  );
+  ret.push(
+    new KeyEmailAddress(`${Buffer.from(randomBytes(10)).toString("hex")}@unipass.com`, unipassPrivateKey, {
+      ownerWeight: 40,
+      assetsOpWeight: 0,
+      guardianWeight: 0,
+    })
+  );
+
   return ret;
 }
 

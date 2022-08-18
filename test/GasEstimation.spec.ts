@@ -223,8 +223,8 @@ describe("GasEstimation", function () {
       await moduleGuest.execute([deployTx, moduleMainTx, transferTx], nonce, feeToken, feeReceiver, 0, signature, { value })
     ).wait();
     expect(estimate.gas.toNumber() + txBaseCost(moduleGuestTxData)).to.approximately(realTx.gasUsed.toNumber(), 5000);
-    const ret = await proxyModuleMain.lockedKeysetHash();
-    expect(ret).to.equal(newKeysetHash);
+    const ret = await proxyModuleMain.getLockInfo();
+    expect(ret.lockedKeysetHashRet).to.equal(newKeysetHash);
     expect(await proxyModuleMain.provider.getBalance(expectedAddress)).to.equal(value);
   });
 });

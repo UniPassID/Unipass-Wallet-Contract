@@ -3,17 +3,16 @@ import { Contract, ContractFactory, Overrides, Wallet } from "ethers";
 import { hexlify, randomBytes, solidityPack } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import NodeRSA from "node-rsa";
-import {
-  ASSETS_OP_THRESHOLD,
-  getKeysetHash,
-  GUARDIAN_THRESHOLD,
-  GUARDIAN_TIMELOCK_THRESHOLD,
-  OWNER_THRESHOLD,
-  transferEth,
-} from "./utils/common";
+import { getKeysetHash, transferEth } from "./utils/common";
 import { Deployer } from "./utils/deployer";
-import { randomKeys, selectKeys } from "./utils/key";
-import { executeCall, generateTransferTx, generateUpdateKeysetHashTx, Role } from "./utils/sigPart";
+import { randomNewWallet } from "./utils/key";
+import {
+  executeCall,
+  generateTransferTx,
+  generateUnlockKeysetHashTx,
+  generateUpdateKeysetHashTx,
+  generateUpdateTimeLockDuringTx,
+} from "./utils/sigPart";
 
 const runs = 256;
 
@@ -127,40 +126,112 @@ describe("ModuleMain Benchmark", function () {
         report("deploy wallets", results);
       });
 
-      it("Relay 1/1 Update KeysetHash transaction", async () => {
+      it("Relay 1/1 Update KeysetHash By 2 Emails transaction", async () => {
         const newKeysetHash = hexlify(randomBytes(32));
 
-        for (const [role, threshold, withTimeOut] of [
-          [Role.Owner, OWNER_THRESHOLD, false],
-          [Role.Guardian, GUARDIAN_THRESHOLD, false],
-          [Role.Guardian, GUARDIAN_TIMELOCK_THRESHOLD, true],
-        ]) {
-          const results: number[] = [];
-          for (let i = 0; i < runs; i++) {
-            const keys = await randomKeys(10, unipassPrivateKey, testERC1271Wallet);
-            const keysetHash = getKeysetHash(keys);
-            const wallet = await deployer.deployProxyContract(moduleMain.interface, moduleMain.address, keysetHash, txParams);
+        const results: number[] = [];
+        for (let i = 0; i < runs; i++) {
+          const keys = await randomNewWallet(unipassPrivateKey);
+          const keysetHash = getKeysetHash(keys);
+          const wallet = await deployer.deployProxyContract(moduleMain.interface, moduleMain.address, keysetHash, txParams);
 
-            const transaction = await generateUpdateKeysetHashTx(
-              wallet,
-              1,
-              newKeysetHash,
-              withTimeOut as boolean,
-              selectKeys(keys, role as Role, threshold as number)
-            );
+          const transaction = await generateUpdateKeysetHashTx(wallet, 1, newKeysetHash, false, [
+            [keys[0], false],
+            [keys[1], true],
+            [keys[2], true],
+          ]);
 
-            const tx = await executeCall([transaction], chainId, 1, [], wallet, undefined, txParams);
-            results.push(tx.gasUsed);
-          }
-
-          report(`relay 1/1 Update Keyset By ${role} transaction`, results);
+          const tx = await executeCall([transaction], chainId, 1, [], wallet, undefined, txParams);
+          results.push(tx.gasUsed);
         }
+
+        report(`relay 1/1 Update Keyset By 2 Emails transaction`, results);
+      });
+
+      it("Relay 1/1 Update KeysetHash By 1 Email And 1 Secp256k1 transaction", async () => {
+        const newKeysetHash = hexlify(randomBytes(32));
+
+        const results: number[] = [];
+        for (let i = 0; i < runs; i++) {
+          const keys = await randomNewWallet(unipassPrivateKey);
+          const keysetHash = getKeysetHash(keys);
+          const wallet = await deployer.deployProxyContract(moduleMain.interface, moduleMain.address, keysetHash, txParams);
+
+          const transaction = await generateUpdateKeysetHashTx(wallet, 1, newKeysetHash, false, [
+            [keys[0], true],
+            [keys[1], true],
+            [keys[2], false],
+          ]);
+
+          const tx = await executeCall([transaction], chainId, 1, [], wallet, undefined, txParams);
+          results.push(tx.gasUsed);
+        }
+
+        report(`relay 1/1 Update Keyset By 1 Email And 1 Secp256k1 transaction`, results);
+      });
+
+      it("Relay 1/1 Update KeysetHash With TimeLock By 2 Emails transaction", async () => {
+        const newKeysetHash = hexlify(randomBytes(32));
+
+        const results: number[] = [];
+        for (let i = 0; i < runs; i++) {
+          const keys = await randomNewWallet(unipassPrivateKey);
+          const keysetHash = getKeysetHash(keys);
+          const wallet = await deployer.deployProxyContract(moduleMain.interface, moduleMain.address, keysetHash, txParams);
+
+          const transaction = await generateUpdateKeysetHashTx(wallet, 1, newKeysetHash, true, [
+            [keys[0], false],
+            [keys[1], true],
+            [keys[2], true],
+          ]);
+
+          const tx = await executeCall([transaction], chainId, 1, [], wallet, undefined, txParams);
+          results.push(tx.gasUsed);
+        }
+
+        report(`relay 1/1 Update Keyset With TimeLock By 2 Emails transaction`, results);
+      });
+
+      it("Relay 1/1 Unlock KeysetHash transaction", async () => {
+        const newKeysetHash = hexlify(randomBytes(32));
+
+        const results: number[] = [];
+        for (let i = 0; i < runs; i++) {
+          const keys = await randomNewWallet(unipassPrivateKey);
+          const keysetHash = getKeysetHash(keys);
+          const wallet = await deployer.deployProxyContract(moduleMain.interface, moduleMain.address, keysetHash, txParams);
+
+          let transaction = await generateUpdateTimeLockDuringTx(wallet, 1, 1, [
+            [keys[0], false],
+            [keys[1], true],
+            [keys[2], true],
+          ]);
+
+          let tx = await executeCall([transaction], chainId, 1, [], wallet, undefined, txParams);
+
+          transaction = await generateUpdateKeysetHashTx(wallet, 2, newKeysetHash, true, [
+            [keys[0], false],
+            [keys[1], true],
+            [keys[2], true],
+          ]);
+
+          tx = await executeCall([transaction], chainId, 2, [], wallet, undefined, txParams);
+
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+
+          transaction = await generateUnlockKeysetHashTx(wallet, 3);
+
+          tx = await executeCall([transaction], chainId, 3, [], wallet, undefined, txParams);
+          results.push(tx.gasUsed);
+        }
+
+        report(`relay 1/1 Unlock KeysetHash transaction transaction`, results);
       });
 
       it("Relay 1/1 Transfer Eth transaction", async () => {
         const results: number[] = [];
         for (let i = 0; i < runs; i++) {
-          const keys = await randomKeys(10, unipassPrivateKey, testERC1271Wallet);
+          const keys = await randomNewWallet(unipassPrivateKey);
           const keysetHash = getKeysetHash(keys);
           const wallet = await deployer.deployProxyContract(moduleMain.interface, moduleMain.address, keysetHash, txParams);
           await transferEth(wallet.address, 1);
@@ -175,7 +246,11 @@ describe("ModuleMain Benchmark", function () {
             [transaction],
             chainId,
             1,
-            selectKeys(keys, Role.AssetsOp, ASSETS_OP_THRESHOLD),
+            [
+              [keys[0], true],
+              [keys[1], false],
+              [keys[2], false],
+            ],
             wallet,
             {
               key: Wallet.createRandom(),
