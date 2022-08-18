@@ -126,7 +126,7 @@ abstract contract ModuleAuthBase is
         if (!isValidKeysetHash(_keysetHash)) {
             _updateKeysetHash(_keysetHash);
         }
-        if (getLockDuring() != _newTimeLockDuring) {
+        if (_getLockDuring() != _newTimeLockDuring) {
             _setLockDuring(_newTimeLockDuring);
         }
         if (getImplementation() != _newImplementation) {
@@ -183,7 +183,7 @@ abstract contract ModuleAuthBase is
 
         require(roleWeight.guardianWeight >= LibRole.GUARDIAN_TIMELOCK_THRESHOLD, "updateKeysetHashWithTimeLock: INVALID_WEIGHT");
 
-        _toLockKeysetHash(_newKeysetHash, getLockDuring());
+        _toLockKeysetHash(_newKeysetHash, _getLockDuring());
         _writeMetaNonce(_metaNonce);
 
         emit UpdateKeysetHashWithTimeLock(_metaNonce, _newKeysetHash);
@@ -195,7 +195,7 @@ abstract contract ModuleAuthBase is
     function unlockKeysetHash(uint256 _metaNonce) external {
         _requireMetaNonce(_metaNonce);
         _requireToUnLock();
-        _updateKeysetHash(lockedKeysetHash);
+        _updateKeysetHash(_readLockedKeysetHash());
         _unlockKeysetHash();
         _writeMetaNonce(_metaNonce);
 
@@ -259,9 +259,8 @@ abstract contract ModuleAuthBase is
         bytes calldata _signature
     ) external onlySelf {
         _requireMetaNonce(_metaNonce);
-        if (!_newImplementation.isContract()) {
-            revert InvalidImplementation(_newImplementation);
-        }
+        if (!_newImplementation.isContract()) revert InvalidImplementation(_newImplementation);
+
         bytes32 digestHash = keccak256(
             abi.encodePacked(_metaNonce, address(this), uint8(UPDATE_IMPLEMENTATION), _newImplementation)
         );
@@ -293,7 +292,7 @@ abstract contract ModuleAuthBase is
         }
         uint256 index = 0;
         bool isSessionKey = _signature.mcReadUint8(index) == 1;
-        index++;
+        ++index;
         RoleWeight memory roleWeight;
 
         if (isSessionKey) {
@@ -404,7 +403,7 @@ abstract contract ModuleAuthBase is
         index = _index + 1;
         if (keyType == KeyType.Secp256k1) {
             isSig = _signature.mcReadUint8(index) == 1;
-            index++;
+            ++index;
             if (isSig) {
                 key = recoverSigner(_hash, _signature[index:index + 66]);
                 index += 66;
@@ -413,7 +412,7 @@ abstract contract ModuleAuthBase is
             }
         } else if (keyType == KeyType.ERC1271Wallet) {
             isSig = _signature.mcReadUint8(index) == 1;
-            index++;
+            ++index;
             (key, index) = _signature.cReadAddress(index);
             if (isSig) {
                 uint32 sigLen;
@@ -427,7 +426,7 @@ abstract contract ModuleAuthBase is
             }
         } else if (keyType == KeyType.EmailAddress) {
             isSig = _signature.mcReadUint8(index) == 1;
-            index++;
+            ++index;
             uint32 emailFromLen;
             (emailFromLen, index) = _signature.cReadUint32(index);
             bytes calldata emailFrom = _signature[index:index + emailFromLen];

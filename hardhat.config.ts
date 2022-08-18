@@ -10,6 +10,7 @@ import "@openzeppelin/hardhat-upgrades";
 import "@tenderly/hardhat-tenderly";
 import "hardhat-contract-sizer";
 import "hardhat-change-network";
+import "hardhat-dependency-compiler";
 
 dotenv.config();
 
@@ -40,15 +41,11 @@ const config: HardhatUserConfig = {
     local1: { url: "http://127.0.0.1:10086" },
     ropsten: {
       url: process.env.ROPSTEN_URL || "",
-      accounts:
-        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+      accounts: process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
     },
     polygon_testnet: {
       url: process.env.POLYGON_TESTNET_URL || "",
-      accounts:
-        process.env.POLYGON_TESTNET_PRIVATE_KEY !== undefined
-          ? [process.env.POLYGON_TESTNET_PRIVATE_KEY]
-          : [],
+      accounts: process.env.POLYGON_TESTNET_PRIVATE_KEY !== undefined ? [process.env.POLYGON_TESTNET_PRIVATE_KEY] : [],
     },
   },
   gasReporter: {
@@ -64,6 +61,9 @@ const config: HardhatUserConfig = {
   tenderly: {
     project: "@UniPassID/unipass-wallet",
     username: "zz",
+  },
+  dependencyCompiler: {
+    paths: ["@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol"],
   },
 };
 

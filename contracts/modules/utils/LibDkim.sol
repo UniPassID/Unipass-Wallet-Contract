@@ -65,7 +65,7 @@ library LibDkimValidator {
 
     function emailAddressHash(bytes memory from) internal pure returns (bytes32) {
         uint256 emailLength = 124;
-        require(from.length < emailLength, "to long");
+        require(from.length < emailLength, "too long");
         uint256 diff = emailLength - from.length;
         bytes memory padding = new bytes(diff);
         bytes32 hash = sha256(abi.encodePacked(from, padding));

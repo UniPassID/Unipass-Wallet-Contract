@@ -163,7 +163,8 @@ describe("ModuleCall", function () {
         const tx = await generateUpdateKeysetHashTx(proxyTestModuleCall, metaNonce, newKeysetHash, false, selectedKeys);
         const ret = await executeCall([tx], chainId, nonce, [], proxyTestModuleCall, undefined, txParams);
         expect(ret.status).to.equal(1);
-        expect(await proxyTestModuleCall.isLocked()).to.false;
+        const lockInfo = await proxyTestModuleCall.getLockInfo();
+        expect(lockInfo.isLockedRet).to.false;
         expect(await proxyTestModuleCall.getKeysetHash()).to.equal(newKeysetHash);
         expect(await proxyTestModuleCall.getNonce()).to.equals(nonce);
         expect(await proxyTestModuleCall.getMetaNonce()).to.equals(metaNonce);
@@ -177,7 +178,8 @@ describe("ModuleCall", function () {
         const tx = await generateUpdateKeysetHashTx(proxyTestModuleCall, metaNonce, newKeysetHash, false, selectedKeys);
         const ret = await executeCall([tx], chainId, nonce, [], proxyTestModuleCall, undefined, txParams);
         expect(ret.status).to.equal(1);
-        expect(await proxyTestModuleCall.isLocked()).to.false;
+        const lockInfo = await proxyTestModuleCall.getLockInfo();
+        expect(lockInfo.isLockedRet).to.false;
         expect(await proxyTestModuleCall.getKeysetHash()).to.equal(newKeysetHash);
         expect(await proxyTestModuleCall.getNonce()).to.equals(nonce);
         expect(await proxyTestModuleCall.getMetaNonce()).to.equals(metaNonce);
@@ -191,8 +193,9 @@ describe("ModuleCall", function () {
         const tx = await generateUpdateKeysetHashTx(proxyTestModuleCall, metaNonce, newKeysetHash, true, selectedKeys);
         const ret = await executeCall([tx], chainId, nonce, [], proxyTestModuleCall, undefined, txParams);
         expect(ret.status).to.equal(1);
-        expect(await proxyTestModuleCall.isLocked()).to.true;
-        expect(await proxyTestModuleCall.lockedKeysetHash()).to.equal(newKeysetHash);
+        const lockInfo = await proxyTestModuleCall.getLockInfo();
+        expect(lockInfo.isLockedRet).to.true;
+        expect(lockInfo.lockedKeysetHashRet).to.equal(newKeysetHash);
         expect(await proxyTestModuleCall.getNonce()).to.equals(nonce);
         expect(await proxyTestModuleCall.getMetaNonce()).to.equals(metaNonce);
         metaNonce++;
@@ -207,8 +210,9 @@ describe("ModuleCall", function () {
         let tx = await generateUpdateTimeLockDuringTx(proxyTestModuleCall, metaNonce, newDelay, selectedKeys);
         let ret = await executeCall([tx], chainId, nonce, [], proxyTestModuleCall, undefined, txParams);
         expect(ret.status).to.equal(1);
-        expect(await proxyTestModuleCall.isLocked()).to.false;
-        expect(await proxyTestModuleCall.getLockDuring()).to.equal(newDelay);
+        let lockInfo = await proxyTestModuleCall.getLockInfo();
+        expect(lockInfo.isLockedRet).to.false;
+        expect(lockInfo.lockDuringRet).to.equal(newDelay);
         expect(await proxyTestModuleCall.getNonce()).to.equals(nonce);
         expect(await proxyTestModuleCall.getMetaNonce()).to.equals(metaNonce);
         nonce++;
@@ -224,8 +228,9 @@ describe("ModuleCall", function () {
         );
         ret = await executeCall([tx], chainId, nonce, [], proxyTestModuleCall, undefined, txParams);
         expect(ret.status).to.equal(1);
-        expect(await proxyTestModuleCall.isLocked()).to.true;
-        expect(await proxyTestModuleCall.lockedKeysetHash()).to.equal(newKeysetHash);
+        lockInfo = await proxyTestModuleCall.getLockInfo();
+        expect(lockInfo.isLockedRet).to.true;
+        expect(lockInfo.lockedKeysetHashRet).to.equal(newKeysetHash);
         expect(await proxyTestModuleCall.getKeysetHash()).not.to.equal(newKeysetHash);
         expect(await proxyTestModuleCall.getNonce()).to.equals(nonce);
         expect(await proxyTestModuleCall.getMetaNonce()).to.equals(metaNonce);
@@ -254,9 +259,9 @@ describe("ModuleCall", function () {
           selectKeys(keys, Role.Guardian, GUARDIAN_TIMELOCK_THRESHOLD)
         );
         let ret = await executeCall([tx], chainId, nonce, [], proxyTestModuleCall, undefined, txParams);
-        expect(ret.status).to.equal(1);
-        expect(await proxyTestModuleCall.isLocked()).to.true;
-        expect(await proxyTestModuleCall.lockedKeysetHash()).to.equal(newKeysetHash);
+        let lockInfo = await proxyTestModuleCall.getLockInfo();
+        expect(lockInfo.isLockedRet).to.true;
+        expect(lockInfo.lockedKeysetHashRet).to.equal(newKeysetHash);
         expect(await proxyTestModuleCall.getKeysetHash()).not.to.equal(newKeysetHash);
         expect(await proxyTestModuleCall.getNonce()).to.equals(nonce);
         expect(await proxyTestModuleCall.getMetaNonce()).to.equals(metaNonce);
@@ -270,7 +275,8 @@ describe("ModuleCall", function () {
         );
         ret = await executeCall([tx], chainId, nonce, [], proxyTestModuleCall, undefined, txParams);
         expect(ret.status).to.equal(1);
-        expect(await proxyTestModuleCall.isLocked()).to.false;
+        lockInfo = await proxyTestModuleCall.getLockInfo();
+        expect(lockInfo.isLockedRet).to.false;
         expect(await proxyTestModuleCall.getMetaNonce()).to.equals(metaNonce);
         expect(await proxyTestModuleCall.getNonce()).to.equals(nonce);
         expect(await proxyTestModuleCall.getMetaNonce()).to.equals(metaNonce);
@@ -285,8 +291,9 @@ describe("ModuleCall", function () {
         let tx = await generateUpdateTimeLockDuringTx(proxyTestModuleCall, metaNonce, newDelay, selectedKeys);
         let ret = await executeCall([tx], chainId, nonce, [], proxyTestModuleCall, undefined, txParams);
         expect(ret.status).to.equal(1);
-        expect(await proxyTestModuleCall.isLocked()).to.false;
-        expect(await proxyTestModuleCall.getLockDuring()).to.equal(newDelay);
+        const lockInfo = await proxyTestModuleCall.getLockInfo();
+        expect(lockInfo.isLockedRet).to.false;
+        expect(lockInfo.lockDuringRet).to.equal(newDelay);
         expect(await proxyTestModuleCall.getNonce()).to.equals(nonce);
         expect(await proxyTestModuleCall.getMetaNonce()).to.equals(metaNonce);
         nonce++;

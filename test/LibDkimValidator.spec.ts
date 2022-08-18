@@ -58,7 +58,7 @@ describe("LibDkimValidator", function () {
     expect(ret).to.not.null;
   });
   if (process.env.TEST_ALL_EMAILS) {
-    it.only("Validate All Emails", async function () {
+    it.only("Test All Emails", async function () {
       emails.forEach(async ({ params, from }, _index, _array) => {
         const ret = await emailDkimValidator.parseHeader(params);
         expect(ret.emailfrom).to.equal(ethers.utils.hexValue(from));
