@@ -20,7 +20,6 @@ import {
   generateSyncAccountTx,
   generateTransactionSig,
   generateTransferTx,
-  generateUnlockKeysetHashTx,
   generateUpdateKeysetHashTx,
   generateUpdateTimeLockDuringTx,
   Role,
