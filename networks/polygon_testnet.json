@@ -1,18 +1,22 @@
 [
   {
+    "contractName": "DkimKeys",
+    "address": "0xf2AdfEf287A4967ED9F69BDd8f5dB139F9D2ebc6"
+  },
+  {
+    "contractName": "ModuleWhiteList",
+    "address": "0x2807883a5881d6C4C12eFA70eD4Da6b645C6c502"
+  },
+  {
     "contractName": "ModuleMain",
-    "address": "0xe9E49646Fb24fa33b5b0B2BC7f6d3e8A26440E92"
+    "address": "0xe01dc29b3e7866ECFE9cC040f2da926Be6B676De"
   },
   {
     "contractName": "ModuleMainUpgradable",
-    "address": "0xB4707D3c96fB38bfA95736Ff8718A18E3f0D1694"
-  },
-  {
-    "contractName": "DkimKeys",
-    "address": "0x3DEA455c02f74731A2033a419b12A5BdB543Be7F"
+    "address": "0x9F5c13b42d0D34410c3B7f1Be8ccF2662DF308cA"
   },
   {
     "contractName": "ModuleGuest",
-    "address": "0x752C791397077d0A07843Dd7A77895B3a5E3deCf"
+    "address": "0x08Cc3F08c754ecbF73380E44195b2B9F5942ca40"
   }
 ]
