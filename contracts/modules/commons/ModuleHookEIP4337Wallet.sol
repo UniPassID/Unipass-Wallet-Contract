@@ -8,6 +8,7 @@ pragma solidity ^0.8.0;
 import "./ModuleStorage.sol";
 import "./ModuleSelfAuth.sol";
 import "./ModuleRole.sol";
+import "./ModuleTransaction.sol";
 import "../../UserOperation.sol";
 import "../../interfaces/IEIP4337Wallet.sol";
 import "../../interfaces/IModuleCall.sol";
@@ -23,7 +24,7 @@ import "hardhat/console.sol";
  * this contract provides the basic logic for implementing the IWallet interface  - validateUserOp
  * specific wallet implementation should inherit it and provide the wallet-specific logic
  */
-contract ModuleHookEIP4337Wallet is ITransaction, IEIP4337Wallet, ModuleSelfAuth {
+contract ModuleHookEIP4337Wallet is ModuleTransaction, IEIP4337Wallet, ModuleSelfAuth {
     using UserOperationLib for UserOperation;
     using Address for address;
     using LibBytes for bytes;

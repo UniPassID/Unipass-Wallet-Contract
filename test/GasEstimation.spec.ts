@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { Contract, ContractFactory, Overrides, Wallet } from "ethers";
-import { BytesLike, randomBytes, solidityPack } from "ethers/lib/utils";
+import { BytesLike, formatBytes32String, randomBytes, solidityPack } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import NodeRSA from "node-rsa";
 import { getKeysetHash, GUARDIAN_TIMELOCK_THRESHOLD, optimalGasLimit, OWNER_THRESHOLD, transferEth } from "./utils/common";
@@ -42,6 +42,7 @@ describe("GasEstimation", function () {
   let Greeter: ContractFactory;
   let greeter1: Contract;
   let greeter2: Contract;
+  let chainId: number;
   this.beforeAll(async function () {
     const [signer] = await ethers.getSigners();
     deployer = await new Deployer(signer).init();
@@ -104,13 +105,15 @@ describe("GasEstimation", function () {
     const ModuleGuest = await ethers.getContractFactory("ModuleGuest");
     moduleGuest = await deployer.deployContract(ModuleGuest, 0, txParams);
 
+    chainId = await (await moduleGuest.provider.getNetwork()).chainId;
+
     const privateKey = new NodeRSA({ b: 2048 });
     unipassPrivateKey = privateKey.exportKey("pkcs1");
     ret = await (
       await dkimKeys
         .connect(dkimKeysAdmin)
         .updateDKIMKey(
-          solidityPack(["bytes", "bytes"], [Buffer.from("s2055"), Buffer.from("unipass.com")]),
+          solidityPack(["bytes32", "bytes32"], [formatBytes32String("s2055"), formatBytes32String("unipass.com")]),
           privateKey.exportKey("components-public").n.subarray(1)
         )
     ).wait();
@@ -150,14 +153,10 @@ describe("GasEstimation", function () {
   it("Should estimate account transaction", async function () {
     const newKeysetHash = ethers.utils.hexlify(randomBytes(32));
     const selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
-    const tx = await generateUpdateKeysetHashTx(proxyModuleMain, metaNonce, newKeysetHash, false, selectedKeys);
+    const tx = await generateUpdateKeysetHashTx(chainId, proxyModuleMain, metaNonce, newKeysetHash, false, selectedKeys);
     const nonce = 1;
-    const { chainId } = await proxyModuleMain.provider.getNetwork();
-    const feeToken = ethers.constants.AddressZero;
-    const feeReceiver = ethers.constants.AddressZero;
-    const feeAmount = 0;
-    const signature = await generateTransactionSig(chainId, [tx], nonce, feeToken, feeAmount, [], undefined);
-    const txData = proxyModuleMain.interface.encodeFunctionData("execute", [[tx], nonce, feeToken, feeReceiver, 0, signature]);
+    const signature = await generateTransactionSig(chainId, proxyModuleMain.address, [tx], nonce, [], undefined);
+    const txData = proxyModuleMain.interface.encodeFunctionData("execute", [[tx], nonce, signature]);
     const estimate = await gasEstimation.callStatic.estimate(proxyModuleMain.address, txData);
     const realTx = await executeCall([tx], chainId, nonce, [], proxyModuleMain, undefined, txParams);
     expect(estimate.gas.toNumber() + txBaseCost(txData)).to.approximately(realTx.gasUsed.toNumber(), 5000);
@@ -180,6 +179,7 @@ describe("GasEstimation", function () {
     const newKeysetHash = ethers.utils.hexlify(randomBytes(32));
     proxyModuleMain = ModuleMain.attach(expectedAddress);
     const accountTx = await generateUpdateKeysetHashTx(
+      chainId,
       proxyModuleMain,
       metaNonce,
       newKeysetHash,
@@ -189,19 +189,8 @@ describe("GasEstimation", function () {
     let value = ethers.utils.parseEther("0.1");
     const transferTx = await generateTransferTx(expectedAddress, ethers.constants.Zero, value);
     const nonce = 1;
-    const { chainId } = await moduleGuest.provider.getNetwork();
-    const feeToken = ethers.constants.AddressZero;
-    const feeReceiver = ethers.constants.AddressZero;
-    const feeAmount = 0;
-    const signature = await generateTransactionSig(chainId, [accountTx], nonce, feeToken, feeAmount, [], undefined);
-    const moduleMainTxData = moduleMain.interface.encodeFunctionData("execute", [
-      [accountTx],
-      nonce,
-      feeToken,
-      feeReceiver,
-      0,
-      signature,
-    ]);
+    const signature = await generateTransactionSig(chainId, proxyModuleMain.address, [accountTx], nonce, [], undefined);
+    const moduleMainTxData = moduleMain.interface.encodeFunctionData("execute", [[accountTx], nonce, signature]);
     const moduleMainTx = {
       target: expectedAddress,
       callType: CallType.Call,
@@ -213,15 +202,10 @@ describe("GasEstimation", function () {
     const moduleGuestTxData = moduleGuest.interface.encodeFunctionData("execute", [
       [deployTx, moduleMainTx, transferTx],
       nonce,
-      ethers.constants.AddressZero,
-      ethers.constants.AddressZero,
-      0,
       "0x",
     ]);
     const estimate = await gasEstimation.callStatic.estimate(moduleGuest.address, moduleGuestTxData);
-    const realTx = await (
-      await moduleGuest.execute([deployTx, moduleMainTx, transferTx], nonce, feeToken, feeReceiver, 0, signature, { value })
-    ).wait();
+    const realTx = await (await moduleGuest.execute([deployTx, moduleMainTx, transferTx], nonce, signature, { value })).wait();
     expect(estimate.gas.toNumber() + txBaseCost(moduleGuestTxData)).to.approximately(realTx.gasUsed.toNumber(), 5000);
     const ret = await proxyModuleMain.getLockInfo();
     expect(ret.lockedKeysetHashRet).to.equal(newKeysetHash);

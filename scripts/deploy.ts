@@ -1,8 +1,9 @@
-import { BigNumber, ContractFactory, providers } from "ethers";
+import { BigNumber, Contract, ContractFactory, providers } from "ethers";
 import { ethers, network, run, tenderly } from "hardhat";
 import ora from "ora";
 import fs from "fs";
 import { Deployer } from "../test/utils/deployer";
+import { expect } from "chai";
 
 const DkimKeysAdmin: string = "0x4d802eb3F2027Ae2d22daa101612BAe022a849Dc";
 const WhiteListAdmin: string = "0xd2bef91743Db86f6c4a621542240400e9C171f0b";
@@ -57,14 +58,15 @@ async function main() {
   const DkimKeys = await ethers.getContractFactory("DkimKeys");
   let dkimKeys = await deployer.deployContract(DkimKeys, instance, txParams, DkimKeysAdmin);
 
-  const WhiteList = await ethers.getContractFactory("ModuleWhiteList");
-  const whiteList = await deployer.deployContract(WhiteList, instance, txParams, WhiteListAdmin);
-
   prompt.start("Start To Proxy DkimKeys");
   const ERC1967 = await ethers.getContractFactory("ERC1967Proxy");
-  const erc1967 = await deployer.deployContract(ERC1967, instance, txParams, dkimKeys.address, "0x");
+  const calldata = DkimKeys.interface.encodeFunctionData("initialize");
+  const erc1967 = await deployer.deployContract(ERC1967, instance, txParams, dkimKeys.address, calldata);
   dkimKeys = dkimKeys.attach(erc1967.address);
   prompt.succeed();
+
+  const WhiteList = await ethers.getContractFactory("ModuleWhiteList");
+  const whiteList = await deployer.deployContract(WhiteList, instance, txParams, WhiteListAdmin);
 
   const ModuleMainUpgradable = await ethers.getContractFactory("ModuleMainUpgradable");
   const moduleMainUpgradable = await deployer.deployContract(
@@ -74,12 +76,6 @@ async function main() {
     dkimKeys.address,
     whiteList.address
   );
-
-  prompt.start("Start To Deploy Proxy WhiteList And Add ModuleMainUpgradable To WhiteList");
-  if (!(await whiteList.isImplementationWhiteList(moduleMainUpgradable.address))) {
-    await whiteList.updateImplementationWhiteList(moduleMainUpgradable.address, true);
-  }
-  prompt.succeed();
 
   const ModuleMain = await ethers.getContractFactory("ModuleMain");
   const moduleMain = await deployer.deployContract(
@@ -94,6 +90,10 @@ async function main() {
 
   const ModuleGuest = await ethers.getContractFactory("ModuleGuest");
   const moduleGuest = await deployer.deployContract(ModuleGuest, 0, txParams);
+
+  prompt.start("Start to Initalize White List");
+  await addImplementationWhiteList(whiteList, moduleMainUpgradable.address);
+  prompt.succeed();
 
   prompt.start(`writing deployment information to ${network.name}.json`);
   fs.writeFileSync(
@@ -141,6 +141,20 @@ async function main() {
   await attempVerify("ModuleGuest", ModuleGuest, moduleGuest.address);
 
   prompt.succeed();
+}
+
+async function addHookWhiteList(whiteList: Contract, addr: string) {
+  if (!(await whiteList.isHookWhiteList(addr))) {
+    const ret = await (await whiteList.updateHookWhiteList(addr, true)).wait();
+    expect(ret.status).to.equals(1);
+  }
+}
+
+async function addImplementationWhiteList(whiteList: Contract, addr: string) {
+  if (!(await whiteList.isImplementationWhiteList(addr))) {
+    const ret = await (await whiteList.updateImplementationWhiteList(addr, true)).wait();
+    expect(ret.status).to.equals(1);
+  }
 }
 
 main().catch((error) => {

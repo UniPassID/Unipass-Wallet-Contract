@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { Contract, ContractFactory, Overrides, Wallet } from "ethers";
-import { hexlify, randomBytes, solidityPack } from "ethers/lib/utils";
+import { formatBytes32String, hexlify, hexZeroPad, randomBytes, solidityPack } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import NodeRSA from "node-rsa";
 import { getKeysetHash, transferEth } from "./utils/common";
@@ -103,7 +103,7 @@ describe("ModuleMain Benchmark", function () {
       await dkimKeys
         .connect(dkimKeysAdmin)
         .updateDKIMKey(
-          solidityPack(["bytes", "bytes"], [Buffer.from("s2055"), Buffer.from("unipass.com")]),
+          solidityPack(["bytes32", "bytes32"], [formatBytes32String("s2055"), formatBytes32String("unipass.com")]),
           privateKey.exportKey("components-public").n.subarray(1)
         )
     ).wait();
@@ -135,7 +135,7 @@ describe("ModuleMain Benchmark", function () {
           const keysetHash = getKeysetHash(keys);
           const wallet = await deployer.deployProxyContract(moduleMain.interface, moduleMain.address, keysetHash, txParams);
 
-          const transaction = await generateUpdateKeysetHashTx(wallet, 1, newKeysetHash, false, [
+          const transaction = await generateUpdateKeysetHashTx(chainId, wallet, 1, newKeysetHash, false, [
             [keys[0], false],
             [keys[1], true],
             [keys[2], true],
@@ -157,7 +157,7 @@ describe("ModuleMain Benchmark", function () {
           const keysetHash = getKeysetHash(keys);
           const wallet = await deployer.deployProxyContract(moduleMain.interface, moduleMain.address, keysetHash, txParams);
 
-          const transaction = await generateUpdateKeysetHashTx(wallet, 1, newKeysetHash, false, [
+          const transaction = await generateUpdateKeysetHashTx(chainId, wallet, 1, newKeysetHash, false, [
             [keys[0], true],
             [keys[1], true],
             [keys[2], false],
@@ -179,7 +179,7 @@ describe("ModuleMain Benchmark", function () {
           const keysetHash = getKeysetHash(keys);
           const wallet = await deployer.deployProxyContract(moduleMain.interface, moduleMain.address, keysetHash, txParams);
 
-          const transaction = await generateUpdateKeysetHashTx(wallet, 1, newKeysetHash, true, [
+          const transaction = await generateUpdateKeysetHashTx(chainId, wallet, 1, newKeysetHash, true, [
             [keys[0], false],
             [keys[1], true],
             [keys[2], true],
@@ -201,7 +201,7 @@ describe("ModuleMain Benchmark", function () {
           const keysetHash = getKeysetHash(keys);
           const wallet = await deployer.deployProxyContract(moduleMain.interface, moduleMain.address, keysetHash, txParams);
 
-          let transaction = await generateUpdateTimeLockDuringTx(wallet, 1, 1, [
+          let transaction = await generateUpdateTimeLockDuringTx(chainId, wallet, 1, 1, [
             [keys[0], false],
             [keys[1], true],
             [keys[2], true],
@@ -209,7 +209,7 @@ describe("ModuleMain Benchmark", function () {
 
           let tx = await executeCall([transaction], chainId, 1, [], wallet, undefined, txParams);
 
-          transaction = await generateUpdateKeysetHashTx(wallet, 2, newKeysetHash, true, [
+          transaction = await generateUpdateKeysetHashTx(chainId, wallet, 2, newKeysetHash, true, [
             [keys[0], false],
             [keys[1], true],
             [keys[2], true],

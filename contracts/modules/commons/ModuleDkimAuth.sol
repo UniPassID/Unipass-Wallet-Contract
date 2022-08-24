@@ -15,11 +15,7 @@ contract ModuleDkimAuth {
         dkimKeys = _dkimKeys;
     }
 
-    function _dkimVerify(
-        bytes calldata _data,
-        uint256 _index,
-        bytes memory inputEmailFrom
-    )
+    function _dkimVerify(bytes calldata _data, uint256 _index)
         internal
         view
         returns (
@@ -29,12 +25,7 @@ contract ModuleDkimAuth {
             uint256
         )
     {
-        try dkimKeys.dkimVerify(_data, _index, inputEmailFrom) returns (
-            bool ret,
-            bytes32 emailHash,
-            bytes memory sigHashHex,
-            uint256 index
-        ) {
+        try dkimKeys.dkimVerify(_data, _index) returns (bool ret, bytes32 emailHash, bytes memory sigHashHex, uint256 index) {
             return (ret, emailHash, sigHashHex, index);
         } catch (bytes memory reason) {
             revert DkimFailed(reason);

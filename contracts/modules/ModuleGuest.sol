@@ -3,36 +3,14 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./commons/ModuleRole.sol";
+import "./commons/ModuleTransaction.sol";
 
-contract ModuleGuest {
+contract ModuleGuest is ModuleTransaction {
     using SafeERC20 for IERC20;
-
-    struct Transaction {
-        CallType callType;
-        uint256 gasLimit;
-        address target;
-        uint256 value;
-        bytes data;
-    }
-
-    enum CallType {
-        Call,
-        DelegateCall,
-        CallAccountLayer,
-        CallHooks
-    }
-
-    error TxFailed(bytes32, bytes);
-    error InvalidCallType(CallType);
-
-    event TxExecuted(bytes32 txHash);
 
     function execute(
         Transaction[] calldata _txs,
         uint256 _nonce,
-        address feeToken,
-        address feeReceiver,
-        uint256 feeAmount,
         bytes calldata
     ) external payable {
         uint256 chainId;
@@ -40,14 +18,9 @@ contract ModuleGuest {
             chainId := chainid()
         }
 
-        bytes32 txhash = keccak256(
-            abi.encodePacked(abi.encodePacked(chainId, keccak256(abi.encode(_nonce, _txs))), feeToken, feeAmount)
-        );
+        bytes32 txhash = keccak256(abi.encodePacked(chainId, keccak256(abi.encode(_nonce, _txs))));
 
         _execute(txhash, _txs);
-        if (feeAmount != 0) {
-            _payFee(feeToken, feeReceiver, feeAmount);
-        }
     }
 
     function _execute(bytes32 _txHash, Transaction[] calldata _txs) internal {
@@ -70,20 +43,8 @@ contract ModuleGuest {
             if (success) {
                 emit TxExecuted(_txHash);
             } else {
-                revert TxFailed(_txHash, result);
+                _revertBytes(transaction, _txHash, result);
             }
         }
-    }
-
-    function _payFee(
-        address feeToken,
-        address feeReceiver,
-        uint256 feeAmount
-    ) private {
-        // transfer native token to msg.sender
-        if (feeToken == address(0))
-            payable(feeReceiver).transfer(feeAmount);
-            // transfer erc20 token to msg.sender
-        else IERC20(feeToken).safeTransfer(feeReceiver, feeAmount);
     }
 }

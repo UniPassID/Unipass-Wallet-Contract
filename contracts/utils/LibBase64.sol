@@ -14,7 +14,7 @@ library LibBase64 {
         hex"00000102030405060708090a0b0c0d0e0f101112131415161718190000000000"
         hex"001a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132330000000000";
 
-    function decode(bytes memory _data) internal pure returns (bytes memory) {
+    function decode(bytes calldata _data) internal pure returns (bytes memory) {
         bytes memory data = bytes(_data);
 
         if (data.length == 0) return new bytes(0);

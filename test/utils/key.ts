@@ -63,15 +63,8 @@ export class KeyEmailAddress extends KeyBase {
     let email = await getSignEmailWithDkim(digestHash, this.emailAddress, "test@unipass.me", this.unipassPrivateKey);
     let { params } = await parseEmailParams(email);
     return solidityPack(
-      ["uint8", "uint8", "uint32", "bytes", "bytes", "bytes"],
-      [
-        KeyType.EmailAddress,
-        1,
-        this.emailAddress.length,
-        Buffer.from(this.emailAddress, "utf-8"),
-        SerializeDkimParams(params),
-        this.serializeRoleWeight(),
-      ]
+      ["uint8", "uint8", "bytes", "bytes"],
+      [KeyType.EmailAddress, 1, SerializeDkimParams(params), this.serializeRoleWeight()]
     );
   }
   public async generateKey(): Promise<string> {
