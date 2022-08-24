@@ -33,25 +33,36 @@ export interface DkimParams {
  * @returns Params Serializing String
  */
 export function SerializeDkimParams(params: DkimParams): string {
-  let sig = solidityPack(["uint32", "bytes"], [params.emailHeader.length / 2 - 1, params.emailHeader]);
-  sig = solidityPack(["bytes", "uint32", "bytes"], [sig, params.dkimSig.length / 2 - 1, params.dkimSig]);
-  sig = solidityPack(
-    ["bytes", "uint32", "uint32", "uint32", "uint32", "uint32"],
-    [sig, params.fromIndex, params.fromLeftIndex, params.fromRightIndex, params.subjectIndex, params.subjectRightIndex]
+  let isSubBase64 = 0;
+  params.isSubBase64.forEach((v, i) => {
+    isSubBase64 = isSubBase64 | Number(v) << i;
+  });
+  let sig = solidityPack(
+    ["uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32"],
+    [
+      params.subjectIndex,
+      params.subjectRightIndex,
+      params.subjectPadding.length,
+      isSubBase64,
+      params.fromIndex,
+      params.fromLeftIndex,
+      params.fromRightIndex,
+      params.dkimHeaderIndex,
+      params.selectorIndex,
+      params.selectorRightIndex,
+      params.sdidIndex,
+      params.sdidRightIndex,
+    ]
   );
-  sig = solidityPack(["bytes", "uint32"], [sig, params.isSubBase64.length]);
-  for (const isBase64 of params.isSubBase64) {
-    sig = solidityPack(["bytes", "uint8"], [sig, isBase64 ? 1 : 0]);
-  }
-  sig = solidityPack(["bytes", "uint32", "bytes"], [sig, params.subjectPadding.length, params.subjectPadding]);
-  sig = solidityPack(["bytes", "uint32"], [sig, params.subject.length]);
+  sig = solidityPack(["bytes", "uint32", "bytes"], [sig, params.emailHeader.length / 2 - 1, params.emailHeader]);
+
+  let subjects = "0x";
   for (const subject of params.subject) {
-    sig = solidityPack(["bytes", "uint32", "bytes"], [sig, subject.length, subject]);
+    subjects = solidityPack(["bytes", "uint32", "bytes"], [subjects, subject.length, subject]);
   }
-  sig = solidityPack(
-    ["bytes", "uint32", "uint32", "uint32", "uint32", "uint32"],
-    [sig, params.dkimHeaderIndex, params.selectorIndex, params.selectorRightIndex, params.sdidIndex, params.sdidRightIndex]
-  );
+  sig = solidityPack(["bytes", "uint32", "bytes"], [sig, subjects.length / 2 - 1, subjects]);
+  sig = solidityPack(["bytes", "uint32", "bytes"], [sig, params.dkimSig.length / 2 - 1, params.dkimSig]);
+
   return sig;
 }
 

@@ -1,6 +1,6 @@
 import { BigNumber, Contract, Overrides, utils, Wallet } from "ethers";
 import { arrayify, BytesLike, keccak256, solidityPack } from "ethers/lib/utils";
-import { ethers,upgrades } from "hardhat";
+import { ethers } from "hardhat";
 import { KeyBase } from "./key";
 
 export enum ActionType {
@@ -30,6 +30,7 @@ export enum SignerType {
 
 export interface Transaction {
   callType: CallType;
+  revertOnError: boolean;
   gasLimit: BigNumber;
   target: BytesLike;
   value: BigNumber;
@@ -40,48 +41,37 @@ export async function signerSign(hash: string, signer: Wallet): Promise<string> 
   return solidityPack(["bytes", "uint8"], [await signer.signMessage(arrayify(hash)), SignerType.EthSign]);
 }
 
-export function generateTransactionHash(
-  chainId: number,
-  tx: Transaction[],
-  nonce: number,
-  feeToken: string,
-  feeAmount: number
-): string {
-  const digestHash = keccak256(
-    solidityPack(
-      ["uint256", "bytes32", "address", "uint256"],
-      [
-        chainId,
-        keccak256(
-          utils.defaultAbiCoder.encode(
-            ["uint256", "tuple(uint8 callType,uint256 gasLimit,address target,uint256 value,bytes data)[]"],
-            [nonce, tx]
-          )
-        ),
-        feeToken,
-        feeAmount,
-      ]
+export function generateTransactionHash(chainId: number, address: string, tx: Transaction[], nonce: number): string {
+  let digestHash = keccak256(
+    utils.defaultAbiCoder.encode(
+      ["uint256", "tuple(uint8 callType,bool revertOnError,address target,uint256 gasLimit,uint256 value,bytes data)[]"],
+      [nonce, tx]
     )
   );
+  digestHash = eip712hash(chainId, address, digestHash);
   return digestHash;
+}
+
+export function eip712hash(chainId: number, address: string, hash: BytesLike): string {
+  return keccak256(solidityPack(["bytes", "uint256", "address", "bytes32"], [Buffer.from("\x19\x01"), chainId, address, hash]));
 }
 
 export async function generateTransactionSig(
   chainId: number,
+  address: string,
   tx: Transaction[],
   nonce: number,
-  feeToken: string,
-  feeAmount: number,
   keys: [KeyBase, boolean][],
   sessionKey: SessionKey | undefined
 ): Promise<string> {
-  const digestHash = generateTransactionHash(chainId, tx, nonce, feeToken, feeAmount);
-  let sig: string = await generateSignature(digestHash, keys, sessionKey);
+  const digestHash = generateTransactionHash(chainId, address, tx, nonce);
+  let sig: string = await generateSignature(digestHash, chainId, address, keys, sessionKey);
 
   return sig;
 }
 
 export async function generateSyncAccountTx(
+  chainId: number,
   contract: Contract,
   metaNonce: number,
   newKeysetHash: string,
@@ -91,8 +81,8 @@ export async function generateSyncAccountTx(
 ) {
   const digestHash = keccak256(
     solidityPack(
-      ["uint32", "address", "uint8", "bytes32", "uint32", "address"],
-      [metaNonce, contract.address, ActionType.SyncAccount, newKeysetHash, newTimeLockDuring, newImplementation]
+      ["uint8", "uint32", "bytes32", "uint32", "address"],
+      [ActionType.SyncAccount, metaNonce, newKeysetHash, newTimeLockDuring, newImplementation]
     )
   );
 
@@ -101,12 +91,13 @@ export async function generateSyncAccountTx(
     newKeysetHash,
     newTimeLockDuring,
     newImplementation,
-    await generateSignature(digestHash, keys, undefined),
+    await generateSignature(digestHash, chainId, contract.address, keys, undefined),
   ]);
 
   let tx = {
     callType: CallType.Call,
     gasLimit: ethers.constants.Zero,
+    revertOnError: true,
     target: contract.address,
     value: ethers.constants.Zero,
     data,
@@ -115,6 +106,7 @@ export async function generateSyncAccountTx(
 }
 
 export async function generateUpdateKeysetHashTx(
+  chainId: number,
   contract: Contract,
   metaNonce: number,
   newKeysetHash: string,
@@ -122,12 +114,8 @@ export async function generateUpdateKeysetHashTx(
   keys: [KeyBase, boolean][]
 ) {
   const digestHash = keccak256(
-    solidityPack(
-      ["uint32", "address", "uint8", "bytes32"],
-      [metaNonce, contract.address, ActionType.UpdateKeysetHash, newKeysetHash]
-    )
+    solidityPack(["uint8", "uint32", "bytes32"], [ActionType.UpdateKeysetHash, metaNonce, newKeysetHash])
   );
-
   let func: string;
   if (withTimeLock) {
     func = "updateKeysetHashWithTimeLock";
@@ -137,11 +125,12 @@ export async function generateUpdateKeysetHashTx(
   const data = contract.interface.encodeFunctionData(func, [
     metaNonce,
     newKeysetHash,
-    await generateSignature(digestHash, keys, undefined),
+    await generateSignature(digestHash, chainId, contract.address, keys, undefined),
   ]);
 
   let tx = {
     callType: CallType.Call,
+    revertOnError: true,
     gasLimit: ethers.constants.Zero,
     target: contract.address,
     value: ethers.constants.Zero,
@@ -155,6 +144,7 @@ export async function generateUnlockKeysetHashTx(contract: Contract, metaNonce: 
 
   let tx = {
     callType: CallType.Call,
+    revertOnError: true,
     gasLimit: ethers.constants.Zero,
     target: contract.address,
     value: ethers.constants.Zero,
@@ -163,17 +153,21 @@ export async function generateUnlockKeysetHashTx(contract: Contract, metaNonce: 
   return tx;
 }
 
-export async function generateCancelLockKeysetHashTx(contract: Contract, metaNonce: number, keys: [KeyBase, boolean][]) {
-  const digestHash = keccak256(
-    solidityPack(["uint32", "address", "uint8"], [metaNonce, contract.address, ActionType.CancelLockKeysetHash])
-  );
+export async function generateCancelLockKeysetHashTx(
+  chainId: number,
+  contract: Contract,
+  metaNonce: number,
+  keys: [KeyBase, boolean][]
+) {
+  const digestHash = keccak256(solidityPack(["uint8", "uint32"], [ActionType.CancelLockKeysetHash, metaNonce]));
   const data = contract.interface.encodeFunctionData("cancelLockKeysetHsah", [
     metaNonce,
-    await generateSignature(digestHash, keys, undefined),
+    await generateSignature(digestHash, chainId, contract.address, keys, undefined),
   ]);
 
   let tx = {
     callType: CallType.Call,
+    revertOnError: true,
     gasLimit: ethers.constants.Zero,
     target: contract.address,
     value: ethers.constants.Zero,
@@ -183,27 +177,25 @@ export async function generateCancelLockKeysetHashTx(contract: Contract, metaNon
 }
 
 export async function generateUpdateTimeLockDuringTx(
+  chainId: number,
   contract: Contract,
   metaNonce: number,
   newTimeLockDuring: number,
   keys: [KeyBase, boolean][]
 ) {
   const digestHash = keccak256(
-    solidityPack(
-      ["uint32", "address", "uint8", "uint32"],
-      [metaNonce, contract.address, ActionType.UpdateTimeLockDuring, newTimeLockDuring]
-    )
+    solidityPack(["uint8", "uint32", "uint32"], [ActionType.UpdateTimeLockDuring, metaNonce, newTimeLockDuring])
   );
-
   const data = contract.interface.encodeFunctionData("updateTimeLockDuring", [
     metaNonce,
     newTimeLockDuring,
-    await generateSignature(digestHash, keys, undefined),
+    await generateSignature(digestHash, chainId, contract.address, keys, undefined),
   ]);
 
   let tx = {
     callType: CallType.Call,
     gasLimit: ethers.constants.Zero,
+    revertOnError: true,
     target: contract.address,
     value: ethers.constants.Zero,
     data,
@@ -214,6 +206,7 @@ export async function generateUpdateTimeLockDuringTx(
 export async function generateTransferTx(target: BytesLike, gasLimit: BigNumber, value: BigNumber) {
   let tx = {
     callType: CallType.Call,
+    revertOnError: true,
     gasLimit,
     target,
     value,
@@ -223,26 +216,24 @@ export async function generateTransferTx(target: BytesLike, gasLimit: BigNumber,
 }
 
 export async function generateUpdateImplementationTx(
+  chainId: number,
   contract: Contract,
   metaNonce: number,
   newImplementation: string,
   keys: [KeyBase, boolean][]
 ) {
   const digestHash = keccak256(
-    solidityPack(
-      ["uint32", "address", "uint8", "address"],
-      [metaNonce, contract.address, ActionType.UpdateImplementation, newImplementation]
-    )
+    solidityPack(["uint8", "uint32", "address"], [ActionType.UpdateImplementation, metaNonce, newImplementation])
   );
-
   const data = contract.interface.encodeFunctionData("updateImplementation", [
     metaNonce,
     newImplementation,
-    await generateSignature(digestHash, keys, undefined),
+    await generateSignature(digestHash, chainId, contract.address, keys, undefined),
   ]);
 
   let tx = {
     callType: CallType.Call,
+    revertOnError: true,
     gasLimit: ethers.constants.Zero,
     target: contract.address,
     value: ethers.constants.Zero,
@@ -255,6 +246,7 @@ export function generateUpdateEntryPointTx(contract: Contract, eip4337WalletNonc
   const data = contract.interface.encodeFunctionData("updateEntryPoint", [eip4337WalletNonce, newEntryPoint]);
   let tx = {
     callType: CallType.Call,
+    revertOnError: true,
     gasLimit: ethers.constants.Zero,
     target: contract.address,
     value: ethers.constants.Zero,
@@ -268,6 +260,7 @@ export function generateRemovePermissionTx(contract: Contract, selector: BytesLi
   let tx = {
     callType: CallType.Call,
     gasLimit: ethers.constants.Zero,
+    revertOnError: true,
     target: contract.address,
     value: ethers.constants.Zero,
     data,
@@ -279,6 +272,7 @@ export function generateAddPermissionTx(contract: Contract, role: Role, selector
   const data = contract.interface.encodeFunctionData("addPermission", [role, selector, threshold]);
   let tx = {
     callType: CallType.Call,
+    revertOnError: true,
     gasLimit: ethers.constants.Zero,
     target: contract.address,
     value: ethers.constants.Zero,
@@ -296,13 +290,9 @@ export async function executeCall(
   sessionKey: SessionKey | undefined,
   txParams: Overrides
 ) {
-  const feeToken = ethers.constants.AddressZero;
-  const feeReceiver = ethers.constants.AddressZero;
-  const feeAmount = 0;
+  let signature = await generateTransactionSig(chainId, moduleMain.address, txs, nonce, keys, sessionKey);
 
-  let signature = await generateTransactionSig(chainId, txs, nonce, feeToken, feeAmount, keys, sessionKey);
-
-  const ret = await (await moduleMain.execute(txs, nonce, feeToken, feeReceiver, 0, signature, txParams)).wait();
+  const ret = await (await moduleMain.execute(txs, nonce, signature, txParams)).wait();
   return ret;
 }
 
@@ -314,6 +304,8 @@ export interface SessionKey {
 
 export async function generateSignature(
   digestHash: string,
+  chainId: number,
+  contractAddr: string,
   keys: [KeyBase, boolean][],
   sessionKey: SessionKey | undefined
 ): Promise<string> {
@@ -328,8 +320,10 @@ export async function generateSignature(
       ["uint8", "uint32", "uint32", "bytes"],
       [1, sessionKey.timestamp, sessionKey.weight, await signerSign(digestHash, sessionKey.key)]
     );
-    digestHash = keccak256(
-      solidityPack(["address", "uint32", "uint32"], [sessionKey.key.address, sessionKey.timestamp, sessionKey.weight])
+    digestHash = eip712hash(
+      chainId,
+      contractAddr,
+      keccak256(solidityPack(["address", "uint32", "uint32"], [sessionKey.key.address, sessionKey.timestamp, sessionKey.weight]))
     );
   }
   for (const [key, isSig] of keys) {

@@ -36,27 +36,18 @@ describe("ModuleGuest", function () {
 
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     wallet = Wallet.createRandom();
-    dkimKeys = await deployer.deployContract(
-      DkimKeys,
-      0,
-      txParams,
-      wallet.address
-    );
+    dkimKeys = await deployer.deployContract(DkimKeys, 0, txParams, wallet.address);
 
-    const CallReceiverMock = await ethers.getContractFactory(
-      "CallReceiverMock"
-    );
+    const CallReceiverMock = await ethers.getContractFactory("CallReceiverMock");
     callReceiverMock = await CallReceiverMock.deploy();
   });
   this.beforeEach(async function () {
     valA = randomInt(65535);
     valB = "0x" + Buffer.from(randomBytes(10)).toString("hex");
-    data1 = callReceiverMock.interface.encodeFunctionData("testCall", [
-      valA,
-      valB,
-    ]);
+    data1 = callReceiverMock.interface.encodeFunctionData("testCall", [valA, valB]);
     txs = [
       {
+        revertOnError: true,
         callType: CallType.Call,
         gasLimit: optimalGasLimit,
         target: callReceiverMock.address,
@@ -68,16 +59,7 @@ describe("ModuleGuest", function () {
     sig = "0x" + Buffer.from(randomBytes(63)).toString("hex");
   });
   it("A Call Transaction Should Success With Random Nonce and Random Signature", async function () {
-    let ret = await (
-      await moduleGuest.execute(
-        txs,
-        nonce,
-        ethers.constants.AddressZero,
-        ethers.constants.AddressZero,
-        0,
-        sig
-      )
-    ).wait();
+    let ret = await (await moduleGuest.execute(txs, nonce, sig)).wait();
     expect(ret.status).to.equal(1);
     expect(await callReceiverMock.lastValA()).to.equal(valA);
     expect(await callReceiverMock.lastValB()).to.equal(valB);
@@ -86,45 +68,30 @@ describe("ModuleGuest", function () {
     txs = [
       {
         callType: CallType.DelegateCall,
+        revertOnError: true,
         gasLimit: optimalGasLimit,
         target: callReceiverMock.address,
         value: ethers.constants.Zero,
         data: data1,
       },
     ];
-    let ret = moduleGuest.execute(
-      txs,
-      0,
-      ethers.constants.AddressZero,
-      ethers.constants.AddressZero,
-      0,
-      "0x"
-    );
+    let ret = moduleGuest.execute(txs, 0, "0x");
     await expect(ret).to.be.revertedWith(
       `VM Exception while processing transaction: reverted with custom error 'InvalidCallType(1)'`
     );
   });
 
   it("A Reverted Tx Should Revert", async function () {
-    const data2 = callReceiverMock.interface.encodeFunctionData(
-      "setRevertFlag",
-      [true]
-    );
+    const data2 = callReceiverMock.interface.encodeFunctionData("setRevertFlag", [true]);
     txs.unshift({
       callType: CallType.Call,
+      revertOnError: true,
       gasLimit: optimalGasLimit,
       target: callReceiverMock.address,
       value: ethers.constants.Zero,
       data: data2,
     });
-    let ret = moduleGuest.execute(
-      txs,
-      nonce,
-      ethers.constants.AddressZero,
-      ethers.constants.AddressZero,
-      0,
-      sig
-    );
+    let ret = moduleGuest.execute(txs, nonce, sig);
     await expect(ret).to.be.reverted;
   });
 });

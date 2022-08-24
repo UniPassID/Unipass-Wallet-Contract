@@ -13,10 +13,10 @@ library LibBytes {
     error ReadFirstUint8OutOfBounds(bytes _data);
     error ReadUint8Uint8OutOfBounds(bytes _data, uint256 _index);
     error ReadAddressOutOfBounds(bytes _data, uint256 _index);
-    error ReadBytes66OutOfBounds(bytes _data, uint256 _index);
     error ReadBytes32OutOfBounds(bytes _data, uint256 _index);
     error ReadUint16OutOfBounds(bytes _data, uint256 _index);
     error ReadBytesOutOfBounds(bytes _datam, uint256 _index, uint256 _length);
+    error SplitInvalidNeedle();
 
     /***********************************|
   |        Read Bytes Functions       |
@@ -46,15 +46,6 @@ library LibBytes {
         }
     }
 
-    function readFirstUint8(bytes memory data) internal pure returns (uint8 a, uint256 newIndex) {
-        if (data.length == 0) revert ReadFirstUint8OutOfBounds(data);
-        assembly {
-            let word := mload(add(32, data))
-            a := shr(248, word)
-            newIndex := 1
-        }
-    }
-
     function cReadFirstUint8(bytes calldata data) internal pure returns (uint8 a, uint256 newIndex) {
         if (data.length == 0) revert ReadFirstUint8OutOfBounds(data);
         assembly {
@@ -64,10 +55,36 @@ library LibBytes {
         }
     }
 
+    function readBytes32(bytes memory b, uint256 index) internal pure returns (bytes32 result) {
+        // Arrays are prefixed by a 256 bit length parameter
+        uint256 pos = index + 32;
+
+        if (b.length < pos) revert ReadBytes32OutOfBounds(b, index);
+
+        // Read the bytes32 from array memory
+        assembly {
+            result := mload(add(b, pos))
+        }
+        return result;
+    }
+
     function mcReadBytes32(bytes calldata data, uint256 index) internal pure returns (bytes32 a) {
         assembly {
             a := calldataload(add(data.offset, index))
         }
+    }
+
+    function mcReadBytesN(
+        bytes calldata data,
+        uint256 index,
+        uint256 length
+    ) internal pure returns (bytes32 a) {
+        uint256 ret;
+        assembly {
+            ret := calldataload(add(data.offset, index))
+        }
+        uint256 offset = (32 - length) * 8;
+        a = bytes32((ret >> offset) << offset);
     }
 
     function mcReadUint8(bytes calldata data, uint256 index) internal pure returns (uint8 a) {
@@ -75,32 +92,6 @@ library LibBytes {
             let word := calldataload(add(data.offset, index))
             a := shr(248, word)
         }
-    }
-
-    /**
-     * @dev Reads consecutive bool (8 bits) and uint8 values.
-     * @param data Byte array to be read.
-     * @param index Index in byte array of uint8 and uint8 values.
-     * @return a uint8 value of data at given index.
-     * @return b uint8 value of data at given index + 8.
-     * @return newIndex Updated index after reading the values.
-     */
-    function readUint8Uint8(bytes memory data, uint256 index)
-        internal
-        pure
-        returns (
-            uint8 a,
-            uint8 b,
-            uint256 newIndex
-        )
-    {
-        assembly {
-            let word := mload(add(index, add(32, data)))
-            a := shr(248, word)
-            b := and(shr(240, word), 0xff)
-            newIndex := add(index, 2)
-        }
-        if (newIndex > data.length) revert ReadUint8Uint8OutOfBounds(data, index);
     }
 
     function cReadUint8Uint8(bytes calldata data, uint256 index)
@@ -120,82 +111,12 @@ library LibBytes {
         }
     }
 
-    /**
-     * @dev Reads an address value from a position in a byte array.
-     * @param data Byte array to be read.
-     * @param index Index in byte array of address value.
-     * @return a address value of data at given index.
-     * @return newIndex Updated index after reading the value.
-     */
-    function readAddress(bytes memory data, uint256 index) internal pure returns (address a, uint256 newIndex) {
-        assembly {
-            let word := mload(add(index, add(32, data)))
-            a := and(shr(96, word), 0xffffffffffffffffffffffffffffffffffffffff)
-            newIndex := add(index, 20)
-        }
-        if (newIndex > data.length) revert ReadAddressOutOfBounds(data, index);
-    }
-
     function cReadAddress(bytes calldata data, uint256 index) internal pure returns (address a, uint256 newIndex) {
         assembly {
             let word := calldataload(add(index, data.offset))
             a := and(shr(96, word), 0xffffffffffffffffffffffffffffffffffffffff)
             newIndex := add(index, 20)
         }
-    }
-
-    /**
-     * @dev Reads 66 bytes from a position in a byte array.
-     * @param data Byte array to be read.
-     * @param index Index in byte array of 66 bytes value.
-     * @return a 66 bytes bytes array value of data at given index.
-     * @return newIndex Updated index after reading the value.
-     */
-    function readBytes66(bytes memory data, uint256 index) internal pure returns (bytes memory a, uint256 newIndex) {
-        a = new bytes(66);
-        assembly {
-            let offset := add(32, add(data, index))
-            mstore(add(a, 32), mload(offset))
-            mstore(add(a, 64), mload(add(offset, 32)))
-            mstore(add(a, 66), mload(add(offset, 34)))
-            newIndex := add(index, 66)
-        }
-        if (newIndex > data.length) revert ReadBytes66OutOfBounds(data, index);
-    }
-
-    /**
-     * @dev Reads a bytes32 value from a position in a byte array.
-     * @param b Byte array containing a bytes32 value.
-     * @param index Index in byte array of bytes32 value.
-     * @return result bytes32 value from byte array.
-     */
-    function readBytes32(bytes memory b, uint256 index) internal pure returns (bytes32 result) {
-        // Arrays are prefixed by a 256 bit length parameter
-        uint256 pos = index + 32;
-
-        if (b.length < pos) revert ReadBytes32OutOfBounds(b, index);
-
-        // Read the bytes32 from array memory
-        assembly {
-            result := mload(add(b, pos))
-        }
-        return result;
-    }
-
-    /**
-     * @dev Reads an uint16 value from a position in a byte array.
-     * @param data Byte array to be read.
-     * @param index Index in byte array of uint16 value.
-     * @return a uint16 value of data at given index.
-     * @return newIndex Updated index after reading the value.
-     */
-    function readUint16(bytes memory data, uint256 index) internal pure returns (uint16 a, uint256 newIndex) {
-        assembly {
-            let word := mload(add(index, add(32, data)))
-            a := and(shr(240, word), 0xffff)
-            newIndex := add(index, 2)
-        }
-        if (newIndex > data.length) revert ReadUint16OutOfBounds(data, index);
     }
 
     function cReadBytes4(bytes calldata data, uint256 index) internal pure returns (bytes4 a, uint256 newIndex) {
@@ -221,63 +142,7 @@ library LibBytes {
         }
     }
 
-    /**
-     * @dev Reads bytes from a position in a byte array.
-     * @param data Byte array to be read.
-     * @param index Index in byte array of bytes value.
-     * @param size Number of bytes to read.
-     * @return a bytes bytes array value of data at given index.
-     * @return newIndex Updated index after reading the value.
-     */
-    function readBytes(
-        bytes memory data,
-        uint256 index,
-        uint256 size
-    ) internal pure returns (bytes memory a, uint256 newIndex) {
-        a = new bytes(size);
-
-        assembly {
-            let offset := add(32, add(data, index))
-
-            let i := 0
-            let n := 32
-            // Copy each word, except last one
-            for {
-
-            } lt(n, size) {
-                i := n
-                n := add(n, 32)
-            } {
-                mstore(add(a, n), mload(add(offset, i)))
-            }
-
-            // Load word after new array
-            let suffix := add(a, add(32, size))
-            let suffixWord := mload(suffix)
-
-            // Copy last word, overwrites after array
-            mstore(add(a, n), mload(add(offset, i)))
-
-            // Restore after array
-            mstore(suffix, suffixWord)
-
-            newIndex := add(index, size)
-        }
-
-        assert(newIndex >= index);
-        if (newIndex > data.length) revert ReadBytesOutOfBounds(data, index, size);
-    }
-
-    function splitSigAndArgs(bytes memory data) internal pure returns (bytes4 sig, bytes memory args) {
-        assembly {
-            // First 4 bytes are the signature
-            sig := and(0xffffffff, mload(add(data, 32)))
-        }
-
-        (args, ) = readBytes(data, 4, data.length - 4);
-    }
-
-    function toLower(bytes memory bStr) internal pure returns (bytes memory) {
+    function toLower(bytes calldata bStr) internal pure returns (bytes memory) {
         bytes memory bLower = new bytes(bStr.length);
         for (uint256 i = 0; i < bStr.length; i++) {
             // Uppercase character...
@@ -291,24 +156,18 @@ library LibBytes {
         return bLower;
     }
 
-    /*
-     * @dev Returns the n byte value at the specified index of self.
-     * @param self The byte string.
-     * @param idx The index into the bytes.
-     * @param len The number of bytes.
-     * @return The specified 32 bytes of the string.
-     */
-    function readBytesN(
-        bytes memory self,
-        uint256 idx,
-        uint256 len
-    ) internal pure returns (bytes32 ret) {
-        require(len <= 32);
-        require(idx + len <= self.length);
-        assembly {
-            let mask := not(sub(exp(256, sub(32, len)), 1))
-            ret := and(mload(add(add(self, 32), idx)), mask)
+    function toLowerMemory(bytes memory bStr) internal pure returns (bytes memory) {
+        bytes memory bLower = new bytes(bStr.length);
+        for (uint256 i = 0; i < bStr.length; i++) {
+            // Uppercase character...
+            if ((uint8(bStr[i]) >= 65) && (uint8(bStr[i]) <= 90)) {
+                // So we add 32 to make it lowercase
+                bLower[i] = bytes1(uint8(bStr[i]) + 32);
+            } else {
+                bLower[i] = bStr[i];
+            }
         }
+        return bLower;
     }
 
     function toHex(uint256 value, uint256 length) internal pure returns (bytes memory) {
@@ -321,5 +180,39 @@ library LibBytes {
         }
         require(value == 0, "Strings: hex length insufficient");
         return buffer;
+    }
+
+    function findBytes1(
+        bytes calldata self,
+        uint256 _index,
+        bytes1 _needle
+    ) internal pure returns (uint256 index) {
+        for (index = _index; index < self.length; index++) {
+            if (self[index] == _needle) {
+                return index;
+            }
+        }
+        revert SplitInvalidNeedle();
+    }
+
+    function findBytes(
+        bytes calldata self,
+        uint256 _index,
+        bytes calldata _needle
+    ) internal pure returns (uint256 index) {
+        uint256 selfLength = self.length;
+        uint256 needleLength = _needle.length;
+        for (index = _index; index < selfLength; index++) {
+            uint256 innerIndex;
+            for (innerIndex; innerIndex < needleLength; innerIndex++) {
+                if (self[index + innerIndex] != _needle[innerIndex]) {
+                    break;
+                }
+            }
+            if (innerIndex == needleLength) {
+                return index;
+            }
+        }
+        revert SplitInvalidNeedle();
     }
 }

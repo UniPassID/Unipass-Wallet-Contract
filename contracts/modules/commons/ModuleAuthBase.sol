@@ -116,7 +116,7 @@ abstract contract ModuleAuthBase is
         uint256 metaNonce = getMetaNonce();
         require(metaNonce < _metaNonce && metaNonce + 100 > _metaNonce, "syncAccount: INVALID_METANONCE");
         bytes32 digestHash = keccak256(
-            abi.encodePacked(_metaNonce, address(this), uint8(SYNC_ACCOUNT), _keysetHash, _newTimeLockDuring, _newImplementation)
+            abi.encodePacked(uint8(SYNC_ACCOUNT), _metaNonce, _keysetHash, _newTimeLockDuring, _newImplementation)
         );
 
         (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
@@ -149,7 +149,7 @@ abstract contract ModuleAuthBase is
     ) external override onlySelf {
         _requireMetaNonce(_metaNonce);
         _requireUnLocked();
-        bytes32 digestHash = keccak256(abi.encodePacked(_metaNonce, address(this), uint8(UPDATE_KEYSET_HASH), _newKeysetHash));
+        bytes32 digestHash = keccak256(abi.encodePacked(uint8(UPDATE_KEYSET_HASH), _metaNonce, _newKeysetHash));
 
         (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
         require(success, "updateKeysetHash: INVALID_SIG");
@@ -176,7 +176,7 @@ abstract contract ModuleAuthBase is
     ) external onlySelf {
         _requireMetaNonce(_metaNonce);
         _requireUnLocked();
-        bytes32 digestHash = keccak256(abi.encodePacked(_metaNonce, address(this), uint8(UPDATE_KEYSET_HASH), _newKeysetHash));
+        bytes32 digestHash = keccak256(abi.encodePacked(uint8(UPDATE_KEYSET_HASH), _metaNonce, _newKeysetHash));
 
         (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
         require(success, "updateKeysetHashWithTimeLock: INVALID_SIG");
@@ -209,7 +209,7 @@ abstract contract ModuleAuthBase is
     function cancelLockKeysetHsah(uint32 _metaNonce, bytes calldata _signature) external onlySelf {
         _requireMetaNonce(_metaNonce);
         _requireLocked();
-        bytes32 digestHash = keccak256(abi.encodePacked(_metaNonce, address(this), uint8(CANCEL_LOCK_KEYSET_HASH)));
+        bytes32 digestHash = keccak256(abi.encodePacked(uint8(CANCEL_LOCK_KEYSET_HASH), _metaNonce));
 
         (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
         require(success, "cancelLockKeysetHsah: INVALID_SIG");
@@ -235,9 +235,8 @@ abstract contract ModuleAuthBase is
         _requireMetaNonce(_metaNonce);
         _requireUnLocked();
 
-        bytes32 digestHash = keccak256(
-            abi.encodePacked(_metaNonce, address(this), uint8(UPDATE_TIMELOCK_DURING), _newTimeLockDuring)
-        );
+        bytes32 digestHash = keccak256(abi.encodePacked(uint8(UPDATE_TIMELOCK_DURING), _metaNonce, _newTimeLockDuring));
+
         (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
         require(success, "updateTimeLockDuring: INVALID_SIG");
 
@@ -261,9 +260,7 @@ abstract contract ModuleAuthBase is
         _requireMetaNonce(_metaNonce);
         if (!_newImplementation.isContract()) revert InvalidImplementation(_newImplementation);
 
-        bytes32 digestHash = keccak256(
-            abi.encodePacked(_metaNonce, address(this), uint8(UPDATE_IMPLEMENTATION), _newImplementation)
-        );
+        bytes32 digestHash = keccak256(abi.encodePacked(uint8(UPDATE_IMPLEMENTATION), _metaNonce, _newImplementation));
 
         (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
         require(success, "updateImplementation: INVALID_SIG");
@@ -302,7 +299,7 @@ abstract contract ModuleAuthBase is
             (roleWeightRet.assetsOpWeight, index) = _signature.cReadUint32(index);
             address sessionKey = recoverSigner(_hash, _signature[index:index + 66]);
             index += 66;
-            bytes32 digestHash = keccak256(abi.encodePacked(sessionKey, timestamp, roleWeightRet.assetsOpWeight));
+            bytes32 digestHash = _subDigest(keccak256(abi.encodePacked(sessionKey, timestamp, roleWeightRet.assetsOpWeight)));
             bool success;
             (success, roleWeight) = _validateSignatureInner(digestHash, _signature, index);
             succ = success && roleWeightRet.assetsOpWeight <= roleWeight.assetsOpWeight;
@@ -427,21 +424,22 @@ abstract contract ModuleAuthBase is
         } else if (keyType == KeyType.EmailAddress) {
             isSig = _signature.mcReadUint8(index) == 1;
             ++index;
-            uint32 emailFromLen;
-            (emailFromLen, index) = _signature.cReadUint32(index);
-            bytes calldata emailFrom = _signature[index:index + emailFromLen];
-            index += emailFromLen;
+
             if (isSig) {
                 bool succ;
                 bytes memory sigHashHex;
-                (succ, emailHash, sigHashHex, index) = _dkimVerify(_signature, index, emailFrom);
+                (succ, emailHash, sigHashHex, index) = _dkimVerify(_signature, index);
                 require(succ, "_validateSignature: INVALID_DKIM");
                 require(
                     keccak256((LibBytes.toHex(uint256(_hash), 32))) == keccak256(sigHashHex),
                     "_validateSignature: INVALID_SIG_HASH"
                 );
             } else {
-                emailHash = LibDkimValidator.emailAddressHash(emailFrom);
+                uint32 emailFromLen;
+                (emailFromLen, index) = _signature.cReadUint32(index);
+                bytes calldata emailFrom = _signature[index:index + emailFromLen];
+                index += emailFromLen;
+                emailHash = LibEmailHash.emailAddressHash(emailFrom);
             }
         } else {
             revert InvalidKeyType(keyType);
@@ -459,5 +457,13 @@ abstract contract ModuleAuthBase is
         if (isValid && roleWeight.assetsOpWeight >= LibRole.ASSETS_OP_THRESHOLD) {
             magicValue = SELECTOR_ERC1271_BYTES32_BYTES;
         }
+    }
+
+    function _subDigest(bytes32 _digest) internal view returns (bytes32) {
+        uint256 chainId;
+        assembly {
+            chainId := chainid()
+        }
+        return keccak256(abi.encodePacked("\x19\x01", chainId, address(this), _digest));
     }
 }

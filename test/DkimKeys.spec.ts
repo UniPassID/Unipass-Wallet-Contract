@@ -1,9 +1,8 @@
 import { expect } from "chai";
 import { Contract, ContractFactory } from "ethers";
 import { ethers } from "hardhat";
-import { DkimParams, parseEmailParams } from "./utils/email";
+import { DkimParams, parseEmailParams, SerializeDkimParams } from "./utils/email";
 import * as fs from "fs";
-import { toUtf8Bytes } from "ethers/lib/utils";
 import { Deployer } from "./utils/deployer";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 
@@ -35,22 +34,29 @@ describe("DkimKeys", function () {
 
     const deployer = await new Deployer(signer).init();
     const ERC1967 = await ethers.getContractFactory("ERC1967Proxy");
-    const erc1967 = await deployer.deployContract(ERC1967, instance, txParams, dkimKeys.address, "0x");
+    const calldata = DkimKeys.interface.encodeFunctionData("initialize");
+    const erc1967 = await deployer.deployContract(ERC1967, instance, txParams, dkimKeys.address, calldata);
     dkimKeys = DkimKeys.attach(erc1967.address);
   });
   if (process.env.VALIDATE_ALL_EMAILS) {
     it.only("Validate All Emails", async function () {
       await Promise.all(
         emails.map(async ({ params, from }, _index, _array) => {
-          const ret = await dkimKeys.dkimVerifyParams(params, toUtf8Bytes(from));
-          if (!from.includes("protonmail")) {
-            expect(ret.ret).to.be.true;
+          let ret;
+          try {
+            ret = await dkimKeys.dkimVerify(SerializeDkimParams(params), 0);
+
+            if (!from.includes("protonmail")) {
+              expect(ret.ret).to.be.true;
+            }
+            expect(ret.emailHash.startsWith("0x")).to.be.true;
+            expect(ret.emailHash.length).to.equal(66);
+            expect(ret.sigHashHex.startsWith("0x")).to.be.true;
+            expect(ret.sigHashHex.length).to.equal(134);
+          } catch (error) {
+            console.log(_index, params, from);
+            return Promise.reject(error);
           }
-          console.log(_index);
-          expect(ret.emailHash.startsWith("0x")).to.be.true;
-          expect(ret.emailHash.length).to.equal(66);
-          expect(ret.sigHashHex.startsWith("0x")).to.be.true;
-          expect(ret.sigHashHex.length).to.equal(134);
         })
       );
     });

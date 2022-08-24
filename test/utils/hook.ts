@@ -13,6 +13,7 @@ export function generateAddHookTx(
   let tx = {
     callType: CallType.Call,
     gasLimit: ethers.constants.Zero,
+    revertOnError: true,
     target: contract.address,
     value: ethers.constants.Zero,
     data,
@@ -24,6 +25,7 @@ export function generateRemoveHookTx(contract: Contract, selector: string) {
   const data = contract.interface.encodeFunctionData("removeHook", [selector]);
   let tx = {
     callType: CallType.Call,
+    revertOnError: true,
     gasLimit: ethers.constants.Zero,
     target: contract.address,
     value: ethers.constants.Zero,

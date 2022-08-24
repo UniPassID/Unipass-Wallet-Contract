@@ -9,11 +9,15 @@
   },
   {
     "contractName": "ModuleMain",
-    "address": "0xe01dc29b3e7866ECFE9cC040f2da926Be6B676De"
+    "address": "0x7C177441cA1b320355e1B3ce739b1A8e236f77cE"
   },
   {
     "contractName": "ModuleMainUpgradable",
-    "address": "0x9F5c13b42d0D34410c3B7f1Be8ccF2662DF308cA"
+    "address": "0xeA63F2a95cb8faF780145b3953CFE7404Ab2e8ac"
+  },
+  {
+    "contractName": "DkimKeys",
+    "address": "0xf2AdfEf287A4967ED9F69BDd8f5dB139F9D2ebc6"
   },
   {
     "contractName": "ModuleGuest",

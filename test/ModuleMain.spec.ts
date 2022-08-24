@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { BigNumber, Contract, ContractFactory, Overrides, Wallet } from "ethers";
-import { keccak256, randomBytes, solidityPack } from "ethers/lib/utils";
+import { formatBytes32String, hexZeroPad, keccak256, randomBytes, solidityPack } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import * as hre from "hardhat";
 import NodeRSA from "node-rsa";
@@ -123,7 +123,7 @@ describe("ModuleMain", function () {
       await dkimKeys
         .connect(dkimKeysAdmin)
         .updateDKIMKey(
-          solidityPack(["bytes", "bytes"], [Buffer.from("s2055"), Buffer.from("unipass.com")]),
+          solidityPack(["bytes32", "bytes32"], [formatBytes32String("s2055"), formatBytes32String("unipass.com")]),
           privateKey.exportKey("components-public").n.subarray(1)
         )
     ).wait();
@@ -201,7 +201,7 @@ describe("ModuleMain", function () {
   it("Test Account Recovery", async () => {
     const newKeysetHash = `0x${Buffer.from(randomBytes(32)).toString("hex")}`;
     const selectedKeys = selectKeys(keys, Role.Guardian, GUARDIAN_TIMELOCK_THRESHOLD);
-    const tx = await generateUpdateKeysetHashTx(proxyModuleMain, metaNonce, newKeysetHash, true, selectedKeys);
+    const tx = await generateUpdateKeysetHashTx(chainId, proxyModuleMain, metaNonce, newKeysetHash, true, selectedKeys);
 
     const ret = await executeCall([tx], chainId, nonce, [], proxyModuleMain, undefined, txParams);
     expect(ret.status).to.equal(1);
@@ -214,9 +214,6 @@ describe("ModuleMain", function () {
 
   it("Test Transfer Eth", async () => {
     const { chainId } = await proxyModuleMain.provider.getNetwork();
-    const feeToken = Wallet.createRandom().address;
-    const feeReceiver = Wallet.createRandom().address;
-    const feeAmount = 0;
     const sessionKey = Wallet.createRandom();
     const timestamp = Math.ceil(Date.now() / 1000 + 5000);
     const selectedKeys = selectKeys(keys, Role.AssetsOp, ASSETS_OP_THRESHOLD);
@@ -226,6 +223,7 @@ describe("ModuleMain", function () {
     const value1 = BigNumber.from(10);
     const value2 = BigNumber.from(20);
     const tx1 = {
+      revertOnError: true,
       callType: CallType.Call,
       gasLimit: optimalGasLimit,
       target: to1.address,
@@ -237,16 +235,17 @@ describe("ModuleMain", function () {
       gasLimit: optimalGasLimit,
       target: to2.address,
       value: value2,
+      revertOnError: true,
       data: "0x",
     };
 
-    const signature = generateTransactionSig(chainId, [tx1, tx2], nonce, feeToken, feeAmount, selectedKeys, {
+    const signature = generateTransactionSig(chainId, proxyModuleMain.address, [tx1, tx2], nonce, selectedKeys, {
       key: sessionKey,
       timestamp,
       weight: 100,
     });
 
-    const recipt = await (await proxyModuleMain.execute([tx1, tx2], nonce, feeToken, feeReceiver, 0, signature)).wait();
+    const recipt = await (await proxyModuleMain.execute([tx1, tx2], nonce, signature)).wait();
     expect(recipt.status).to.equal(1);
     expect(await proxyModuleMain.provider.getBalance(to1.address)).equal(value1);
     expect(await proxyModuleMain.provider.getBalance(to2.address)).equal(value2);
@@ -256,9 +255,6 @@ describe("ModuleMain", function () {
 
   it("Test Transfer Erc20", async () => {
     const { chainId } = await proxyModuleMain.provider.getNetwork();
-    const feeToken = Wallet.createRandom().address;
-    const feeReceiver = Wallet.createRandom().address;
-    const feeAmount = 0;
     const sessionKey = Wallet.createRandom();
     const timestamp = Math.ceil(Date.now() / 1000 + 5000);
     const selectedKeys = selectKeys(keys, Role.AssetsOp, ASSETS_OP_THRESHOLD);
@@ -271,12 +267,14 @@ describe("ModuleMain", function () {
     const data2 = testErc20Token.interface.encodeFunctionData("transfer", [to2.address, value2]);
     const tx1 = {
       callType: CallType.Call,
+      revertOnError: true,
       gasLimit: ethers.constants.Zero,
       target: testErc20Token.address,
       value: ethers.constants.Zero,
       data: data1,
     };
     const tx2 = {
+      revertOnError: true,
       callType: CallType.Call,
       gasLimit: ethers.constants.Zero,
       target: testErc20Token.address,
@@ -284,13 +282,13 @@ describe("ModuleMain", function () {
       data: data2,
     };
 
-    const signature = generateTransactionSig(chainId, [tx1, tx2], nonce, feeToken, feeAmount, selectedKeys, {
+    const signature = generateTransactionSig(chainId, proxyModuleMain.address, [tx1, tx2], nonce, selectedKeys, {
       key: sessionKey,
       timestamp,
       weight: 100,
     });
 
-    const recipt = await (await proxyModuleMain.execute([tx1, tx2], nonce, feeToken, feeReceiver, 0, signature)).wait();
+    const recipt = await (await proxyModuleMain.execute([tx1, tx2], nonce, signature)).wait();
     expect(recipt.status).to.equal(1);
     expect(await testErc20Token.balanceOf(to1.address)).equal(value1);
     expect(await testErc20Token.balanceOf(to2.address)).equal(value2);
@@ -300,9 +298,6 @@ describe("ModuleMain", function () {
 
   it("Test Transfer Erc721", async () => {
     const { chainId } = await proxyModuleMain.provider.getNetwork();
-    const feeToken = Wallet.createRandom().address;
-    const feeReceiver = Wallet.createRandom().address;
-    const feeAmount = 0;
     const sessionKey = Wallet.createRandom();
     const timestamp = Math.ceil(Date.now() / 1000 + 5000);
     const selectedKeys = selectKeys(keys, Role.AssetsOp, ASSETS_OP_THRESHOLD);
@@ -311,6 +306,7 @@ describe("ModuleMain", function () {
     const data1 = testERC721.interface.encodeFunctionData("transferFrom", [proxyModuleMain.address, to1.address, ERC721TokenId]);
 
     const tx1 = {
+      revertOnError: true,
       callType: CallType.Call,
       gasLimit: ethers.constants.Zero,
       target: testERC721.address,
@@ -318,13 +314,13 @@ describe("ModuleMain", function () {
       data: data1,
     };
 
-    const signature = generateTransactionSig(chainId, [tx1], nonce, feeToken, feeAmount, selectedKeys, {
+    const signature = generateTransactionSig(chainId, proxyModuleMain.address, [tx1], nonce, selectedKeys, {
       key: sessionKey,
       timestamp,
       weight: 100,
     });
 
-    const recipt = await (await proxyModuleMain.execute([tx1], nonce, feeToken, feeReceiver, 0, signature)).wait();
+    const recipt = await (await proxyModuleMain.execute([tx1], nonce, signature)).wait();
     expect(recipt.status).to.equal(1);
     expect(await testERC721.ownerOf(ERC721TokenId)).equal(to1.address);
     expect(await proxyModuleMain.getNonce()).to.equal(nonce);
@@ -333,9 +329,6 @@ describe("ModuleMain", function () {
 
   it("Test Transfer Erc1155", async () => {
     const { chainId } = await proxyModuleMain.provider.getNetwork();
-    const feeToken = Wallet.createRandom().address;
-    const feeReceiver = Wallet.createRandom().address;
-    const feeAmount = 0;
     const sessionKey = Wallet.createRandom();
     const timestamp = Math.ceil(Date.now() / 1000 + 5000);
     const selectedKeys = selectKeys(keys, Role.AssetsOp, ASSETS_OP_THRESHOLD);
@@ -362,24 +355,26 @@ describe("ModuleMain", function () {
       callType: CallType.Call,
       gasLimit: ethers.constants.Zero,
       target: testERC1155.address,
+      revertOnError: true,
       value: ethers.constants.Zero,
       data: data1,
     };
     const tx2 = {
       callType: CallType.Call,
+      revertOnError: true,
       gasLimit: ethers.constants.Zero,
       target: testERC1155.address,
       value: ethers.constants.Zero,
       data: data2,
     };
 
-    const signature = generateTransactionSig(chainId, [tx1, tx2], nonce, feeToken, feeAmount, selectedKeys, {
+    const signature = generateTransactionSig(chainId, proxyModuleMain.address, [tx1, tx2], nonce, selectedKeys, {
       key: sessionKey,
       timestamp,
       weight: 100,
     });
 
-    const recipt = await (await proxyModuleMain.execute([tx1, tx2], nonce, feeToken, feeReceiver, 0, signature)).wait();
+    const recipt = await (await proxyModuleMain.execute([tx1, tx2], nonce, signature)).wait();
     expect(recipt.status).to.equal(1);
     expect(await testERC1155.balanceOf(to1.address, ERC1155TokenId)).equal(value1);
     expect(await testERC1155.balanceOf(to2.address, ERC1155TokenId)).equal(value2);
@@ -452,7 +447,7 @@ describe("ModuleMain", function () {
         await localDkimKeys
           .connect(dkimKeysAdmin)
           .updateDKIMKey(
-            solidityPack(["bytes", "bytes"], [Buffer.from("s2055"), Buffer.from("unipass.com")]),
+            solidityPack(["bytes32", "bytes32"], [formatBytes32String("s2055"), formatBytes32String("unipass.com")]),
             privateKey.exportKey("components-public").n.subarray(1)
           )
       ).wait();
@@ -464,13 +459,13 @@ describe("ModuleMain", function () {
       let selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
       keys = await randomKeys(10, unipassPrivateKey, testERC1271Wallet);
       keysetHash = getKeysetHash(keys);
-      const tx1 = await generateUpdateKeysetHashTx(proxyModuleMain, metaNonce, keysetHash, false, selectedKeys);
+      const tx1 = await generateUpdateKeysetHashTx(chainId, proxyModuleMain, metaNonce, keysetHash, false, selectedKeys);
       await executeCall([tx1], chainId, nonce, [], proxyModuleMain, undefined, txParams);
       nonce++;
       metaNonce++;
       const timeLockDuring = 3;
       selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
-      const tx2 = await generateUpdateTimeLockDuringTx(proxyModuleMain, metaNonce, timeLockDuring, selectedKeys);
+      const tx2 = await generateUpdateTimeLockDuringTx(chainId, proxyModuleMain, metaNonce, timeLockDuring, selectedKeys);
       await executeCall([tx2], chainId, nonce, [], proxyModuleMain, undefined, txParams);
       nonce++;
       metaNonce++;
@@ -498,21 +493,16 @@ describe("ModuleMain", function () {
       ]);
       const deployTx = {
         callType: CallType.Call,
+        revertOnError: true,
         gasLimit: ethers.constants.Zero,
         target: localDeployer.singleFactoryContract.address,
         value: ethers.constants.Zero,
         data: deployTxData,
       };
-      const executeTxData = localModuleMain.interface.encodeFunctionData("execute", [
-        [tx1, tx2],
-        1,
-        ethers.constants.AddressZero,
-        ethers.constants.AddressZero,
-        0,
-        "0x",
-      ]);
+      const executeTxData = localModuleMain.interface.encodeFunctionData("execute", [[tx1, tx2], 1, "0x"]);
       const executeTx = {
         callType: CallType.Call,
+        revertOnError: true,
         gasLimit: ethers.constants.Zero,
         target: proxyModuleMain.address,
         value: ethers.constants.Zero,
@@ -520,17 +510,7 @@ describe("ModuleMain", function () {
       };
 
       hre.changeNetwork("local1");
-      const ret = await (
-        await localModuleGuest.execute(
-          [deployTx, executeTx],
-          1,
-          ethers.constants.AddressZero,
-          ethers.constants.AddressZero,
-          0,
-          "0x",
-          txParams
-        )
-      ).wait();
+      const ret = await (await localModuleGuest.execute([deployTx, executeTx], 1, "0x", txParams)).wait();
       const [signer] = await ethers.getSigners();
       proxyModuleMain = new Contract(proxyModuleMain.address, ModuleMain.interface, signer);
       expect(ret.status).to.equals(1);
@@ -556,12 +536,14 @@ describe("ModuleMain", function () {
       ]);
       const deployTx = {
         callType: CallType.Call,
+        revertOnError: true,
         gasLimit: ethers.constants.Zero,
         target: localDeployer.singleFactoryContract.address,
         value: ethers.constants.Zero,
         data: deployTxData,
       };
       const syncAccountTx = await generateSyncAccountTx(
+        chainId,
         proxyModuleMain,
         metaNonce - 1,
         keysetHash,
@@ -569,14 +551,7 @@ describe("ModuleMain", function () {
         moduleMain.address,
         selectKeys(initKeys, Role.Owner, OWNER_THRESHOLD)
       );
-      const executeTxData = localModuleMain.interface.encodeFunctionData("execute", [
-        [syncAccountTx],
-        1,
-        ethers.constants.AddressZero,
-        ethers.constants.AddressZero,
-        0,
-        "0x",
-      ]);
+      const executeTxData = localModuleMain.interface.encodeFunctionData("execute", [[syncAccountTx], 1, "0x"]);
       const executeTx = {
         callType: CallType.Call,
         gasLimit: ethers.constants.Zero,
@@ -586,16 +561,7 @@ describe("ModuleMain", function () {
       };
 
       hre.changeNetwork("local1");
-      const ret = await (
-        await localModuleGuest.execute(
-          [deployTx, executeTx],
-          1,
-          ethers.constants.AddressZero,
-          ethers.constants.AddressZero,
-          0,
-          "0x"
-        )
-      ).wait();
+      const ret = await (await localModuleGuest.execute([deployTx, executeTx], 1, "0x")).wait();
       const [signer] = await ethers.getSigners();
       proxyModuleMain = new Contract(proxyModuleMain.address, ModuleMain.interface, signer);
       expect(ret.status).to.equals(1);

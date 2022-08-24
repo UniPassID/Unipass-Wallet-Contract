@@ -11,8 +11,8 @@ contract ModuleWhiteList is ModuleAdminAuth {
     event UpdateHookWhiteList(address _addr, bool _isWhite);
     event UpdateImplementationWhiteList(address _addr, bool _isWhite);
 
-    mapping(address => bool) implementations;
-    mapping(address => bool) hooks;
+    mapping(address => bool) private implementations;
+    mapping(address => bool) private hooks;
 
     constructor(address _admin) ModuleAdminAuth(_admin) {}
 

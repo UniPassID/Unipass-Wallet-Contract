@@ -10,15 +10,15 @@ import "./ModuleStorage.sol";
 import "./ModuleNonceBase.sol";
 import "./ModuleAuthBase.sol";
 import "./ModuleRole.sol";
+import "./ModuleTransaction.sol";
 import "../../utils/LibBytes.sol";
 import "../../interfaces/IModuleHooks.sol";
-import "../../interfaces/ITransaction.sol";
 import "../../interfaces/IModuleCall.sol";
 import "../../interfaces/IEIP4337Wallet.sol";
 
 import "hardhat/console.sol";
 
-abstract contract ModuleCall is ITransaction, IModuleCall, ModuleNonceBase, ModuleRole, ModuleAuthBase, IModuleHooks {
+abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleNonceBase, ModuleRole, ModuleAuthBase, IModuleHooks {
     using LibBytes for bytes;
     using SafeERC20 for IERC20;
 
@@ -41,34 +41,22 @@ abstract contract ModuleCall is ITransaction, IModuleCall, ModuleNonceBase, Modu
     /**
      * @param _txs Transactions to execute
      * @param _nonce Signature nonce
-     * @param feeToken ERC20 Token Address to pay fee
-     * @param feeReceiver Fee Receiver Address
      * @param _signature Signature bytes
      */
     function execute(
         Transaction[] calldata _txs,
         uint256 _nonce,
-        address feeToken,
-        address feeReceiver,
-        uint256 feeAmount,
         bytes calldata _signature
     ) external payable {
         _validateNonce(_nonce);
 
-        uint256 chainId;
-        assembly {
-            chainId := chainid()
-        }
-
-        bytes32 txhash = keccak256(abi.encodePacked(chainId, keccak256(abi.encode(_nonce, _txs)), feeToken, feeAmount));
+        bytes32 txhash = keccak256(abi.encode(_nonce, _txs));
+        txhash = _subDigest(txhash);
 
         (bool succ, RoleWeight memory roleWeight) = validateSignature(txhash, _signature);
         require(succ, "execute: INVALID_SIG_WEIGHT");
 
         _execute(txhash, _txs, roleWeight);
-        if (feeAmount != 0) {
-            _payFee(feeToken, feeReceiver, feeAmount);
-        }
     }
 
     function _validateNonce(uint256 _nonce) internal virtual {
@@ -164,19 +152,5 @@ abstract contract ModuleCall is ITransaction, IModuleCall, ModuleNonceBase, Modu
             revert InvalidRole(_role);
         }
         succ = weight >= _threshold;
-    }
-
-    function _payFee(
-        address feeToken,
-        address feeReceiver,
-        uint256 feeAmount
-    ) private {
-        // transfer native token to msg.sender
-        if (feeToken == address(0)) {
-            (bool succ, ) = feeReceiver.call{value: feeAmount}("");
-            require(succ, "_payFee: PAY_FAILED");
-        }
-        // transfer erc20 token to msg.sender
-        else IERC20(feeToken).safeTransfer(feeReceiver, feeAmount);
     }
 }
