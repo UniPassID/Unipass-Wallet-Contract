@@ -6,7 +6,11 @@ import "../modules/utils/LibEmailHash.sol";
 interface IDkimKeys {
     function getDKIMKey(bytes calldata _emailServer) external view returns (bytes memory);
 
-    function dkimVerify(bytes calldata _data, uint256 _index)
+    function dkimVerify(
+        bytes calldata _data,
+        uint256 _index,
+        bytes32 _pepper
+    )
         external
         view
         returns (
