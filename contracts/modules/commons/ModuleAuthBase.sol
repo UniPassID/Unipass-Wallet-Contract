@@ -428,18 +428,17 @@ abstract contract ModuleAuthBase is
             if (isSig) {
                 bool succ;
                 bytes memory sigHashHex;
-                (succ, emailHash, sigHashHex, index) = _dkimVerify(_signature, index);
+                bytes32 pepper = _signature.mcReadBytes32(index);
+                index += 32;
+                (succ, emailHash, sigHashHex, index) = _dkimVerify(_signature, index, pepper);
                 require(succ, "_validateSignature: INVALID_DKIM");
                 require(
                     keccak256((LibBytes.toHex(uint256(_hash), 32))) == keccak256(sigHashHex),
                     "_validateSignature: INVALID_SIG_HASH"
                 );
             } else {
-                uint32 emailFromLen;
-                (emailFromLen, index) = _signature.cReadUint32(index);
-                bytes calldata emailFrom = _signature[index:index + emailFromLen];
-                index += emailFromLen;
-                emailHash = LibEmailHash.emailAddressHash(emailFrom);
+                emailHash = _signature.mcReadBytes32(index);
+                index += 32;
             }
         } else {
             revert InvalidKeyType(keyType);

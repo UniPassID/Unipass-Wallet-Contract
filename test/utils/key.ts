@@ -1,5 +1,5 @@
 import { BytesLike, Contract, Wallet } from "ethers";
-import { arrayify, joinSignature, randomBytes, solidityPack } from "ethers/lib/utils";
+import { arrayify, hexlify, joinSignature, randomBytes, solidityPack } from "ethers/lib/utils";
 import { getSignEmailWithDkim, parseEmailParams, pureEmailHash, SerializeDkimParams } from "./email";
 import { Role, signerSign } from "./sigPart";
 
@@ -56,27 +56,32 @@ export class KeySecp256k1 extends KeyBase {
 }
 
 export class KeyEmailAddress extends KeyBase {
-  constructor(readonly emailAddress: string, readonly unipassPrivateKey: string, roleWeight: RoleWeight) {
+  constructor(
+    readonly emailAddress: string,
+    readonly pepper: string,
+    readonly unipassPrivateKey: string,
+    roleWeight: RoleWeight
+  ) {
     super(roleWeight);
   }
   public async generateSignature(digestHash: string): Promise<string> {
     let email = await getSignEmailWithDkim(digestHash, this.emailAddress, "test@unipass.me", this.unipassPrivateKey);
     let { params } = await parseEmailParams(email);
     return solidityPack(
-      ["uint8", "uint8", "bytes", "bytes"],
-      [KeyType.EmailAddress, 1, SerializeDkimParams(params), this.serializeRoleWeight()]
+      ["uint8", "uint8", "bytes32", "bytes", "bytes"],
+      [KeyType.EmailAddress, 1, this.pepper, SerializeDkimParams(params), this.serializeRoleWeight()]
     );
   }
   public async generateKey(): Promise<string> {
     return solidityPack(
-      ["uint8", "uint8", "uint32", "bytes", "bytes"],
-      [KeyType.EmailAddress, 0, this.emailAddress.length, Buffer.from(this.emailAddress, "utf-8"), this.serializeRoleWeight()]
+      ["uint8", "uint8", "bytes32", "bytes"],
+      [KeyType.EmailAddress, 0, pureEmailHash(this.emailAddress, this.pepper), this.serializeRoleWeight()]
     );
   }
   public serialize(): string {
     return solidityPack(
       ["uint8", "bytes32", "bytes"],
-      [KeyType.EmailAddress, pureEmailHash(this.emailAddress), this.serializeRoleWeight()]
+      [KeyType.EmailAddress, pureEmailHash(this.emailAddress, this.pepper), this.serializeRoleWeight()]
     );
   }
 }
@@ -118,6 +123,7 @@ export async function randomKeys(len: number, unipassPrivateKey: string, contrac
         ret.push(
           new KeyEmailAddress(
             `${Buffer.from(randomBytes(10)).toString("hex")}@unipass.com`,
+            hexlify(randomBytes(32)),
             unipassPrivateKey,
             randomRoleWeight(role)
           )
@@ -132,18 +138,28 @@ export async function randomNewWallet(unipassPrivateKey: string): Promise<KeyBas
   let ret: KeyBase[] = [];
   ret.push(new KeySecp256k1(Wallet.createRandom(), { ownerWeight: 40, assetsOpWeight: 100, guardianWeight: 0 }));
   ret.push(
-    new KeyEmailAddress(`${Buffer.from(randomBytes(10)).toString("hex")}@unipass.com`, unipassPrivateKey, {
-      ownerWeight: 60,
-      assetsOpWeight: 0,
-      guardianWeight: 60,
-    })
+    new KeyEmailAddress(
+      `${Buffer.from(randomBytes(10)).toString("hex")}@unipass.com`,
+      hexlify(randomBytes(32)),
+      unipassPrivateKey,
+      {
+        ownerWeight: 60,
+        assetsOpWeight: 0,
+        guardianWeight: 60,
+      }
+    )
   );
   ret.push(
-    new KeyEmailAddress(`${Buffer.from(randomBytes(10)).toString("hex")}@unipass.com`, unipassPrivateKey, {
-      ownerWeight: 40,
-      assetsOpWeight: 0,
-      guardianWeight: 0,
-    })
+    new KeyEmailAddress(
+      `${Buffer.from(randomBytes(10)).toString("hex")}@unipass.com`,
+      hexlify(randomBytes(32)),
+      unipassPrivateKey,
+      {
+        ownerWeight: 40,
+        assetsOpWeight: 0,
+        guardianWeight: 0,
+      }
+    )
   );
 
   return ret;

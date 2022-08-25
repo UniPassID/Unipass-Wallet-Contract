@@ -3,7 +3,7 @@ import { sha256 } from "ethereumjs-util";
 import MailComposer from "nodemailer/lib/mail-composer";
 import * as Dkim from "dkim";
 import NodeRSA from "node-rsa";
-import { solidityPack } from "ethers/lib/utils";
+import { arrayify, hexlify, solidityPack, toUtf8Bytes } from "ethers/lib/utils";
 const mailParser = require("mailparser");
 
 const MAX_EMAIL_LEN = 100;
@@ -35,7 +35,7 @@ export interface DkimParams {
 export function SerializeDkimParams(params: DkimParams): string {
   let isSubBase64 = 0;
   params.isSubBase64.forEach((v, i) => {
-    isSubBase64 = isSubBase64 | Number(v) << i;
+    isSubBase64 = isSubBase64 | (Number(v) << i);
   });
   let sig = solidityPack(
     ["uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32"],
@@ -108,7 +108,7 @@ function updateEmail(emailAddress: string) {
   return `${prefix}@${emailData[1]}`;
 }
 
-export function emailHash(emailAddress: string): string {
+export function emailHash(emailAddress: string, pepper: string): string {
   if (!emailAddress) return "";
   emailAddress = emailAddress.toLowerCase();
   const split = emailAddress.split("@", 2);
@@ -125,20 +125,13 @@ export function emailHash(emailAddress: string): string {
     );
   }
 
-  return pureEmailHash(emailAddress);
+  return pureEmailHash(emailAddress, pepper);
 }
 
-export function pureEmailHash(emailAddress: string): string {
+export function pureEmailHash(emailAddress: string, pepper: string): string {
   if (!emailAddress) return "";
 
-  let buf = Buffer.from(emailAddress, "utf-8");
-  let i;
-  const len = buf.length;
-  for (i = 0; i < FR_EMAIL_LEN * 31 - len; ++i) buf = Buffer.concat([buf, new Uint8Array([0])]);
-  const hash = sha256(Buffer.from(buf));
-  const hashRev = hash.reverse();
-  hashRev[31] &= 0x1f;
-  return "0x" + hashRev.toString("hex");
+  return hexlify(sha256(Buffer.from(arrayify(solidityPack(["bytes", "bytes32"], [toUtf8Bytes(emailAddress), pepper])))));
 }
 
 export function verifyDKIMContent(content: Buffer) {

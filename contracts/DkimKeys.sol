@@ -230,7 +230,8 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
     function _getEmailFrom(
         bytes calldata _data,
         uint256 _index,
-        bytes calldata _emailHeader
+        bytes calldata _emailHeader,
+        bytes32 _pepper
     ) internal pure returns (bytes32 emailHash) {
         uint32 fromIndex;
         uint32 fromLeftIndex;
@@ -254,7 +255,7 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
             require(fromLeftIndex == fromIndex + 5, "AE");
         }
 
-        emailHash = LibEmailHash.emailAddressHash(_emailHeader[fromLeftIndex:fromRightIndex + 1]);
+        emailHash = LibEmailHash.emailAddressHash(_emailHeader[fromLeftIndex:fromRightIndex + 1], _pepper);
     }
 
     function _getDkimInfo(
@@ -312,25 +313,11 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
         ret = LibRsa.rsapkcs1Verify(sha256(_emailHeader), n, hex"010001", dkimSig);
     }
 
-    function _validateEmailFromAndDkim(
+    function dkimVerify(
         bytes calldata _data,
         uint256 _index,
-        bytes calldata _emailHeader,
-        uint256 _emailHeaderIndex
+        bytes32 _pepper
     )
-        internal
-        view
-        returns (
-            bool ret,
-            bytes32 emailHash,
-            uint256 emailHeaderIndex
-        )
-    {
-        emailHash = _getEmailFrom(_data, _index, _emailHeader);
-        (ret, emailHeaderIndex) = _validateEmailDkim(_data, _index, _emailHeader, _emailHeaderIndex);
-    }
-
-    function dkimVerify(bytes calldata _data, uint256 _index)
         external
         view
         override
@@ -350,7 +337,8 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
             index += len;
         }
         (sigHashHex, index) = _validateEmailSubject(_data, _index, emailHeader, index);
-        (ret, emailHash, index) = _validateEmailFromAndDkim(_data, _index, emailHeader, index);
+        emailHash = _getEmailFrom(_data, _index, emailHeader, _pepper);
+        (ret, index) = _validateEmailDkim(_data, _index, emailHeader, index);
     }
 
     function removeDotForEmailFrom(bytes calldata _emailFrom, uint256 _atSignIndex) internal pure returns (bytes memory fromRet) {
