@@ -48,6 +48,7 @@ abstract contract ModuleAuthBase is
     uint256 private constant UPDATE_TIMELOCK_DURING = 3;
     uint256 private constant UPDATE_IMPLEMENTATION = 4;
     uint256 private constant SYNC_ACCOUNT = 6;
+    uint256 private constant ZERO_CHAINID = 0;
 
     bytes4 private constant SELECTOR_ERC1271_BYTES32_BYTES = 0x1626ba7e;
 
@@ -115,8 +116,9 @@ abstract contract ModuleAuthBase is
     ) external override onlySelf {
         uint256 metaNonce = getMetaNonce();
         require(metaNonce < _metaNonce && metaNonce + 100 > _metaNonce, "syncAccount: INVALID_METANONCE");
-        bytes32 digestHash = keccak256(
-            abi.encodePacked(uint8(SYNC_ACCOUNT), _metaNonce, _keysetHash, _newTimeLockDuring, _newImplementation)
+        bytes32 digestHash = _subDigest(
+            keccak256(abi.encodePacked(uint8(SYNC_ACCOUNT), _metaNonce, _keysetHash, _newTimeLockDuring, _newImplementation)),
+            ZERO_CHAINID
         );
 
         (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
@@ -149,7 +151,10 @@ abstract contract ModuleAuthBase is
     ) external override onlySelf {
         _requireMetaNonce(_metaNonce);
         _requireUnLocked();
-        bytes32 digestHash = keccak256(abi.encodePacked(uint8(UPDATE_KEYSET_HASH), _metaNonce, _newKeysetHash));
+        bytes32 digestHash = _subDigest(
+            keccak256(abi.encodePacked(uint8(UPDATE_KEYSET_HASH), _metaNonce, _newKeysetHash)),
+            ZERO_CHAINID
+        );
 
         (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
         require(success, "updateKeysetHash: INVALID_SIG");
@@ -176,7 +181,10 @@ abstract contract ModuleAuthBase is
     ) external onlySelf {
         _requireMetaNonce(_metaNonce);
         _requireUnLocked();
-        bytes32 digestHash = keccak256(abi.encodePacked(uint8(UPDATE_KEYSET_HASH), _metaNonce, _newKeysetHash));
+        bytes32 digestHash = _subDigest(
+            keccak256(abi.encodePacked(uint8(UPDATE_KEYSET_HASH), _metaNonce, _newKeysetHash)),
+            ZERO_CHAINID
+        );
 
         (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
         require(success, "updateKeysetHashWithTimeLock: INVALID_SIG");
@@ -209,7 +217,7 @@ abstract contract ModuleAuthBase is
     function cancelLockKeysetHsah(uint32 _metaNonce, bytes calldata _signature) external onlySelf {
         _requireMetaNonce(_metaNonce);
         _requireLocked();
-        bytes32 digestHash = keccak256(abi.encodePacked(uint8(CANCEL_LOCK_KEYSET_HASH), _metaNonce));
+        bytes32 digestHash = _subDigest(keccak256(abi.encodePacked(uint8(CANCEL_LOCK_KEYSET_HASH), _metaNonce)), ZERO_CHAINID);
 
         (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
         require(success, "cancelLockKeysetHsah: INVALID_SIG");
@@ -235,7 +243,10 @@ abstract contract ModuleAuthBase is
         _requireMetaNonce(_metaNonce);
         _requireUnLocked();
 
-        bytes32 digestHash = keccak256(abi.encodePacked(uint8(UPDATE_TIMELOCK_DURING), _metaNonce, _newTimeLockDuring));
+        bytes32 digestHash = _subDigest(
+            keccak256(abi.encodePacked(uint8(UPDATE_TIMELOCK_DURING), _metaNonce, _newTimeLockDuring)),
+            ZERO_CHAINID
+        );
 
         (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
         require(success, "updateTimeLockDuring: INVALID_SIG");
@@ -260,7 +271,10 @@ abstract contract ModuleAuthBase is
         _requireMetaNonce(_metaNonce);
         if (!_newImplementation.isContract()) revert InvalidImplementation(_newImplementation);
 
-        bytes32 digestHash = keccak256(abi.encodePacked(uint8(UPDATE_IMPLEMENTATION), _metaNonce, _newImplementation));
+        bytes32 digestHash = _subDigest(
+            keccak256(abi.encodePacked(uint8(UPDATE_IMPLEMENTATION), _metaNonce, _newImplementation)),
+            ZERO_CHAINID
+        );
 
         (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
         require(success, "updateImplementation: INVALID_SIG");
@@ -299,7 +313,10 @@ abstract contract ModuleAuthBase is
             (roleWeightRet.assetsOpWeight, index) = _signature.cReadUint32(index);
             address sessionKey = recoverSigner(_hash, _signature[index:index + 66]);
             index += 66;
-            bytes32 digestHash = _subDigest(keccak256(abi.encodePacked(sessionKey, timestamp, roleWeightRet.assetsOpWeight)));
+            bytes32 digestHash = _subDigest(
+                keccak256(abi.encodePacked(sessionKey, timestamp, roleWeightRet.assetsOpWeight)),
+                block.chainid
+            );
             bool success;
             (success, roleWeight) = _validateSignatureInner(digestHash, _signature, index);
             succ = success && roleWeightRet.assetsOpWeight <= roleWeight.assetsOpWeight;
@@ -458,11 +475,7 @@ abstract contract ModuleAuthBase is
         }
     }
 
-    function _subDigest(bytes32 _digest) internal view returns (bytes32) {
-        uint256 chainId;
-        assembly {
-            chainId := chainid()
-        }
-        return keccak256(abi.encodePacked("\x19\x01", chainId, address(this), _digest));
+    function _subDigest(bytes32 _digest, uint256 _chainId) internal view returns (bytes32) {
+        return keccak256(abi.encodePacked("\x19\x01", _chainId, address(this), _digest));
     }
 }

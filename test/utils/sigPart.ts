@@ -48,11 +48,11 @@ export function generateTransactionHash(chainId: number, address: string, tx: Tr
       [nonce, tx]
     )
   );
-  digestHash = eip712hash(chainId, address, digestHash);
+  digestHash = subdigest(chainId, address, digestHash);
   return digestHash;
 }
 
-export function eip712hash(chainId: number, address: string, hash: BytesLike): string {
+export function subdigest(chainId: number, address: string, hash: BytesLike): string {
   return keccak256(solidityPack(["bytes", "uint256", "address", "bytes32"], [Buffer.from("\x19\x01"), chainId, address, hash]));
 }
 
@@ -79,10 +79,14 @@ export async function generateSyncAccountTx(
   newImplementation: string,
   keys: [KeyBase, boolean][]
 ) {
-  const digestHash = keccak256(
-    solidityPack(
-      ["uint8", "uint32", "bytes32", "uint32", "address"],
-      [ActionType.SyncAccount, metaNonce, newKeysetHash, newTimeLockDuring, newImplementation]
+  const digestHash = subdigest(
+    0,
+    contract.address,
+    keccak256(
+      solidityPack(
+        ["uint8", "uint32", "bytes32", "uint32", "address"],
+        [ActionType.SyncAccount, metaNonce, newKeysetHash, newTimeLockDuring, newImplementation]
+      )
     )
   );
 
@@ -113,8 +117,10 @@ export async function generateUpdateKeysetHashTx(
   withTimeLock: boolean,
   keys: [KeyBase, boolean][]
 ) {
-  const digestHash = keccak256(
-    solidityPack(["uint8", "uint32", "bytes32"], [ActionType.UpdateKeysetHash, metaNonce, newKeysetHash])
+  const digestHash = subdigest(
+    0,
+    contract.address,
+    keccak256(solidityPack(["uint8", "uint32", "bytes32"], [ActionType.UpdateKeysetHash, metaNonce, newKeysetHash]))
   );
   let func: string;
   if (withTimeLock) {
@@ -159,7 +165,11 @@ export async function generateCancelLockKeysetHashTx(
   metaNonce: number,
   keys: [KeyBase, boolean][]
 ) {
-  const digestHash = keccak256(solidityPack(["uint8", "uint32"], [ActionType.CancelLockKeysetHash, metaNonce]));
+  const digestHash = subdigest(
+    0,
+    contract.address,
+    keccak256(solidityPack(["uint8", "uint32"], [ActionType.CancelLockKeysetHash, metaNonce]))
+  );
   const data = contract.interface.encodeFunctionData("cancelLockKeysetHsah", [
     metaNonce,
     await generateSignature(digestHash, chainId, contract.address, keys, undefined),
@@ -183,8 +193,10 @@ export async function generateUpdateTimeLockDuringTx(
   newTimeLockDuring: number,
   keys: [KeyBase, boolean][]
 ) {
-  const digestHash = keccak256(
-    solidityPack(["uint8", "uint32", "uint32"], [ActionType.UpdateTimeLockDuring, metaNonce, newTimeLockDuring])
+  const digestHash = subdigest(
+    0,
+    contract.address,
+    keccak256(solidityPack(["uint8", "uint32", "uint32"], [ActionType.UpdateTimeLockDuring, metaNonce, newTimeLockDuring]))
   );
   const data = contract.interface.encodeFunctionData("updateTimeLockDuring", [
     metaNonce,
@@ -222,8 +234,10 @@ export async function generateUpdateImplementationTx(
   newImplementation: string,
   keys: [KeyBase, boolean][]
 ) {
-  const digestHash = keccak256(
-    solidityPack(["uint8", "uint32", "address"], [ActionType.UpdateImplementation, metaNonce, newImplementation])
+  const digestHash = subdigest(
+    0,
+    contract.address,
+    keccak256(solidityPack(["uint8", "uint32", "address"], [ActionType.UpdateImplementation, metaNonce, newImplementation]))
   );
   const data = contract.interface.encodeFunctionData("updateImplementation", [
     metaNonce,
@@ -320,7 +334,7 @@ export async function generateSignature(
       ["uint8", "uint32", "uint32", "bytes"],
       [1, sessionKey.timestamp, sessionKey.weight, await signerSign(digestHash, sessionKey.key)]
     );
-    digestHash = eip712hash(
+    digestHash = subdigest(
       chainId,
       contractAddr,
       keccak256(solidityPack(["address", "uint32", "uint32"], [sessionKey.key.address, sessionKey.timestamp, sessionKey.weight]))

@@ -51,7 +51,7 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleNonceBase,
         _validateNonce(_nonce);
 
         bytes32 txhash = keccak256(abi.encode(_nonce, _txs));
-        txhash = _subDigest(txhash);
+        txhash = _subDigest(txhash, block.chainid);
 
         (bool succ, RoleWeight memory roleWeight) = validateSignature(txhash, _signature);
         require(succ, "execute: INVALID_SIG_WEIGHT");
