@@ -13,12 +13,7 @@ contract ModuleGuest is ModuleTransaction {
         uint256 _nonce,
         bytes calldata
     ) external payable {
-        uint256 chainId;
-        assembly {
-            chainId := chainid()
-        }
-
-        bytes32 txhash = keccak256(abi.encodePacked(chainId, keccak256(abi.encode(_nonce, _txs))));
+        bytes32 txhash = keccak256(abi.encodePacked(block.chainid, keccak256(abi.encode(_nonce, _txs))));
 
         _execute(txhash, _txs);
     }

@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { Contract, ContractFactory, Overrides, Wallet } from "ethers";
-import { formatBytes32String, hexlify, hexZeroPad, randomBytes, solidityPack } from "ethers/lib/utils";
+import { formatBytes32String, hexlify, randomBytes, solidityPack } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import NodeRSA from "node-rsa";
 import {
