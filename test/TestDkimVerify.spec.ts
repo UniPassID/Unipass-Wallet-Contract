@@ -1,12 +1,13 @@
 import { expect } from "chai";
-import { Contract, ContractFactory } from "ethers";
+import { constants, Contract, ContractFactory } from "ethers";
 import { ethers } from "hardhat";
-import { DkimParams, parseEmailParams, SerializeDkimParams } from "./utils/email";
+import { DkimParams, EmailType, parseEmailParams, SerializeDkimParams } from "./utils/email";
 import * as fs from "fs";
 import { Deployer } from "./utils/deployer";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
+import { arrayify } from "ethers/lib/utils";
 
-describe("DkimKeys", function () {
+describe("TestDkimVerify", function () {
   let dkimKeys: Contract;
   let DkimKeys: ContractFactory;
   let emails: { from: string; params: DkimParams }[] = [];
@@ -23,7 +24,7 @@ describe("DkimKeys", function () {
   this.beforeEach(async function () {
     [signer, signer1] = await ethers.getSigners();
 
-    DkimKeys = await ethers.getContractFactory("DkimKeys");
+    DkimKeys = await ethers.getContractFactory("TestDkimVerify");
     dkimKeys = await DkimKeys.deploy(signer.address);
 
     const instance = 0;
@@ -44,17 +45,15 @@ describe("DkimKeys", function () {
         emails.map(async ({ params, from }, _index, _array) => {
           let ret;
           try {
-            ret = await dkimKeys.dkimVerify(SerializeDkimParams(params), 0);
+            ret = await dkimKeys.dkimParse(SerializeDkimParams(params, EmailType.CallOtherContract), 0, constants.HashZero);
 
             if (!from.includes("protonmail")) {
               expect(ret.ret).to.be.true;
             }
             expect(ret.emailHash.startsWith("0x")).to.be.true;
             expect(ret.emailHash.length).to.equal(66);
-            expect(ret.sigHashHex.startsWith("0x")).to.be.true;
-            expect(ret.sigHashHex.length).to.equal(134);
           } catch (error) {
-            console.log(_index, params, from);
+            console.log(Buffer.from(arrayify(params.emailHeader)).toString());
             return Promise.reject(error);
           }
         })
