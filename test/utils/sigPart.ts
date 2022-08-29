@@ -1,7 +1,8 @@
 import { BigNumber, Contract, Overrides, utils, Wallet } from "ethers";
 import { arrayify, BytesLike, keccak256, solidityPack } from "ethers/lib/utils";
 import { ethers } from "hardhat";
-import { KeyBase } from "./key";
+import { EmailType } from "./email";
+import { KeyBase, KeyEmailAddress } from "./key";
 
 export enum ActionType {
   UpdateKeysetHash = 0,
@@ -131,7 +132,18 @@ export async function generateUpdateKeysetHashTx(
   const data = contract.interface.encodeFunctionData(func, [
     metaNonce,
     newKeysetHash,
-    await generateSignature(digestHash, chainId, contract.address, keys, undefined),
+    await generateSignature(
+      digestHash,
+      chainId,
+      contract.address,
+      keys.map((v) => {
+        if (v[0] instanceof KeyEmailAddress) {
+          v[0].emailType = EmailType.UpdateKeysetHash;
+        }
+        return v;
+      }),
+      undefined
+    ),
   ]);
 
   let tx = {

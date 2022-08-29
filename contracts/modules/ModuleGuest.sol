@@ -8,13 +8,16 @@ import "./commons/ModuleTransaction.sol";
 contract ModuleGuest is ModuleTransaction {
     using SafeERC20 for IERC20;
 
+    function _subDigest(bytes32 _digest, uint256 _chainId) internal view returns (bytes32) {
+        return keccak256(abi.encodePacked("\x19\x01", _chainId, address(this), _digest));
+    }
+
     function execute(
         Transaction[] calldata _txs,
         uint256 _nonce,
         bytes calldata
     ) external payable {
-        bytes32 txhash = keccak256(abi.encodePacked(block.chainid, keccak256(abi.encode(_nonce, _txs))));
-
+        bytes32 txhash = _subDigest(keccak256(abi.encode(_nonce, _txs)), block.chainid);
         _execute(txhash, _txs);
     }
 

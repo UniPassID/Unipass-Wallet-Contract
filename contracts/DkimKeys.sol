@@ -20,14 +20,16 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
     event UpdateDKIMKey(bytes emailServer, bytes oldKey, bytes newKey);
     event DeleteDKIMKey(bytes emailServer, bytes oldKey);
 
-    bytes1 constant AtSignBytes1 = 0x40;
-    bytes1 constant DotSignBytes1 = 0x2e;
+    error InvalidEncodings(bytes1 _encodings);
+    error InvalidEmailType(EmailType _emailType);
+
+    bytes1 public constant AtSignBytes1 = 0x40;
+    bytes1 public constant DotSignBytes1 = 0x2e;
 
     enum DkimParamsIndex {
+        emailType,
         subjectIndex,
         subjectRightIndex,
-        subjectPaddingLen,
-        isSubBase64,
         fromIndex,
         fromLeftIndex,
         fromRightIndex,
@@ -37,7 +39,7 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
         sdidIndex,
         sdidRightIndex
     }
-    uint256 constant DkimParamsIndexNum = 12;
+    uint256 constant DkimParamsIndexNum = 11;
 
     constructor(address _admin) ModuleAdminAuth(_admin) {
         _disableInitializers();
@@ -170,15 +172,13 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
     function _validateEmailSubject(
         bytes calldata _data,
         uint256 _index,
-        bytes calldata _emailHeader,
-        uint256 _emailHeaderIndex
-    ) internal pure returns (bytes memory sigHashHex, uint256 emailHeaderIndex) {
+        bytes calldata _emailHeader
+    ) internal pure returns (bytes memory sigHashHex) {
         bytes calldata subjectHeader = _getSubjectHeader(_data, _index, _emailHeader);
-        bytes calldata subjects;
-        uint32 subjectPaddingLen;
-        uint32 isSubBase64;
-        (subjects, subjectPaddingLen, isSubBase64, emailHeaderIndex) = _getSubjectInfo(_data, _index, _emailHeaderIndex);
-        sigHashHex = _checkSubjectHeader(subjectHeader, subjects, isSubBase64, subjectPaddingLen);
+        bytes memory decodedSubject = _parseSubjectHeader(subjectHeader);
+        uint32 emailType;
+        (emailType, ) = _data.cReadUint32(_index + uint256(DkimParamsIndex.emailType) * 4);
+        sigHashHex = _checkSubjectHeader(decodedSubject, (EmailType)(emailType));
     }
 
     function _getSubjectHeader(
@@ -202,29 +202,6 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
         }
 
         subjectHeader = _emailHeader[subjectIndex + 8:subjectRightIndex];
-    }
-
-    function _getSubjectInfo(
-        bytes calldata _data,
-        uint256 _index,
-        uint256 _emailHeaderIndex
-    )
-        internal
-        pure
-        returns (
-            bytes calldata subjects,
-            uint32 subjectPaddingLen,
-            uint32 isSubBase64,
-            uint256 emailHeaderIndex
-        )
-    {
-        (isSubBase64, ) = _data.cReadUint32(_index + uint256(DkimParamsIndex.isSubBase64) * 4);
-        (subjectPaddingLen, ) = _data.cReadUint32(_index + uint256(DkimParamsIndex.subjectPaddingLen) * 4);
-        require(subjectPaddingLen < 3, "_getSubjectInfo: INVALID_SUBJECT_PADDING");
-        uint32 len;
-        (len, emailHeaderIndex) = _data.cReadUint32(_emailHeaderIndex);
-        subjects = _data[emailHeaderIndex:emailHeaderIndex + len];
-        emailHeaderIndex += len;
     }
 
     function _getEmailFrom(
@@ -336,8 +313,8 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
             emailHeader = _data[index:index + len];
             index += len;
         }
-        (sigHashHex, index) = _validateEmailSubject(_data, _index, emailHeader, index);
         emailHash = _getEmailFrom(_data, _index, emailHeader, _pepper);
+        sigHashHex = _validateEmailSubject(_data, _index, emailHeader);
         (ret, index) = _validateEmailDkim(_data, _index, emailHeader, index);
     }
 
@@ -354,40 +331,119 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
         }
     }
 
-    function _checkSubjectHeader(
-        bytes calldata header,
-        bytes calldata headerParts,
-        uint32 isBase64,
-        uint32 subjectPaddingLen
-    ) private pure returns (bytes memory ret) {
-        // uint256 headerPartsLength = headerParts.length;
-        require(headerParts.length > 0, "DHE");
-
-        if (subjectPaddingLen == 1) {
-            ret = bytes("0");
-        } else if (subjectPaddingLen == 2) {
-            ret = bytes("0x");
-        }
-
+    function _parseSubjectHeader(bytes calldata _subjectHeader) internal pure returns (bytes memory ret) {
         uint256 index;
-        uint256 offset = 1;
-        uint256 headerPartIndex;
-        uint32 headerPartLen;
-        while (headerPartIndex < headerParts.length - 1) {
-            (headerPartLen, headerPartIndex) = headerParts.cReadUint32(headerPartIndex);
-            index = header.findBytes(index, headerParts[headerPartIndex:headerPartIndex + headerPartLen]);
-
-            if (isBase64 & offset > 0) {
-                bytes memory decoded = LibBase64.decode(headerParts[headerPartIndex:headerPartIndex + headerPartLen]);
-                ret = bytes.concat(ret, decoded);
-            } else {
-                ret = bytes.concat(ret, headerParts[headerPartIndex:headerPartIndex + headerPartLen]);
+        while (index < _subjectHeader.length - 1) {
+            if (_subjectHeader[index] == " ") {
+                ++index;
+                continue;
             }
-            headerPartIndex += headerPartLen;
 
-            offset <<= 1;
+            uint256 startIndex;
+            uint256 endIndex;
+
+            if (_subjectHeader[index + 1] == "?") {
+                require(_subjectHeader[index] == "=", "_parseSubjectHeader: INVALID_HEADER");
+                bytes1 encodings;
+                index += 2;
+                while (index < _subjectHeader.length - 1) {
+                    if (_subjectHeader[index] == "?" && _subjectHeader[index + 2] == "?") {
+                        encodings = _subjectHeader[index + 1];
+                        index += 3;
+                        startIndex = index;
+                        break;
+                    }
+                    ++index;
+                }
+                require(startIndex != 0, "_parseSubjectHeader: INVALID_START_HEADER");
+                while (index < _subjectHeader.length - 1) {
+                    if (_subjectHeader[index + 1] == "?") {
+                        require(_subjectHeader[index + 2] == "=", "_parseSubjectHeader: INVALID_HEADER");
+                        endIndex = index + 1;
+                        index += 2;
+                        break;
+                    }
+                    ++index;
+                }
+                require(endIndex != 0, "_parseSubjectHeader: INVALID_END_HEADER");
+                if (encodings == "B" || encodings == "b") {
+                    ret = bytes.concat(ret, LibBase64.decode(_subjectHeader[startIndex:endIndex]));
+                    continue;
+                }
+                if (encodings == "Q" || encodings == "q") {
+                    ret = bytes.concat(ret, _subjectHeader[startIndex:endIndex]);
+                    continue;
+                }
+                revert InvalidEncodings(encodings);
+            }
+
+            startIndex = index;
+            while (index < _subjectHeader.length - 1) {
+                if (_subjectHeader[index + 1] == " ") {
+                    endIndex = index;
+                    index += 2;
+                }
+                ++index;
+            }
+            endIndex = endIndex == 0 ? _subjectHeader.length : endIndex;
+            ret = bytes.concat(ret, _subjectHeader[startIndex:endIndex]);
         }
-        require(ret.length == 66, "SHE");
+    }
+
+    function _checkSubjectHeader(bytes memory _decodedSubjectHeader, EmailType _emailType)
+        private
+        pure
+        returns (bytes memory sigHashHex)
+    {
+        if (_emailType == EmailType.UpdateKeysetHash) {
+            require(_decodedSubjectHeader.length == 89, "_checkSubjectHeader: INVALID_LENGTH");
+            require(
+                _decodedSubjectHeader.readBytesN(0, 25) == "UniPass-Update-Account-0x",
+                "_checkSubjectHeader: INVALID_HEADER"
+            );
+            (sigHashHex, ) = _decodedSubjectHeader.readBytes66(23);
+        } else if (_emailType == EmailType.LockKeysetHash) {
+            require(_decodedSubjectHeader.length == 89, "_checkSubjectHeader: INVALID_LENGTH");
+            require(
+                _decodedSubjectHeader.readBytesN(0, 25) == "UniPass-Start-Recovery-0x",
+                "_checkSubjectHeader: INVALID_HEADER"
+            );
+            (sigHashHex, ) = _decodedSubjectHeader.readBytes66(23);
+        } else if (_emailType == EmailType.CancelLockKeysetHash) {
+            require(_decodedSubjectHeader.length == 90, "_checkSubjectHeader: INVALID_LENGTH");
+            require(
+                _decodedSubjectHeader.readBytesN(0, 26) == "UniPass-Cancel-Recovery-0x",
+                "_checkSubjectHeader: INVALID_HEADER"
+            );
+            (sigHashHex, ) = _decodedSubjectHeader.readBytes66(24);
+        } else if (_emailType == EmailType.UpdateTimeLockDuring) {
+            require(_decodedSubjectHeader.length == 90, "_checkSubjectHeader: INVALID_LENGTH");
+            require(
+                _decodedSubjectHeader.readBytesN(0, 26) == "UniPass-Update-Timelock-0x",
+                "_checkSubjectHeader: INVALID_HEADER"
+            );
+            (sigHashHex, ) = _decodedSubjectHeader.readBytes66(24);
+        } else if (_emailType == EmailType.UpdateImplementation) {
+            require(_decodedSubjectHeader.length == 96, "_checkSubjectHeader: INVALID_LENGTH");
+            require(
+                _decodedSubjectHeader.readBytes32(0) == "UniPass-Update-Implementation-0x",
+                "_checkSubjectHeader: INVALID_HEADER"
+            );
+            (sigHashHex, ) = _decodedSubjectHeader.readBytes66(30);
+        } else if (_emailType == EmailType.SyncAccount) {
+            require(_decodedSubjectHeader.length == 89, "_checkSubjectHeader: INVALID_LENGTH");
+            require(
+                _decodedSubjectHeader.readBytesN(0, 25) == "UniPass-Deploy-Account-0x",
+                "_checkSubjectHeader: INVALID_HEADER"
+            );
+            (sigHashHex, ) = _decodedSubjectHeader.readBytes66(23);
+        } else if (_emailType == EmailType.CallOtherContract) {
+            require(_decodedSubjectHeader.length == 88, "_checkSubjectHeader: INVALID_LENGTH");
+            require(_decodedSubjectHeader.readBytesN(0, 24) == "UniPass-Call-Contract-0x", "_checkSubjectHeader: INVALID_HEADER");
+            (sigHashHex, ) = _decodedSubjectHeader.readBytes66(22);
+        } else {
+            revert InvalidEmailType(_emailType);
+        }
     }
 
     function checkEmailFrom(bytes calldata _emailFrom, bytes32 _sdid) internal pure returns (bytes memory emailFromRet) {

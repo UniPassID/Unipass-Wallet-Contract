@@ -2,13 +2,8 @@ import DKIM from "nodemailer/lib/dkim";
 import { sha256 } from "ethereumjs-util";
 import MailComposer from "nodemailer/lib/mail-composer";
 import * as Dkim from "dkim";
-import NodeRSA from "node-rsa";
 import { arrayify, hexlify, solidityPack, toUtf8Bytes } from "ethers/lib/utils";
 const mailParser = require("mailparser");
-
-const MAX_EMAIL_LEN = 100;
-const FR_EMAIL_LEN = Math.floor(MAX_EMAIL_LEN / 31) + 1;
-const MIN_EMAIL_LEN = 6;
 
 export interface DkimParams {
   emailHeader: string;
@@ -18,9 +13,6 @@ export interface DkimParams {
   fromRightIndex: number;
   subjectIndex: number;
   subjectRightIndex: number;
-  subject: Buffer[];
-  subjectPadding: Buffer;
-  isSubBase64: boolean[];
   dkimHeaderIndex: number;
   sdidIndex: number;
   sdidRightIndex: number;
@@ -28,22 +20,27 @@ export interface DkimParams {
   selectorRightIndex: number;
 }
 
+export enum EmailType {
+  UpdateKeysetHash,
+  LockKeysetHash,
+  CancelLockKeysetHash,
+  UpdateTimeLockDuring,
+  UpdateImplementation,
+  SyncAccount,
+  CallOtherContract,
+}
+
 /**
  * @param params Solidity Dkim Validating Params
  * @returns Params Serializing String
  */
-export function SerializeDkimParams(params: DkimParams): string {
-  let isSubBase64 = 0;
-  params.isSubBase64.forEach((v, i) => {
-    isSubBase64 = isSubBase64 | (Number(v) << i);
-  });
+export function SerializeDkimParams(params: DkimParams, emailType: EmailType): string {
   let sig = solidityPack(
-    ["uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32"],
+    ["uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32"],
     [
+      emailType,
       params.subjectIndex,
       params.subjectRightIndex,
-      params.subjectPadding.length,
-      isSubBase64,
       params.fromIndex,
       params.fromLeftIndex,
       params.fromRightIndex,
@@ -56,11 +53,6 @@ export function SerializeDkimParams(params: DkimParams): string {
   );
   sig = solidityPack(["bytes", "uint32", "bytes"], [sig, params.emailHeader.length / 2 - 1, params.emailHeader]);
 
-  let subjects = "0x";
-  for (const subject of params.subject) {
-    subjects = solidityPack(["bytes", "uint32", "bytes"], [subjects, subject.length, subject]);
-  }
-  sig = solidityPack(["bytes", "uint32", "bytes"], [sig, subjects.length / 2 - 1, subjects]);
   sig = solidityPack(["bytes", "uint32", "bytes"], [sig, params.dkimSig.length / 2 - 1, params.dkimSig]);
 
   return sig;
@@ -92,20 +84,6 @@ export async function signEmailWithDkim(mail: MailComposer, dkim: DKIM) {
   }
 
   return buff;
-}
-
-function updateEmail(emailAddress: string) {
-  if (!emailAddress) return "";
-  if (emailAddress.length < MIN_EMAIL_LEN || emailAddress.length > MAX_EMAIL_LEN) {
-    throw new Error("Invalid email length");
-  }
-  emailAddress = emailAddress.toLocaleLowerCase().trim();
-  const emailData = emailAddress.split("@");
-  let prefix = emailData[0].split("+")[0];
-  if (emailData[1] !== "gmail.com") return `${prefix}@${emailData[1]}`;
-  const reg = /[.]+/g;
-  prefix = prefix.trim().replace(reg, "");
-  return `${prefix}@${emailData[1]}`;
 }
 
 export function emailHash(emailAddress: string, pepper: string): string {

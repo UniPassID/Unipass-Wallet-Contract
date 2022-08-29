@@ -4,6 +4,16 @@ pragma solidity ^0.8.0;
 import "../modules/utils/LibEmailHash.sol";
 
 interface IDkimKeys {
+    enum EmailType {
+        UpdateKeysetHash,
+        LockKeysetHash,
+        CancelLockKeysetHash,
+        UpdateTimeLockDuring,
+        UpdateImplementation,
+        SyncAccount,
+        CallOtherContract
+    }
+
     function getDKIMKey(bytes calldata _emailServer) external view returns (bytes memory);
 
     function dkimVerify(

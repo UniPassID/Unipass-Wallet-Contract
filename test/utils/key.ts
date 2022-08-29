@@ -1,6 +1,6 @@
 import { BytesLike, Contract, Wallet } from "ethers";
 import { arrayify, hexlify, joinSignature, randomBytes, solidityPack } from "ethers/lib/utils";
-import { getSignEmailWithDkim, parseEmailParams, pureEmailHash, SerializeDkimParams } from "./email";
+import { EmailType, getSignEmailWithDkim, parseEmailParams, pureEmailHash, SerializeDkimParams } from "./email";
 import { Role, signerSign } from "./sigPart";
 
 export enum KeyType {
@@ -60,16 +60,46 @@ export class KeyEmailAddress extends KeyBase {
     readonly emailAddress: string,
     readonly pepper: string,
     readonly unipassPrivateKey: string,
-    roleWeight: RoleWeight
+    roleWeight: RoleWeight,
+    public emailType: EmailType
   ) {
     super(roleWeight);
   }
   public async generateSignature(digestHash: string): Promise<string> {
-    let email = await getSignEmailWithDkim(digestHash, this.emailAddress, "test@unipass.me", this.unipassPrivateKey);
+    let subject: string;
+    switch (this.emailType) {
+      case EmailType.UpdateKeysetHash: {
+        subject = `UniPass-Update-Account-${digestHash}`;
+        break;
+      }
+      case EmailType.LockKeysetHash: {
+        subject = `UniPass-Start-Recovery-${digestHash}`;
+        break;
+      }
+      case EmailType.CancelLockKeysetHash: {
+        subject = `UniPass-Cancel-Recovery-${digestHash}`;
+        break;
+      }
+      case EmailType.UpdateTimeLockDuring: {
+        subject = `UniPass-Update-Timelock-${digestHash}`;
+        break;
+      }
+      case EmailType.UpdateImplementation: {
+        subject = `UniPass-Update-Implementation-${digestHash}`;
+        break;
+      }
+      case EmailType.CallOtherContract: {
+        subject = `UniPass-Call-Contract-${digestHash}`;
+        break;
+      }
+      default:
+        throw new Error(`Invalid EmailType: ${this.emailType}`);
+    }
+    let email = await getSignEmailWithDkim(subject, this.emailAddress, "test@unipass.me", this.unipassPrivateKey);
     let { params } = await parseEmailParams(email);
     return solidityPack(
       ["uint8", "uint8", "bytes32", "bytes", "bytes"],
-      [KeyType.EmailAddress, 1, this.pepper, SerializeDkimParams(params), this.serializeRoleWeight()]
+      [KeyType.EmailAddress, 1, this.pepper, SerializeDkimParams(params, this.emailType), this.serializeRoleWeight()]
     );
   }
   public async generateKey(): Promise<string> {
@@ -125,7 +155,8 @@ export async function randomKeys(len: number, unipassPrivateKey: string, contrac
             `${Buffer.from(randomBytes(10)).toString("hex")}@unipass.com`,
             hexlify(randomBytes(32)),
             unipassPrivateKey,
-            randomRoleWeight(role)
+            randomRoleWeight(role),
+            EmailType.CallOtherContract
           )
         );
       }
@@ -146,7 +177,8 @@ export async function randomNewWallet(unipassPrivateKey: string): Promise<KeyBas
         ownerWeight: 60,
         assetsOpWeight: 0,
         guardianWeight: 60,
-      }
+      },
+      EmailType.CallOtherContract
     )
   );
   ret.push(
@@ -158,7 +190,8 @@ export async function randomNewWallet(unipassPrivateKey: string): Promise<KeyBas
         ownerWeight: 40,
         assetsOpWeight: 0,
         guardianWeight: 0,
-      }
+      },
+      EmailType.CallOtherContract
     )
   );
 

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
+import "hardhat/console.sol";
+
 /* solhint-disable no-inline-assembly */
 
 library LibBytes {
@@ -68,10 +70,42 @@ library LibBytes {
         return result;
     }
 
+    function readBytesN(
+        bytes memory b,
+        uint256 index,
+        uint32 length
+    ) internal pure returns (bytes32 result) {
+        // Arrays are prefixed by a 256 bit length parameter
+        uint256 pos = index + 32;
+
+        if (b.length < pos) revert ReadBytes32OutOfBounds(b, index);
+
+        // Read the bytes32 from array memory
+        assembly {
+            result := mload(add(b, pos))
+        }
+
+        uint256 offset = (32 - length) * 8;
+        result = bytes32((result >> offset) << offset);
+    }
+
     function mcReadBytes32(bytes calldata data, uint256 index) internal pure returns (bytes32 a) {
         assembly {
             a := calldataload(add(data.offset, index))
         }
+    }
+
+    function readBytes66(bytes memory data, uint256 index) internal pure returns (bytes memory a, uint256 newIndex) {
+        a = new bytes(66);
+        assembly {
+            let offset := add(32, add(data, index))
+            mstore(add(a, 32), mload(offset))
+            mstore(add(a, 64), mload(add(offset, 32)))
+            mstore(add(a, 66), mload(add(offset, 34)))
+            newIndex := add(index, 66)
+        }
+        assert(newIndex > index);
+        require(newIndex <= data.length, "LibBytes#readBytes66: OUT_OF_BOUNDS");
     }
 
     function mcReadBytesN(
