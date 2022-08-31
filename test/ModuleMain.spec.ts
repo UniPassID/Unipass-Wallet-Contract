@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { BigNumber, Contract, ContractFactory, Overrides, Wallet } from "ethers";
-import { formatBytes32String, keccak256, randomBytes, solidityPack } from "ethers/lib/utils";
+import { formatBytes32String, hexlify, keccak256, randomBytes, solidityPack, toUtf8String } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import * as hre from "hardhat";
 import NodeRSA from "node-rsa";
@@ -177,6 +177,17 @@ describe("ModuleMain", function () {
     }
   });
 
+  it("Test Source", async () => {
+    const source = "source";
+    let ret = await (await proxyModuleMain.setSource(formatBytes32String(source))).wait();
+    expect(ret.status).to.equals(1);
+    expect(toUtf8String(await proxyModuleMain.getSource()).replace(/\u0000/g, "")).to.equals(source);
+    ret = proxyModuleMain.setSource(formatBytes32String(source));
+    await expect(ret).to.revertedWith(
+      "VM Exception while processing transaction: reverted with reason string '_setSource: EXISTED_SOURCE'"
+    );
+  });
+
   describe("Test User Register", async () => {
     let keys: KeyBase[];
     let userAddress: string;
@@ -199,7 +210,7 @@ describe("ModuleMain", function () {
   });
 
   it("Test Account Recovery", async () => {
-    const newKeysetHash = `0x${Buffer.from(randomBytes(32)).toString("hex")}`;
+    const newKeysetHash = hexlify(randomBytes(32));
     const selectedKeys = selectKeys(keys, Role.Guardian, GUARDIAN_TIMELOCK_THRESHOLD);
     const tx = await generateUpdateKeysetHashTx(chainId, proxyModuleMain, metaNonce, newKeysetHash, true, selectedKeys);
 

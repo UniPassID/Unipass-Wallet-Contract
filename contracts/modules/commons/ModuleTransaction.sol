@@ -26,7 +26,7 @@ abstract contract ModuleTransaction {
     event TxPayFeeFailed(bytes32 _txHash, bytes _reason);
 
     function _revertBytes(
-        Transaction memory _tx,
+        Transaction calldata _tx,
         bytes32 _txHash,
         bytes memory _reason
     ) internal {

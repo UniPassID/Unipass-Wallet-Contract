@@ -1,23 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "./commons/ModuleRole.sol";
 import "./commons/ModuleTransaction.sol";
 
 contract ModuleGuest is ModuleTransaction {
-    using SafeERC20 for IERC20;
-
     function _subDigest(bytes32 _digest, uint256 _chainId) internal view returns (bytes32) {
         return keccak256(abi.encodePacked("\x19\x01", _chainId, address(this), _digest));
     }
 
     function execute(
         Transaction[] calldata _txs,
-        uint256 _nonce,
+        uint256,
         bytes calldata
     ) external payable {
-        bytes32 txhash = _subDigest(keccak256(abi.encode(_nonce, _txs)), block.chainid);
+        bytes32 txhash = _subDigest(keccak256(abi.encode("guest:", _txs)), block.chainid);
         _execute(txhash, _txs);
     }
 
