@@ -109,7 +109,7 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleNonceBase,
         if (success) {
             emit TxExecuted(_txHash);
         } else {
-            revert TxFailed(_txHash, result);
+            _revertBytes(_transaction, _txHash, result);
         }
     }
 
