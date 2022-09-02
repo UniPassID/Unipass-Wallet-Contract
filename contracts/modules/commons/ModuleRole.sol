@@ -7,41 +7,40 @@ import "../../interfaces/IModuleCall.sol";
 import "../../utils/LibRole.sol";
 
 contract ModuleRole is ModuleSelfAuth {
-    enum Role {
-        Owner,
-        AssetsOp,
-        Guardian
-    }
-
-    mapping(bytes4 => bytes5) public permissions;
+    mapping(bytes4 => bytes12) public permissions;
 
     error ConstantPermission(bytes4 _permission);
-    event AddPermission(Role _role, bytes4 _permission, uint32 _threshold);
+    event AddPermission(bytes4 _permission, uint32 _ownerWeight, uint32 _assetsOpWeight, uint32 _guardianWeight);
     event RemovePermission(bytes4 _permission);
 
     function _addPermission(
-        Role _role,
         bytes4 _permission,
-        uint32 _threshold
+        uint32 _ownerWeight,
+        uint32 _assetsOpWeight,
+        uint32 _guardianWeight
     ) internal {
-        bytes5 role = bytes5(uint40(_role)) | (bytes5((bytes4(_threshold))) >> 8);
+        bytes12 roleWeight = (bytes12)((bytes4)(_ownerWeight)) |
+            (bytes12(bytes4(_assetsOpWeight)) >> 32) |
+            (bytes12(bytes4(_guardianWeight)) >> 64);
 
-        permissions[_permission] = role;
+        permissions[_permission] = roleWeight;
     }
 
     function _removePermission(bytes4 _permission) internal {
-        permissions[_permission] = bytes5(0);
+        permissions[_permission] = bytes12(0);
     }
 
     /**
-     * @param _role The Signature Role
      * @param _permission The Permission Of The Role, whose value is the selector of Method
-     * @param _threshold The Threshold required by the Permission
+     * @param _ownerWeight The Threshold Weight of Role Owner
+     * @param _assetsOpWeight The Threshold Weight Of Role AssetsOp
+     * @param _guardianWeight The Threshold Weight Of Role Guardian
      */
     function addPermission(
-        Role _role,
         bytes4 _permission,
-        uint32 _threshold
+        uint32 _ownerWeight,
+        uint32 _assetsOpWeight,
+        uint32 _guardianWeight
     ) external onlySelf {
         if (
             _permission == IModuleAuth.updateKeysetHash.selector ||
@@ -57,8 +56,8 @@ contract ModuleRole is ModuleSelfAuth {
         ) {
             revert ConstantPermission(_permission);
         }
-        _addPermission(_role, _permission, _threshold);
-        emit AddPermission(_role, _permission, _threshold);
+        _addPermission(_permission, _ownerWeight, _assetsOpWeight, _guardianWeight);
+        emit AddPermission(_permission, _ownerWeight, _assetsOpWeight, _guardianWeight);
     }
 
     /**
@@ -85,10 +84,19 @@ contract ModuleRole is ModuleSelfAuth {
 
     /**
      * @param _permission The Permission
-     * @return role The Role Of The Permission
-     * @return threshold The Threshold required by the Permission
+     * @return ownerWeight The Threshold Weight of Role Owner
+     * @return assetsOpWeight The Threshold Weight Of Role AssetsOp
+     * @return guardianWeight The Threshold Weight Of Role Guardian
      */
-    function getRoleOfPermission(bytes4 _permission) public view returns (Role role, uint32 threshold) {
+    function getRoleOfPermission(bytes4 _permission)
+        public
+        view
+        returns (
+            uint32 ownerWeight,
+            uint32 assetsOpWeight,
+            uint32 guardianWeight
+        )
+    {
         if (
             _permission == IModuleAuth.updateKeysetHash.selector ||
             _permission == IModuleAuth.updateKeysetHashWithTimeLock.selector ||
@@ -97,20 +105,19 @@ contract ModuleRole is ModuleSelfAuth {
             _permission == IModuleAuth.cancelLockKeysetHsah.selector ||
             _permission == IModuleAuth.syncAccount.selector
         ) {
-            role = Role.Owner;
-            threshold = LibRole.SYNC_TX_THRESHOLD;
+            ownerWeight = LibRole.SYNC_TX_THRESHOLD;
         } else if (
             _permission == ModuleHooks.addHook.selector ||
             _permission == ModuleHooks.removeHook.selector ||
             _permission == this.addPermission.selector ||
             _permission == this.removePermission.selector
         ) {
-            role = Role.Owner;
-            threshold = LibRole.OWNER_THRESHOLD;
+            ownerWeight = LibRole.OWNER_THRESHOLD;
         } else {
-            bytes5 roleInfo = permissions[_permission];
-            role = Role(uint8(bytes1(roleInfo >> 32)));
-            threshold = uint32(bytes4(roleInfo << 8));
+            bytes12 roleWeight = permissions[_permission];
+            ownerWeight = uint32((bytes4)(roleWeight));
+            assetsOpWeight = uint32((bytes4)(roleWeight << 32));
+            guardianWeight = uint32((bytes4)(roleWeight << 64));
         }
     }
 }

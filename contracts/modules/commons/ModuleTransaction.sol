@@ -26,11 +26,11 @@ abstract contract ModuleTransaction {
     event TxPayFeeFailed(bytes32 _txHash, bytes _reason);
 
     function _revertBytes(
-        Transaction calldata _tx,
+        bool _revertOnError,
         bytes32 _txHash,
         bytes memory _reason
     ) internal {
-        if (_tx.revertOnError) {
+        if (_revertOnError) {
             revert TxFailed(_txHash, _reason);
         } else {
             emit TxFailedEvent(_txHash, _reason);

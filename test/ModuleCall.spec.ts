@@ -478,24 +478,21 @@ describe("ModuleCall", function () {
         EIP4337Wallet.interface.getSighash("execFromEntryPoint"),
         eip4337Wallet.address
       );
-      const tx6 = generateAddPermissionTx(
-        proxyTestModuleCall,
-        Role.Owner,
-        EIP4337Wallet.interface.getSighash("updateEntryPoint"),
-        100
-      );
-      const tx7 = generateAddPermissionTx(
-        proxyTestModuleCall,
-        Role.Owner,
-        EIP4337Wallet.interface.getSighash("validateUserOp"),
-        100
-      );
-      const tx8 = generateAddPermissionTx(
-        proxyTestModuleCall,
-        Role.Owner,
-        EIP4337Wallet.interface.getSighash("execFromEntryPoint"),
-        100
-      );
+      const tx6 = generateAddPermissionTx(proxyTestModuleCall, EIP4337Wallet.interface.getSighash("updateEntryPoint"), {
+        ownerWeight: 100,
+        assetsOpWeight: 0,
+        guardianWeight: 0,
+      });
+      const tx7 = generateAddPermissionTx(proxyTestModuleCall, EIP4337Wallet.interface.getSighash("validateUserOp"), {
+        ownerWeight: 100,
+        assetsOpWeight: 0,
+        guardianWeight: 0,
+      });
+      const tx8 = generateAddPermissionTx(proxyTestModuleCall, EIP4337Wallet.interface.getSighash("execFromEntryPoint"), {
+        ownerWeight: 100,
+        assetsOpWeight: 0,
+        guardianWeight: 0,
+      });
       const selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
       const ret = await executeCall(
         [tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8],
