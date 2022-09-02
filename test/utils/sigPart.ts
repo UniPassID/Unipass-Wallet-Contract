@@ -29,24 +29,34 @@ export enum SignerType {
   EthSign = 2,
 }
 
+export interface SelfExecuteTransaction {
+  transactions: Transaction[];
+  roleWeightThreshold: RoleWeight;
+}
+
 export interface Transaction {
   callType: CallType;
   revertOnError: boolean;
   gasLimit: BigNumber;
   target: BytesLike;
   value: BigNumber;
-  data: string;
+  data: string | SelfExecuteTransaction;
 }
 
 export async function signerSign(hash: string, signer: Wallet): Promise<string> {
   return solidityPack(["bytes", "uint8"], [await signer.signMessage(arrayify(hash)), SignerType.EthSign]);
 }
 
-export function generateTransactionHash(chainId: number, address: string, tx: Transaction[], nonce: number): string {
+export async function generateTransactionHash(
+  chainId: number,
+  address: string,
+  parsedTxs: Transaction[],
+  nonce: number
+): Promise<string> {
   let digestHash = keccak256(
     utils.defaultAbiCoder.encode(
       ["uint256", "tuple(uint8 callType,bool revertOnError,address target,uint256 gasLimit,uint256 value,bytes data)[]"],
-      [nonce, tx]
+      [nonce, parsedTxs]
     )
   );
   digestHash = subdigest(chainId, address, digestHash);
@@ -60,12 +70,12 @@ export function subdigest(chainId: number, address: string, hash: BytesLike): st
 export async function generateTransactionSig(
   chainId: number,
   address: string,
-  tx: Transaction[],
+  txs: Transaction[],
   nonce: number,
   keys: [KeyBase, boolean][],
   sessionKey: SessionKey | undefined
 ): Promise<string> {
-  const digestHash = generateTransactionHash(chainId, address, tx, nonce);
+  const digestHash = await generateTransactionHash(chainId, address, txs, nonce);
   let sig: string = await generateSignature(digestHash, chainId, address, keys, sessionKey);
 
   return sig;
@@ -312,6 +322,29 @@ export function generateAddPermissionTx(contract: Contract, selector: BytesLike,
   return tx;
 }
 
+export async function parseTxs(txs: Transaction[]): Promise<Transaction[]> {
+  const ModuleMain = await ethers.getContractFactory("ModuleMain");
+  const parsedTxs: Transaction[] = txs.map((tx) => {
+    if (typeof tx.data == "string") {
+      return tx;
+    }
+    return {
+      target: tx.target,
+      callType: tx.callType,
+      gasLimit: tx.gasLimit,
+      revertOnError: tx.revertOnError,
+      value: tx.value,
+      data: ModuleMain.interface.encodeFunctionData("selfExecute", [
+        tx.data.roleWeightThreshold.ownerWeight,
+        tx.data.roleWeightThreshold.assetsOpWeight,
+        tx.data.roleWeightThreshold.guardianWeight,
+        tx.data.transactions,
+      ]),
+    };
+  });
+  return parsedTxs;
+}
+
 export async function executeCall(
   txs: Transaction[],
   chainId: number,
@@ -321,9 +354,10 @@ export async function executeCall(
   sessionKey: SessionKey | undefined,
   txParams: Overrides
 ) {
-  let signature = await generateTransactionSig(chainId, moduleMain.address, txs, nonce, keys, sessionKey);
+  const parsedTxs = await parseTxs(txs);
+  let signature = await generateTransactionSig(chainId, moduleMain.address, parsedTxs, nonce, keys, sessionKey);
 
-  const ret = await (await moduleMain.execute(txs, nonce, signature, txParams)).wait();
+  const ret = await (await moduleMain.execute(parsedTxs, nonce, signature, txParams)).wait();
   return ret;
 }
 

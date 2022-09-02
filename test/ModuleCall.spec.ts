@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { Contract, ContractFactory, Overrides, Wallet } from "ethers";
+import { constants, Contract, ContractFactory, Overrides, Wallet } from "ethers";
 import { formatBytes32String, hexlify, randomBytes, solidityPack } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import NodeRSA from "node-rsa";
@@ -17,6 +17,7 @@ import { Deployer } from "./utils/deployer";
 import { generateAddHookTx, generateRemoveHookTx } from "./utils/hook";
 import { selectKeys, KeyBase, randomKeys } from "./utils/key";
 import {
+  CallType,
   executeCall,
   generateAddPermissionTx,
   generateCancelLockKeysetHashTx,
@@ -28,7 +29,9 @@ import {
   generateUpdateImplementationTx,
   generateUpdateKeysetHashTx,
   generateUpdateTimeLockDuringTx,
+  parseTxs,
   Role,
+  Transaction,
 } from "./utils/sigPart";
 import { DefaultsForUserOp } from "./utils/userOperation";
 
@@ -430,7 +433,7 @@ describe("ModuleCall", function () {
 
       tx = generateAddHookTx(proxyTestModuleCall, selector, greeter1.address);
       ret = executeCall([tx], chainId, nonce, selectedKeys, proxyTestModuleCall, undefined, txParams);
-      const txHash = generateTransactionHash(chainId, proxyTestModuleCall.address, [tx], nonce);
+      const txHash = await generateTransactionHash(chainId, proxyTestModuleCall.address, await parseTxs([tx]), nonce);
       await expect(ret).to.revertedWith(
         `VM Exception while processing transaction: reverted with custom error 'TxFailed("${txHash}", "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001c5f7265717569726557686974654c6973743a204e4f545f574849544500000000")'`
       );
@@ -555,6 +558,42 @@ describe("ModuleCall", function () {
 
     const ret = await executeCall(
       [tx1, tx2],
+      chainId,
+      nonce,
+      selectKeys(keys, Role.AssetsOp, ASSETS_OP_THRESHOLD),
+      proxyTestModuleCall,
+      {
+        key: sessionKey,
+        timestamp: Math.ceil(Date.now() / 1000) + 500,
+        weight: 100,
+      },
+      txParams
+    );
+
+    expect(ret.status).to.equal(1);
+    expect(await proxyTestModuleCall.provider.getBalance(to.address)).equal(value);
+    expect(await proxyTestModuleCall.getKeysetHash()).to.equal(newKeysetHash);
+  });
+
+  it("Test Self Execute Transactions", async function () {
+    const to = Wallet.createRandom();
+    const value = ethers.utils.parseEther("10");
+    const newKeysetHash = `0x${Buffer.from(randomBytes(32)).toString("hex")}`;
+    const selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
+    const tx1 = await generateUpdateKeysetHashTx(chainId, proxyTestModuleCall, metaNonce, newKeysetHash, false, selectedKeys);
+    const tx2 = await generateTransferTx(to.address, ethers.constants.Zero, value);
+    const tx: Transaction = {
+      revertOnError: true,
+      gasLimit: constants.Zero,
+      target: proxyTestModuleCall.address,
+      callType: CallType.Call,
+      value: constants.Zero,
+      data: { transactions: [tx1, tx2], roleWeightThreshold: { ownerWeight: 0, assetsOpWeight: 100, guardianWeight: 0 } },
+    };
+    const sessionKey = Wallet.createRandom();
+
+    const ret = await executeCall(
+      [tx],
       chainId,
       nonce,
       selectKeys(keys, Role.AssetsOp, ASSETS_OP_THRESHOLD),
