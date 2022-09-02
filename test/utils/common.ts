@@ -31,9 +31,7 @@ export async function transferEth(to: string, amount: number) {
 export function getKeysetHash(keys: KeyBase[]): string {
   let keysetHash = "0x";
   keys.forEach((key) => {
-    keysetHash = keccak256(
-      solidityPack(["bytes", "bytes"], [keysetHash, key.serialize()])
-    );
+    keysetHash = keccak256(solidityPack(["bytes", "bytes"], [keysetHash, key.serialize()]));
   });
   return keysetHash;
 }
@@ -41,8 +39,7 @@ export function getKeysetHash(keys: KeyBase[]): string {
 export function generateRecoveryEmails(length: number): string[] {
   return [...Array(length)].map(() => {
     var result = "";
-    var characters =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    var characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     var charactersLength = characters.length;
     for (var i = 0; i < 16; i++) {
       result += characters.charAt(Math.floor(Math.random() * charactersLength));
@@ -51,24 +48,13 @@ export function generateRecoveryEmails(length: number): string[] {
   });
 }
 
-export function getProxyAddress(
-  moduleMainAddress: string,
-  factoryAddress: string,
-  keysetHash: string
-): string {
+export function getProxyAddress(moduleMainAddress: string, factoryAddress: string, keysetHash: string): string {
   const code = ethers.utils.solidityPack(
     ["bytes", "uint256"],
-    [
-      "0x603a600e3d39601a805130553df3363d3d373d3d3d363d30545af43d82803e903d91601857fd5bf3",
-      moduleMainAddress,
-    ]
+    ["0x603a600e3d39601a805130553df3363d3d373d3d3d363d30545af43d82803e903d91601857fd5bf3", moduleMainAddress]
   );
   const codeHash = keccak256(code);
 
-  const expectedAddress = getCreate2Address(
-    factoryAddress,
-    keysetHash,
-    codeHash
-  );
+  const expectedAddress = getCreate2Address(factoryAddress, keysetHash, codeHash);
   return expectedAddress;
 }
