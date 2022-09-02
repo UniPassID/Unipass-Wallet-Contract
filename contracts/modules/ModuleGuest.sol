@@ -2,8 +2,11 @@
 pragma solidity ^0.8.0;
 
 import "./commons/ModuleTransaction.sol";
+import "../utils/LibOptim.sol";
 
 contract ModuleGuest is ModuleTransaction {
+    error NotEnoughGas(uint256 _requested, uint256 _available);
+
     function _subDigest(bytes32 _digest, uint256 _chainId) internal view returns (bytes32) {
         return keccak256(abi.encodePacked("\x19\x01", _chainId, address(this), _digest));
     }
@@ -20,24 +23,28 @@ contract ModuleGuest is ModuleTransaction {
     function _execute(bytes32 _txHash, Transaction[] calldata _txs) internal {
         for (uint256 i = 0; i < _txs.length; i++) {
             Transaction calldata transaction = _txs[i];
+            uint256 gasLimit = transaction.gasLimit;
+
+            if (gasleft() < gasLimit) revert NotEnoughGas(gasLimit, gasleft());
 
             require(gasleft() >= transaction.gasLimit, "_execute: NOT_ENOUGH_GAS");
 
             bool success;
-            bytes memory result;
 
             if (transaction.callType == CallType.Call) {
-                (success, result) = transaction.target.call{
-                    value: transaction.value,
-                    gas: transaction.gasLimit == 0 ? gasleft() : transaction.gasLimit
-                }(transaction.data);
+                success = LibOptim.call(
+                    transaction.target,
+                    transaction.value,
+                    gasLimit == 0 ? gasleft() : gasLimit,
+                    transaction.data
+                );
             } else {
                 revert InvalidCallType(transaction.callType);
             }
             if (success) {
                 emit TxExecuted(_txHash);
             } else {
-                _revertBytes(transaction, _txHash, result);
+                _revertBytes(transaction.revertOnError, _txHash, LibOptim.returnData());
             }
         }
     }

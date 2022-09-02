@@ -7,7 +7,12 @@ interface IModuleAuth {
     function validateSignature(bytes32 _hash, bytes calldata _signature)
         external
         view
-        returns (bool succ, RoleWeight memory roleWeightRet);
+        returns (
+            bool succ,
+            uint32 ownerWeight,
+            uint32 assetOpWeight,
+            uint32 guardianWeight
+        );
 
     function syncAccount(
         uint32 _metaNonce,

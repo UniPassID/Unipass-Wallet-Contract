@@ -121,10 +121,10 @@ abstract contract ModuleAuthBase is
             ZERO_CHAINID
         );
 
-        (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
+        (bool success, uint32 ownerWeight, , ) = validateSignature(digestHash, _signature);
         require(success, "syncAccount: INVALID_SIG");
 
-        require(roleWeight.ownerWeight >= LibRole.OWNER_THRESHOLD, "syncAccount: INVALID_WEIGHT");
+        require(ownerWeight >= LibRole.OWNER_THRESHOLD, "syncAccount: INVALID_WEIGHT");
         if (!isValidKeysetHash(_keysetHash)) {
             _updateKeysetHash(_keysetHash);
         }
@@ -156,11 +156,11 @@ abstract contract ModuleAuthBase is
             ZERO_CHAINID
         );
 
-        (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
+        (bool success, uint32 ownerWeight, , uint32 guardianWeight) = validateSignature(digestHash, _signature);
         require(success, "updateKeysetHash: INVALID_SIG");
 
         require(
-            roleWeight.ownerWeight >= LibRole.OWNER_THRESHOLD || roleWeight.guardianWeight >= LibRole.GUARDIAN_THRESHOLD,
+            ownerWeight >= LibRole.OWNER_THRESHOLD || guardianWeight >= LibRole.GUARDIAN_THRESHOLD,
             "updateKeysetHash: INVALID_WEIGHT"
         );
 
@@ -186,10 +186,10 @@ abstract contract ModuleAuthBase is
             ZERO_CHAINID
         );
 
-        (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
+        (bool success, , , uint32 guardianWeight) = validateSignature(digestHash, _signature);
         require(success, "updateKeysetHashWithTimeLock: INVALID_SIG");
 
-        require(roleWeight.guardianWeight >= LibRole.GUARDIAN_TIMELOCK_THRESHOLD, "updateKeysetHashWithTimeLock: INVALID_WEIGHT");
+        require(guardianWeight >= LibRole.GUARDIAN_TIMELOCK_THRESHOLD, "updateKeysetHashWithTimeLock: INVALID_WEIGHT");
 
         _toLockKeysetHash(_newKeysetHash, _getLockDuring());
         _writeMetaNonce(_metaNonce);
@@ -219,10 +219,10 @@ abstract contract ModuleAuthBase is
         _requireLocked();
         bytes32 digestHash = _subDigest(keccak256(abi.encodePacked(uint8(CANCEL_LOCK_KEYSET_HASH), _metaNonce)), ZERO_CHAINID);
 
-        (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
+        (bool success, uint32 ownerWeight, , ) = validateSignature(digestHash, _signature);
         require(success, "cancelLockKeysetHsah: INVALID_SIG");
 
-        require(roleWeight.ownerWeight >= LibRole.OWNER_CANCEL_TIMELOCK_THRESHOLD, "cancelLockKeysetHsah: INVALID_WEIGHT");
+        require(ownerWeight >= LibRole.OWNER_CANCEL_TIMELOCK_THRESHOLD, "cancelLockKeysetHsah: INVALID_WEIGHT");
 
         _unlockKeysetHash();
         _writeMetaNonce(_metaNonce);
@@ -248,10 +248,10 @@ abstract contract ModuleAuthBase is
             ZERO_CHAINID
         );
 
-        (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
+        (bool success, uint32 ownerWeight, , ) = validateSignature(digestHash, _signature);
         require(success, "updateTimeLockDuring: INVALID_SIG");
 
-        require(roleWeight.ownerWeight >= LibRole.OWNER_THRESHOLD, "updateTimeLockDuring: INVALID_WEIGHT");
+        require(ownerWeight >= LibRole.OWNER_THRESHOLD, "updateTimeLockDuring: INVALID_WEIGHT");
         _setLockDuring(_newTimeLockDuring);
         _writeMetaNonce(_metaNonce);
 
@@ -276,10 +276,10 @@ abstract contract ModuleAuthBase is
             ZERO_CHAINID
         );
 
-        (bool success, RoleWeight memory roleWeight) = validateSignature(digestHash, _signature);
+        (bool success, uint32 ownerWeight, , ) = validateSignature(digestHash, _signature);
         require(success, "updateImplementation: INVALID_SIG");
 
-        require(roleWeight.ownerWeight >= LibRole.OWNER_THRESHOLD, "updateImplementation: INVALID_WEIGHT");
+        require(ownerWeight >= LibRole.OWNER_THRESHOLD, "updateImplementation: INVALID_WEIGHT");
         _setImplementation(_newImplementation);
         _writeMetaNonce(_metaNonce);
 
@@ -290,38 +290,40 @@ abstract contract ModuleAuthBase is
      * @param _hash The Hash To Valdiate Signature
      * @param _signature The Transaction Signature
      * @return succ Whether The Signature is Valid
-     * @return roleWeightRet The Role And Signature Weight
+     * @return ownerWeight The Threshold Weight of Role Owner
+     * @return assetsOpWeight The Threshold Weight Of Role AssetsOp
+     * @return guardianWeight The Threshold Weight Of Role Guardian
      */
     function validateSignature(bytes32 _hash, bytes calldata _signature)
         public
         view
         override
-        returns (bool succ, RoleWeight memory roleWeightRet)
+        returns (
+            bool succ,
+            uint32 ownerWeight,
+            uint32 assetsOpWeight,
+            uint32 guardianWeight
+        )
     {
         if (_signature.length == 0) {
-            return (true, roleWeightRet);
+            return (true, 0, 0, 0);
         }
         uint256 index = 0;
         bool isSessionKey = _signature.mcReadUint8(index) == 1;
         ++index;
-        RoleWeight memory roleWeight;
 
         if (isSessionKey) {
             uint32 timestamp;
             (timestamp, index) = _signature.cReadUint32(index);
             require(block.timestamp < timestamp, "_validateSignature: INVALID_TIMESTAMP");
-            (roleWeightRet.assetsOpWeight, index) = _signature.cReadUint32(index);
+            (assetsOpWeight, index) = _signature.cReadUint32(index);
             address sessionKey = recoverSigner(_hash, _signature[index:index + 66]);
             index += 66;
-            bytes32 digestHash = _subDigest(
-                keccak256(abi.encodePacked(sessionKey, timestamp, roleWeightRet.assetsOpWeight)),
-                block.chainid
-            );
-            bool success;
-            (success, roleWeight) = _validateSignatureInner(digestHash, _signature, index);
-            succ = success && roleWeightRet.assetsOpWeight <= roleWeight.assetsOpWeight;
+            bytes32 digestHash = _subDigest(keccak256(abi.encodePacked(sessionKey, timestamp, assetsOpWeight)), block.chainid);
+            (bool success, , uint32 assetsOpWeightRet, ) = _validateSignatureInner(digestHash, _signature, index);
+            succ = success && assetsOpWeightRet >= assetsOpWeight;
         } else {
-            (succ, roleWeightRet) = _validateSignatureInner(_hash, _signature, index);
+            (succ, ownerWeight, assetsOpWeight, guardianWeight) = _validateSignatureInner(_hash, _signature, index);
         }
     }
 
@@ -329,58 +331,66 @@ abstract contract ModuleAuthBase is
         bytes32 _hash,
         bytes calldata _signature,
         uint256 _index
-    ) private view returns (bool succ, RoleWeight memory roleWeightSum) {
-        bytes32 keysetHash;
+    )
+        private
+        view
+        returns (
+            bool succ,
+            uint32 ownerWeight,
+            uint32 assetsOpWeight,
+            uint32 guardianWeight
+        )
+    {
         bool isSig;
         KeyType keyType;
-        address key;
-        bytes32 emailHash;
-        RoleWeight memory roleWeight;
-        (isSig, keyType, key, emailHash, _index) = _parseKey(_hash, _signature, _index);
-        (roleWeight, _index) = _parseRoleWeight(_signature, _index);
+        bytes32 ret;
+        (isSig, keyType, ret, _index) = _parseKey(_hash, _signature, _index);
+        uint32 singleOwnerWeight;
+        uint32 singleAssetsOpWeight;
+        uint32 singleGuardianWeight;
+        (singleOwnerWeight, singleAssetsOpWeight, singleGuardianWeight, _index) = _parseRoleWeight(_signature, _index);
         if (isSig) {
-            roleWeightSum.ownerWeight += roleWeight.ownerWeight;
-            roleWeightSum.assetsOpWeight += roleWeight.assetsOpWeight;
-            roleWeightSum.guardianWeight += roleWeight.guardianWeight;
+            ownerWeight += singleOwnerWeight;
+            assetsOpWeight += singleAssetsOpWeight;
+            guardianWeight += singleGuardianWeight;
         }
+
+        bytes32 keysetHash;
         if (keyType == KeyType.Secp256k1 || keyType == KeyType.ERC1271Wallet) {
             keysetHash = keccak256(
-                abi.encodePacked(keyType, key, roleWeight.ownerWeight, roleWeight.assetsOpWeight, roleWeight.guardianWeight)
+                abi.encodePacked(
+                    keyType,
+                    address(uint160(uint256(ret))),
+                    singleOwnerWeight,
+                    singleAssetsOpWeight,
+                    singleGuardianWeight
+                )
             );
         } else {
-            keysetHash = keccak256(
-                abi.encodePacked(keyType, emailHash, roleWeight.ownerWeight, roleWeight.assetsOpWeight, roleWeight.guardianWeight)
-            );
+            keysetHash = keccak256(abi.encodePacked(keyType, ret, singleOwnerWeight, singleAssetsOpWeight, singleGuardianWeight));
         }
         while (_index < _signature.length - 1) {
-            (isSig, keyType, key, emailHash, _index) = _parseKey(_hash, _signature, _index);
-            (roleWeight, _index) = _parseRoleWeight(_signature, _index);
+            (isSig, keyType, ret, _index) = _parseKey(_hash, _signature, _index);
+            (singleOwnerWeight, singleAssetsOpWeight, singleGuardianWeight, _index) = _parseRoleWeight(_signature, _index);
             if (isSig) {
-                roleWeightSum.ownerWeight += roleWeight.ownerWeight;
-                roleWeightSum.assetsOpWeight += roleWeight.assetsOpWeight;
-                roleWeightSum.guardianWeight += roleWeight.guardianWeight;
+                ownerWeight += singleOwnerWeight;
+                assetsOpWeight += singleAssetsOpWeight;
+                guardianWeight += singleGuardianWeight;
             }
             if (keyType == KeyType.Secp256k1 || keyType == KeyType.ERC1271Wallet) {
                 keysetHash = keccak256(
                     abi.encodePacked(
                         keysetHash,
                         keyType,
-                        key,
-                        roleWeight.ownerWeight,
-                        roleWeight.assetsOpWeight,
-                        roleWeight.guardianWeight
+                        address(uint160(uint256(ret))),
+                        singleOwnerWeight,
+                        singleAssetsOpWeight,
+                        singleGuardianWeight
                     )
                 );
             } else {
                 keysetHash = keccak256(
-                    abi.encodePacked(
-                        keysetHash,
-                        keyType,
-                        emailHash,
-                        roleWeight.ownerWeight,
-                        roleWeight.assetsOpWeight,
-                        roleWeight.guardianWeight
-                    )
+                    abi.encodePacked(keysetHash, keyType, ret, singleOwnerWeight, singleAssetsOpWeight, singleGuardianWeight)
                 );
             }
         }
@@ -391,11 +401,16 @@ abstract contract ModuleAuthBase is
     function _parseRoleWeight(bytes calldata _signature, uint256 _index)
         private
         pure
-        returns (RoleWeight memory roleWeight, uint256 index)
+        returns (
+            uint32 ownerWeight,
+            uint32 assetsOpWeight,
+            uint32 guardianWeight,
+            uint256 index
+        )
     {
-        (roleWeight.ownerWeight, index) = _signature.cReadUint32(_index);
-        (roleWeight.assetsOpWeight, index) = _signature.cReadUint32(index);
-        (roleWeight.guardianWeight, index) = _signature.cReadUint32(index);
+        (ownerWeight, index) = _signature.cReadUint32(_index);
+        (assetsOpWeight, index) = _signature.cReadUint32(index);
+        (guardianWeight, index) = _signature.cReadUint32(index);
     }
 
     function _parseKey(
@@ -408,14 +423,14 @@ abstract contract ModuleAuthBase is
         returns (
             bool isSig,
             KeyType keyType,
-            address key,
-            bytes32 emailHash,
+            bytes32 ret,
             uint256 index
         )
     {
         keyType = (KeyType)(_signature.mcReadUint8(_index));
         index = _index + 1;
         if (keyType == KeyType.Secp256k1) {
+            address key;
             isSig = _signature.mcReadUint8(index) == 1;
             ++index;
             if (isSig) {
@@ -424,9 +439,11 @@ abstract contract ModuleAuthBase is
             } else {
                 (key, index) = _signature.cReadAddress(index);
             }
+            ret = bytes32(uint256(uint160(key)));
         } else if (keyType == KeyType.ERC1271Wallet) {
             isSig = _signature.mcReadUint8(index) == 1;
             ++index;
+            address key;
             (key, index) = _signature.cReadAddress(index);
             if (isSig) {
                 uint32 sigLen;
@@ -438,6 +455,7 @@ abstract contract ModuleAuthBase is
                     "_validateSignature: VALIDATE_FAILED"
                 );
             }
+            ret = bytes32(uint256(uint160(key)));
         } else if (keyType == KeyType.EmailAddress) {
             isSig = _signature.mcReadUint8(index) == 1;
             ++index;
@@ -447,14 +465,14 @@ abstract contract ModuleAuthBase is
                 bytes memory sigHashHex;
                 bytes32 pepper = _signature.mcReadBytes32(index);
                 index += 32;
-                (succ, emailHash, sigHashHex, index) = _dkimVerify(_signature, index, pepper);
+                (succ, ret, sigHashHex, index) = _dkimVerify(_signature, index, pepper);
                 require(succ, "_validateSignature: INVALID_DKIM");
                 require(
                     keccak256((LibBytes.toHex(uint256(_hash), 32))) == keccak256(sigHashHex),
                     "_validateSignature: INVALID_SIG_HASH"
                 );
             } else {
-                emailHash = _signature.mcReadBytes32(index);
+                ret = _signature.mcReadBytes32(index);
                 index += 32;
             }
         } else {
@@ -469,8 +487,8 @@ abstract contract ModuleAuthBase is
      */
     function isValidSignature(bytes32 _hash, bytes calldata _signature) external view override returns (bytes4 magicValue) {
         // Validate signatures
-        (bool isValid, RoleWeight memory roleWeight) = validateSignature(_hash, _signature);
-        if (isValid && roleWeight.assetsOpWeight >= LibRole.ASSETS_OP_THRESHOLD) {
+        (bool isValid, , uint32 assetsOpWeight, ) = validateSignature(_hash, _signature);
+        if (isValid && assetsOpWeight >= LibRole.ASSETS_OP_THRESHOLD) {
             magicValue = SELECTOR_ERC1271_BYTES32_BYTES;
         }
     }

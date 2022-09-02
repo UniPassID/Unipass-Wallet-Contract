@@ -2,7 +2,7 @@ import { BigNumber, Contract, Overrides, utils, Wallet } from "ethers";
 import { arrayify, BytesLike, keccak256, solidityPack } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import { EmailType } from "./email";
-import { KeyBase, KeyEmailAddress } from "./key";
+import { KeyBase, KeyEmailAddress, RoleWeight } from "./key";
 
 export enum ActionType {
   UpdateKeysetHash = 0,
@@ -294,8 +294,13 @@ export function generateRemovePermissionTx(contract: Contract, selector: BytesLi
   return tx;
 }
 
-export function generateAddPermissionTx(contract: Contract, role: Role, selector: BytesLike, threshold: number) {
-  const data = contract.interface.encodeFunctionData("addPermission", [role, selector, threshold]);
+export function generateAddPermissionTx(contract: Contract, selector: BytesLike, roleWeight: RoleWeight) {
+  const data = contract.interface.encodeFunctionData("addPermission", [
+    selector,
+    roleWeight.ownerWeight,
+    roleWeight.assetsOpWeight,
+    roleWeight.guardianWeight,
+  ]);
   let tx = {
     callType: CallType.Call,
     revertOnError: true,
