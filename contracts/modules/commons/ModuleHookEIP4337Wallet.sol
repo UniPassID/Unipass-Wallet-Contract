@@ -12,6 +12,7 @@ import "./ModuleTransaction.sol";
 import "../../UserOperation.sol";
 import "../../interfaces/IEIP4337Wallet.sol";
 import "../../interfaces/IModuleCall.sol";
+import "../../interfaces/IModuleAccount.sol";
 import "../../interfaces/IModuleAuth.sol";
 import "../../utils/LibBytes.sol";
 

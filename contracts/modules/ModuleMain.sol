@@ -5,8 +5,9 @@ import "../modules/commons/ModuleCall.sol";
 import "../modules/commons/ModuleAuthFixed.sol";
 import "../modules/commons/ModuleHooks.sol";
 import "../modules/commons/ModuleSource.sol";
+import "../modules/commons/ModuleAccount.sol";
 
-contract ModuleMain is ModuleAuthFixed, ModuleHooks, ModuleCall, ModuleSource {
+contract ModuleMain is ModuleAuthFixed, ModuleAccount, ModuleHooks, ModuleCall, ModuleSource {
     IModuleWhiteList private immutable WHITE_LIST;
 
     /**

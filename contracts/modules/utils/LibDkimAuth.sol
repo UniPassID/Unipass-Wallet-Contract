@@ -5,17 +5,11 @@ import "../../interfaces/IDkimKeys.sol";
 
 import "hardhat/console.sol";
 
-contract ModuleDkimAuth {
-    IDkimKeys public immutable dkimKeys;
-
+library LibDkimAuth {
     error DkimFailed(bytes reason);
 
-    constructor(IDkimKeys _dkimKeys) {
-        require(address(_dkimKeys) != address(0), "constructor: ZERO");
-        dkimKeys = _dkimKeys;
-    }
-
     function _dkimVerify(
+        IDkimKeys _dkimKeys,
         bytes calldata _data,
         uint256 _index,
         bytes32 _pepper
@@ -29,7 +23,7 @@ contract ModuleDkimAuth {
             uint256
         )
     {
-        try dkimKeys.dkimVerify(_data, _index, _pepper) returns (
+        try _dkimKeys.dkimVerify(_data, _index, _pepper) returns (
             bool ret,
             bytes32 emailHash,
             bytes memory sigHashHex,

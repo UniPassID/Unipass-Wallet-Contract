@@ -2,19 +2,24 @@
 pragma solidity ^0.8.0;
 
 import "../modules/commons/ModuleCall.sol";
-import "../modules/commons/Implementation.sol";
-import "../modules/commons/ModuleAuthUpgradable.sol";
+import "../modules/commons/ModuleAuthFixed.sol";
 import "../modules/commons/ModuleHooks.sol";
 import "../modules/commons/ModuleSource.sol";
-import "../modules/commons/ModuleAccount.sol";
 
-contract ModuleMainUpgradable is ModuleAuthUpgradable, ModuleAccount, ModuleHooks, ModuleCall, ModuleSource {
+contract ModuleMainGasEstimator is ModuleAuthFixed, ModuleHooks, ModuleCall, ModuleSource {
     IModuleWhiteList private immutable WHITE_LIST;
 
     /**
+     * @param _factory The Address Of ERC2470 Singleton Factory
+     * @param _moduleMainUpgradable The Address Of ModuleMainUpgradable, which is used for first contract upgrade
      * @param _dkimKeys The Address Of DkimKeys, which is used for Dkim Verify
      */
-    constructor(IDkimKeys _dkimKeys, IModuleWhiteList _whiteList) ModuleAuthUpgradable(_dkimKeys) {
+    constructor(
+        address _factory,
+        address _moduleMainUpgradable,
+        IDkimKeys _dkimKeys,
+        IModuleWhiteList _whiteList
+    ) ModuleAuthFixed(_factory, _moduleMainUpgradable, _dkimKeys) {
         WHITE_LIST = _whiteList;
     }
 
