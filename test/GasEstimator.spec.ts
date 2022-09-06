@@ -24,19 +24,17 @@ function txBaseCost(data: BytesLike): number {
 }
 
 describe("GasEstimation", function () {
-  let moduleMain: Contract;
-  let ModuleMain: ContractFactory;
+  let moduleMainGasEstimator: Contract;
+  let ModuleMainGasEstimator: ContractFactory;
   let moduleGuest: Contract;
-  let proxyModuleMain: Contract;
+  let moduleWhiteList: Contract;
   let gasEstimation: Contract;
   let deployer: Deployer;
   let dkimKeys: Contract;
-  let keys: KeyBase[];
-  let keysetHash: string;
+  let fakeKeys: KeyBase[];
   let dkimKeysAdmin: Wallet;
   let txParams: Overrides;
   let metaNonce: number;
-  let nonce: number;
   let unipassPrivateKey: string;
   let testERC1271Wallet: [Contract, Wallet][] = [];
   let Greeter: ContractFactory;
@@ -66,7 +64,7 @@ describe("GasEstimation", function () {
     const moduleWhiteListAdmin: Wallet = Wallet.createRandom();
     await transferEth(moduleWhiteListAdmin.address, 1);
     const ModuleWhiteList = await ethers.getContractFactory("ModuleWhiteList");
-    const moduleWhiteList = await ModuleWhiteList.deploy(moduleWhiteListAdmin.address);
+    moduleWhiteList = await ModuleWhiteList.deploy(moduleWhiteListAdmin.address);
     let ret = await (await moduleWhiteList.updateImplementationWhiteList(greeter1.address, true)).wait();
     expect(ret.status).to.equals(1);
     ret = await (await moduleWhiteList.updateHookWhiteList(greeter2.address, true)).wait();
@@ -77,27 +75,7 @@ describe("GasEstimation", function () {
     await transferEth(dkimKeysAdmin.address, 10);
     dkimKeys = await deployer.deployContract(DkimKeys, 0, txParams, dkimKeysAdmin.address);
 
-    const ModuleMainUpgradable = await ethers.getContractFactory("ModuleMainUpgradable");
-    const moduleMainUpgradable = await deployer.deployContract(
-      ModuleMainUpgradable,
-      0,
-      txParams,
-      dkimKeys.address,
-      moduleWhiteList.address
-    );
-
-    ModuleMain = await ethers.getContractFactory("ModuleMain");
-    moduleMain = await deployer.deployContract(
-      ModuleMain,
-      0,
-      txParams,
-      deployer.singleFactoryContract.address,
-      moduleMainUpgradable.address,
-      dkimKeys.address,
-      moduleWhiteList.address
-    );
-
-    ret = await (await moduleWhiteList.updateImplementationWhiteList(moduleMainUpgradable.address, true)).wait();
+    ModuleMainGasEstimator = await ethers.getContractFactory("ModuleMainGasEstimator");
 
     const GasEstimation = await ethers.getContractFactory("GasEstimator");
     gasEstimation = await deployer.deployContract(GasEstimation, 0, txParams);
@@ -118,54 +96,37 @@ describe("GasEstimation", function () {
         )
     ).wait();
     expect(ret.status).to.equals(1);
+    fakeKeys = await randomKeys(10, unipassPrivateKey, testERC1271Wallet);
   });
   this.beforeEach(async function () {
-    keys = await randomKeys(10, unipassPrivateKey, testERC1271Wallet);
-    keysetHash = getKeysetHash(keys);
-
-    proxyModuleMain = await deployer.deployProxyContract(ModuleMain.interface, moduleMain.address, keysetHash, txParams);
+    moduleMainGasEstimator = await ModuleMainGasEstimator.deploy(dkimKeys.address, moduleWhiteList.address);
 
     const txRet = await (
       await ethers.getSigners()
     )[0].sendTransaction({
-      to: proxyModuleMain.address,
+      to: moduleMainGasEstimator.address,
       value: ethers.utils.parseEther("100"),
     });
     expect((await txRet.wait()).status).to.equal(1);
-
     metaNonce = 1;
-    nonce = 1;
   });
 
-  it("Should estimate wallet deployement", async function () {
-    const deployData = deployer.singleFactoryContract.interface.encodeFunctionData("deploy", [
-      Deployer.getInitCode(moduleMain.address),
-      randomBytes(32),
-    ]);
-
-    const estimate = await gasEstimation.callStatic.estimate(deployer.singleFactoryContract.address, deployData);
-    const gasUsed: number = (
-      await (await deployer.singleFactoryContract.deploy(Deployer.getInitCode(moduleMain.address), randomBytes(32))).wait()
-    ).gasUsed.toNumber();
-
-    expect(estimate.gas.toNumber() + txBaseCost(deployData)).to.approximately(gasUsed, 5000);
-  });
   it("Should estimate account transaction", async function () {
     const newKeysetHash = ethers.utils.hexlify(randomBytes(32));
-    const selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
-    const tx = await generateUpdateKeysetHashTx(chainId, proxyModuleMain, metaNonce, newKeysetHash, false, selectedKeys);
+    const selectedKeys = selectKeys(fakeKeys, Role.Owner, OWNER_THRESHOLD);
+    const tx = await generateUpdateKeysetHashTx(chainId, moduleMainGasEstimator, metaNonce, newKeysetHash, false, selectedKeys);
     const nonce = 1;
-    const signature = await generateTransactionSig(chainId, proxyModuleMain.address, [tx], nonce, [], undefined);
-    const txData = proxyModuleMain.interface.encodeFunctionData("execute", [[tx], nonce, signature]);
-    const estimate = await gasEstimation.callStatic.estimate(proxyModuleMain.address, txData);
-    const realTx = await executeCall([tx], chainId, nonce, [], proxyModuleMain, undefined, txParams);
+    const signature = await generateTransactionSig(chainId, moduleMainGasEstimator.address, [tx], nonce, [], undefined);
+    const txData = moduleMainGasEstimator.interface.encodeFunctionData("execute", [[tx], nonce, signature]);
+    const estimate = await gasEstimation.callStatic.estimate(moduleMainGasEstimator.address, txData);
+    const realTx = await executeCall([tx], chainId, nonce, [], moduleMainGasEstimator, undefined, txParams);
     expect(estimate.gas.toNumber() + txBaseCost(txData)).to.approximately(realTx.gasUsed.toNumber(), 5000);
   });
   it("Should estimate deploy + Account Layer Transaction + Transfer", async function () {
-    keys = await randomKeys(10, unipassPrivateKey, testERC1271Wallet);
-    keysetHash = getKeysetHash(keys);
+    const keys = await randomKeys(10, unipassPrivateKey, testERC1271Wallet);
+    const keysetHash = getKeysetHash(keys);
     const deployTxData = deployer.singleFactoryContract.interface.encodeFunctionData("deploy", [
-      Deployer.getInitCode(moduleMain.address),
+      Deployer.getInitCode(moduleMainGasEstimator.address),
       keysetHash,
     ]);
     const deployTx = {
@@ -175,22 +136,22 @@ describe("GasEstimation", function () {
       value: 0,
       data: deployTxData,
     };
-    const expectedAddress = deployer.getProxyContractAddress(moduleMain.address, keysetHash);
+    const expectedAddress = deployer.getProxyContractAddress(moduleMainGasEstimator.address, keysetHash);
     const newKeysetHash = ethers.utils.hexlify(randomBytes(32));
-    proxyModuleMain = ModuleMain.attach(expectedAddress);
+    moduleMainGasEstimator = ModuleMainGasEstimator.attach(expectedAddress);
     const accountTx = await generateUpdateKeysetHashTx(
       chainId,
-      proxyModuleMain,
+      moduleMainGasEstimator,
       metaNonce,
       newKeysetHash,
       true,
-      selectKeys(keys, Role.Guardian, GUARDIAN_TIMELOCK_THRESHOLD)
+      selectKeys(fakeKeys, Role.Guardian, GUARDIAN_TIMELOCK_THRESHOLD)
     );
     let value = ethers.utils.parseEther("0.1");
     const transferTx = await generateTransferTx(expectedAddress, ethers.constants.Zero, value);
     const nonce = 1;
-    const signature = await generateTransactionSig(chainId, proxyModuleMain.address, [accountTx], nonce, [], undefined);
-    const moduleMainTxData = moduleMain.interface.encodeFunctionData("execute", [[accountTx], nonce, signature]);
+    const signature = await generateTransactionSig(chainId, moduleMainGasEstimator.address, [accountTx], nonce, [], undefined);
+    const moduleMainTxData = moduleMainGasEstimator.interface.encodeFunctionData("execute", [[accountTx], nonce, signature]);
     const moduleMainTx = {
       target: expectedAddress,
       callType: CallType.Call,
@@ -207,8 +168,5 @@ describe("GasEstimation", function () {
     const estimate = await gasEstimation.callStatic.estimate(moduleGuest.address, moduleGuestTxData);
     const realTx = await (await moduleGuest.execute([deployTx, moduleMainTx, transferTx], nonce, signature, { value })).wait();
     expect(estimate.gas.toNumber() + txBaseCost(moduleGuestTxData)).to.approximately(realTx.gasUsed.toNumber(), 5000);
-    const ret = await proxyModuleMain.getLockInfo();
-    expect(ret.lockedKeysetHashRet).to.equal(newKeysetHash);
-    expect(await proxyModuleMain.provider.getBalance(expectedAddress)).to.equal(value);
   });
 });

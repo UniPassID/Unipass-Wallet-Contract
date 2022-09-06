@@ -49,8 +49,7 @@ abstract contract ModuleAccount is IModuleAccount, ModuleSelfAuth, ModuleAuthBas
     }
 
     function _validateMetaNonce(uint32 _metaNonce) internal view virtual {
-        uint256 metaNonce = uint256(ModuleStorage.readBytes32(META_NONCE_KEY));
-        require(_metaNonce == metaNonce + 1, "_validateMetaNonce: INVALID_METANONCE");
+        require(_metaNonce == getMetaNonce() + 1, "_validateMetaNonce: INVALID_METANONCE");
     }
 
     function _validateMetaNonceForSyncAccount(uint32 _metaNonce) internal view virtual {

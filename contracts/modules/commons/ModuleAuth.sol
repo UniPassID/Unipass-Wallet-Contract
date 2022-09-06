@@ -44,6 +44,7 @@ abstract contract ModuleAuth is ModuleAuthBase, IERC1271 {
     function validateSignature(bytes32 _hash, bytes calldata _signature)
         public
         view
+        virtual
         override
         returns (
             bool succ,
@@ -99,7 +100,7 @@ abstract contract ModuleAuth is ModuleAuthBase, IERC1271 {
         bytes calldata _signature,
         uint256 _index
     )
-        private
+        internal
         view
         returns (
             bool succ,
