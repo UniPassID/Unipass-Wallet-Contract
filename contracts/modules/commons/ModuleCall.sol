@@ -7,10 +7,10 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./ModuleStorage.sol";
-import "./ModuleNonceBase.sol";
 import "./ModuleAuthBase.sol";
 import "./ModuleRole.sol";
 import "./ModuleTransaction.sol";
+import "../utils/LibUnipassSig.sol";
 import "../../utils/LibBytes.sol";
 import "../../utils/LibOptim.sol";
 import "../../interfaces/IModuleHooks.sol";
@@ -19,7 +19,7 @@ import "../../interfaces/IEIP4337Wallet.sol";
 
 import "hardhat/console.sol";
 
-abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleNonceBase, ModuleRole, ModuleAuthBase, IModuleHooks {
+abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, ModuleAuthBase, IModuleHooks {
     using LibBytes for bytes;
     using SafeERC20 for IERC20;
 
@@ -31,7 +31,7 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleNonceBase,
     error ImmutableSelectorSigWeight(bytes4 _selector);
     error NotEnoughGas(uint256 _requested, uint256 _available);
 
-    function getNonce() public view override returns (uint256) {
+    function getNonce() public view returns (uint256) {
         return uint256(ModuleStorage.readBytes32(NONCE_KEY));
     }
 
@@ -51,7 +51,7 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleNonceBase,
     ) external payable {
         _validateNonce(_nonce);
 
-        bytes32 txhash = _subDigest(keccak256(abi.encode(_nonce, _txs)), block.chainid);
+        bytes32 txhash = LibUnipassSig._subDigest(keccak256(abi.encode(_nonce, _txs)), block.chainid);
 
         (bool succ, uint32 ownerWeight, uint32 assetsOpWeight, uint32 guardianWeight) = validateSignature(txhash, _signature);
         require(succ, "execute: INVALID_SIG_WEIGHT");
@@ -66,7 +66,7 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleNonceBase,
         Transaction[] calldata _txs
     ) external onlySelf {
         // Hash transaction bundle
-        bytes32 txHash = _subDigest(keccak256(abi.encode("self:", _txs)), block.chainid);
+        bytes32 txHash = LibUnipassSig._subDigest(keccak256(abi.encode("self:", _txs)), block.chainid);
 
         // Execute the transactions
         _execute(txHash, _txs, _ownerWeight, _assetsOpWeight, _guardianWeight);
@@ -155,7 +155,7 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleNonceBase,
         bytes calldata _callData,
         bytes32 _digestHash,
         bytes calldata _signature
-    ) external view returns (bool success) {
+    ) external view override returns (bool success) {
         (bool succ, uint32 ownerWeight, uint32 assetsOpWeight, uint32 guardianWeight) = validateSignature(
             _digestHash,
             _signature

@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
-import "./ModuleAuthBase.sol";
+import "./ModuleAuth.sol";
+import "./Implementation.sol";
 import "../../Wallet.sol";
 
-abstract contract ModuleAuthFixed is ModuleAuthBase {
+abstract contract ModuleAuthFixed is ModuleAuth, Implementation {
     bytes32 public immutable INIT_CODE_HASH;
     address public immutable FACTORY;
     address public immutable MODULE_MAIN_UPGRADABLE;
@@ -13,7 +14,7 @@ abstract contract ModuleAuthFixed is ModuleAuthBase {
         address _factory,
         address _moduleMainUpgradable,
         IDkimKeys _dkimKeys
-    ) ModuleAuthBase(_dkimKeys) {
+    ) ModuleAuth(_dkimKeys) {
         FACTORY = _factory;
         MODULE_MAIN_UPGRADABLE = _moduleMainUpgradable;
         INIT_CODE_HASH = keccak256(abi.encodePacked(Wallet.CREATION_CODE, uint256(uint160(address(this)))));

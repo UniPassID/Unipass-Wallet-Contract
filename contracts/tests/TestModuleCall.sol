@@ -4,8 +4,9 @@ pragma solidity ^0.8.0;
 import "../modules/commons/ModuleCall.sol";
 import "../modules/commons/ModuleAuthFixed.sol";
 import "../modules/commons/ModuleHooks.sol";
+import "../modules/commons/ModuleAccount.sol";
 
-contract TestModuleCall is ModuleCall, ModuleAuthFixed, ModuleHooks {
+contract TestModuleCall is ModuleCall, ModuleAuthFixed, ModuleHooks, ModuleAccount {
     IModuleWhiteList private immutable WHITE_LIST;
 
     constructor(

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
-import "./ModuleAuthBase.sol";
+import "./ModuleAuth.sol";
 import "../../Wallet.sol";
 
-abstract contract ModuleAuthUpgradable is ModuleAuthBase {
-    constructor(IDkimKeys _dkimKeys) ModuleAuthBase(_dkimKeys) {}
+abstract contract ModuleAuthUpgradable is ModuleAuth {
+    constructor(IDkimKeys _dkimKeys) ModuleAuth(_dkimKeys) {}
 
     /**
      * @notice Updates the signers configuration of the wallet
