@@ -133,8 +133,14 @@ contract ModuleHookEIP4337Wallet is ModuleTransaction, IEIP4337Wallet, ModuleSel
         Transaction memory transaction;
         (transaction) = abi.decode(userOp.callData[4:], (Transaction));
         if (transaction.target != address(this)) {
-            (bool success, , uint32 assetsOpWeight, ) = IModuleAuth(address(this)).validateSignature(requestId, userOp.signature);
-            require(success && assetsOpWeight >= LibRole.ASSETS_OP_THRESHOLD, "execute: INVALID_SIG_WEIGHT");
+            (bool success, IDkimKeys.EmailType emailType, , uint32 assetsOpWeight, ) = IModuleAuth(address(this))
+                .validateSignature(requestId, userOp.signature);
+            require(
+                success &&
+                    (emailType == IDkimKeys.EmailType.None || emailType == IDkimKeys.EmailType.CallOtherContract) &&
+                    assetsOpWeight >= LibRole.ASSETS_OP_THRESHOLD,
+                "execute: INVALID_SIG_WEIGHT"
+            );
         } else {
             bool success = IModuleCall(userOp.sender).isValidCallData(transaction.data, requestId, userOp.signature);
 

@@ -51,7 +51,7 @@ contract ModuleRole is ModuleSelfAuth {
             _permission == ModuleHooks.removeHook.selector ||
             _permission == this.addPermission.selector ||
             _permission == this.removePermission.selector ||
-            _permission == IModuleAccount.cancelLockKeysetHsah.selector ||
+            _permission == IModuleAccount.cancelLockKeysetHash.selector ||
             _permission == IModuleAccount.syncAccount.selector
         ) {
             revert ConstantPermission(_permission);
@@ -73,7 +73,7 @@ contract ModuleRole is ModuleSelfAuth {
             _permission == ModuleHooks.removeHook.selector ||
             _permission == this.addPermission.selector ||
             _permission == this.removePermission.selector ||
-            _permission == IModuleAccount.cancelLockKeysetHsah.selector ||
+            _permission == IModuleAccount.cancelLockKeysetHash.selector ||
             _permission == IModuleAccount.syncAccount.selector
         ) {
             revert ConstantPermission(_permission);
@@ -102,7 +102,7 @@ contract ModuleRole is ModuleSelfAuth {
             _permission == IModuleAccount.updateKeysetHashWithTimeLock.selector ||
             _permission == IModuleAccount.updateTimeLockDuring.selector ||
             _permission == IModuleAccount.updateImplementation.selector ||
-            _permission == IModuleAccount.cancelLockKeysetHsah.selector ||
+            _permission == IModuleAccount.cancelLockKeysetHash.selector ||
             _permission == IModuleAccount.syncAccount.selector
         ) {
             ownerWeight = LibRole.SYNC_TX_THRESHOLD;

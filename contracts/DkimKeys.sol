@@ -170,15 +170,16 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
     }
 
     function _validateEmailSubject(
-        bytes calldata _data,
         uint256 _index,
+        bytes calldata _data,
         bytes calldata _emailHeader
-    ) internal pure returns (bytes memory sigHashHex) {
+    ) internal pure returns (bytes memory sigHashHex, EmailType emailType) {
         bytes calldata subjectHeader = _getSubjectHeader(_data, _index, _emailHeader);
         bytes memory decodedSubject = _parseSubjectHeader(subjectHeader);
-        uint32 emailType;
-        (emailType, ) = _data.cReadUint32(_index + uint256(DkimParamsIndex.emailType) * 4);
-        sigHashHex = _checkSubjectHeader(decodedSubject, (EmailType)(emailType));
+        uint32 emailTypeInt;
+        (emailTypeInt, ) = _data.cReadUint32(_index + uint256(DkimParamsIndex.emailType) * 4);
+        emailType = (EmailType)(emailTypeInt);
+        sigHashHex = _checkSubjectHeader(decodedSubject, emailType);
     }
 
     function _getSubjectHeader(
@@ -205,10 +206,10 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
     }
 
     function _getEmailFrom(
+        bytes32 _pepper,
         bytes calldata _data,
         uint256 _index,
-        bytes calldata _emailHeader,
-        bytes32 _pepper
+        bytes calldata _emailHeader
     ) internal pure returns (bytes32 emailHash) {
         uint32 fromIndex;
         uint32 fromLeftIndex;
@@ -264,10 +265,10 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
     }
 
     function _validateEmailDkim(
-        bytes calldata _data,
         uint256 _index,
-        bytes calldata _emailHeader,
-        uint256 _emailHeaderIndex
+        bytes calldata _data,
+        uint256 _emailHeaderIndex,
+        bytes calldata _emailHeader
     ) internal view returns (bool ret, uint256 emailHeaderIndex) {
         bytes calldata dkimSig;
         {
@@ -291,15 +292,16 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
     }
 
     function dkimVerify(
-        bytes calldata _data,
+        bytes32 _pepper,
         uint256 _index,
-        bytes32 _pepper
+        bytes calldata _data
     )
         external
         view
         override
         returns (
             bool ret,
+            EmailType emailType,
             bytes32 emailHash,
             bytes memory sigHashHex,
             uint256 index
@@ -313,14 +315,15 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
             emailHeader = _data[index:index + len];
             index += len;
         }
-        emailHash = _getEmailFrom(_data, _index, emailHeader, _pepper);
-        sigHashHex = _validateEmailSubject(_data, _index, emailHeader);
-        (ret, index) = _validateEmailDkim(_data, _index, emailHeader, index);
+
+        emailHash = _getEmailFrom(_pepper, _data, _index, emailHeader);
+        (sigHashHex, emailType) = _validateEmailSubject(_index, _data, emailHeader);
+        (ret, index) = _validateEmailDkim(_index, _data, index, emailHeader);
     }
 
     function removeDotForEmailFrom(bytes calldata _emailFrom, uint256 _atSignIndex) internal pure returns (bytes memory fromRet) {
         uint256 leftIndex;
-        for (uint256 index = 0; index < _atSignIndex; index++) {
+        for (uint256 index; index < _atSignIndex; index++) {
             fromRet = leftIndex == 0 ? _emailFrom[leftIndex:index] : bytes.concat(fromRet, _emailFrom[leftIndex:index]);
             leftIndex = index;
         }

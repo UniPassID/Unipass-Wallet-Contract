@@ -21,7 +21,7 @@ contract ModuleGuest is ModuleTransaction {
     }
 
     function _execute(bytes32 _txHash, Transaction[] calldata _txs) internal {
-        for (uint256 i = 0; i < _txs.length; i++) {
+        for (uint256 i; i < _txs.length; i++) {
             Transaction calldata transaction = _txs[i];
             uint256 gasLimit = transaction.gasLimit;
 

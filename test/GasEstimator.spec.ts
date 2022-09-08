@@ -114,7 +114,15 @@ describe("GasEstimation", function () {
   it("Should estimate account transaction", async function () {
     const newKeysetHash = ethers.utils.hexlify(randomBytes(32));
     const selectedKeys = selectKeys(fakeKeys, Role.Owner, OWNER_THRESHOLD);
-    const tx = await generateUpdateKeysetHashTx(chainId, moduleMainGasEstimator, metaNonce, newKeysetHash, false, selectedKeys);
+    const tx = await generateUpdateKeysetHashTx(
+      chainId,
+      moduleMainGasEstimator,
+      metaNonce,
+      newKeysetHash,
+      false,
+      Role.Owner,
+      selectedKeys
+    );
     const nonce = 1;
     const signature = await generateTransactionSig(chainId, moduleMainGasEstimator.address, [tx], nonce, [], undefined);
     const txData = moduleMainGasEstimator.interface.encodeFunctionData("execute", [[tx], nonce, signature]);
@@ -145,6 +153,7 @@ describe("GasEstimation", function () {
       metaNonce,
       newKeysetHash,
       true,
+      Role.Guardian,
       selectKeys(fakeKeys, Role.Guardian, GUARDIAN_TIMELOCK_THRESHOLD)
     );
     let value = ethers.utils.parseEther("0.1");

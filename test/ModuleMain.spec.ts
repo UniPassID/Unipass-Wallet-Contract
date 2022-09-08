@@ -212,7 +212,15 @@ describe("ModuleMain", function () {
   it("Test Account Recovery", async () => {
     const newKeysetHash = hexlify(randomBytes(32));
     const selectedKeys = selectKeys(keys, Role.Guardian, GUARDIAN_TIMELOCK_THRESHOLD);
-    const tx = await generateUpdateKeysetHashTx(chainId, proxyModuleMain, metaNonce, newKeysetHash, true, selectedKeys);
+    const tx = await generateUpdateKeysetHashTx(
+      chainId,
+      proxyModuleMain,
+      metaNonce,
+      newKeysetHash,
+      true,
+      Role.Guardian,
+      selectedKeys
+    );
 
     const ret = await executeCall([tx], chainId, nonce, [], proxyModuleMain, undefined, txParams);
     expect(ret.status).to.equal(1);
@@ -470,7 +478,15 @@ describe("ModuleMain", function () {
       let selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
       keys = await randomKeys(10, unipassPrivateKey, testERC1271Wallet);
       keysetHash = getKeysetHash(keys);
-      const tx1 = await generateUpdateKeysetHashTx(chainId, proxyModuleMain, metaNonce, keysetHash, false, selectedKeys);
+      const tx1 = await generateUpdateKeysetHashTx(
+        chainId,
+        proxyModuleMain,
+        metaNonce,
+        keysetHash,
+        false,
+        Role.Owner,
+        selectedKeys
+      );
       await executeCall([tx1], chainId, nonce, [], proxyModuleMain, undefined, txParams);
       nonce++;
       metaNonce++;

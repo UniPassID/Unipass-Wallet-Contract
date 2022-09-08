@@ -53,8 +53,17 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, Modu
 
         bytes32 txhash = LibUnipassSig._subDigest(keccak256(abi.encode(_nonce, _txs)), block.chainid);
 
-        (bool succ, uint32 ownerWeight, uint32 assetsOpWeight, uint32 guardianWeight) = validateSignature(txhash, _signature);
-        require(succ, "execute: INVALID_SIG_WEIGHT");
+        (
+            bool succ,
+            IDkimKeys.EmailType emailType,
+            uint32 ownerWeight,
+            uint32 assetsOpWeight,
+            uint32 guardianWeight
+        ) = validateSignature(txhash, _signature);
+        require(
+            succ && (emailType == IDkimKeys.EmailType.None || emailType == IDkimKeys.EmailType.CallOtherContract),
+            "execute: INVALID_SIG_WEIGHT"
+        );
 
         _execute(txhash, _txs, ownerWeight, assetsOpWeight, guardianWeight);
     }
@@ -85,7 +94,7 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, Modu
         uint32 _assetsOpWeight,
         uint32 _guardianWeight
     ) internal {
-        for (uint256 i = 0; i < _txs.length; i++) {
+        for (uint256 i; i < _txs.length; i++) {
             Transaction calldata transaction = _txs[i];
             uint256 gasLimit = transaction.gasLimit;
             if (gasleft() < gasLimit) revert NotEnoughGas(gasLimit, gasleft());
@@ -132,7 +141,7 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, Modu
             uint32 guardianWeight
         )
     {
-        uint256 index = 0;
+        uint256 index;
         bytes4 selector;
         (selector, index) = callData.cReadBytes4(index);
         if (selector == this.selfExecute.selector) {
@@ -156,10 +165,13 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, Modu
         bytes32 _digestHash,
         bytes calldata _signature
     ) external view override returns (bool success) {
-        (bool succ, uint32 ownerWeight, uint32 assetsOpWeight, uint32 guardianWeight) = validateSignature(
-            _digestHash,
-            _signature
-        );
+        (
+            bool succ,
+            IDkimKeys.EmailType emailType,
+            uint32 ownerWeight,
+            uint32 assetsOpWeight,
+            uint32 guardianWeight
+        ) = validateSignature(_digestHash, _signature);
 
         (uint32 ownerWeightThreshold, uint32 assetsOpWeightThreshold, uint32 guardianWeightThreshold) = _getPermissionOfCallData(
             _callData
@@ -167,6 +179,7 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, Modu
 
         success =
             succ &&
+            emailType == IDkimKeys.EmailType.None &&
             ownerWeight >= ownerWeightThreshold &&
             assetsOpWeight >= assetsOpWeightThreshold &&
             guardianWeight >= guardianWeightThreshold;

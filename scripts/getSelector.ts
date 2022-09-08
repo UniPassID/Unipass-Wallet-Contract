@@ -118,23 +118,12 @@ const abi = `[
   {
     "inputs": [
       {
-        "internalType": "enum KeyType",
+        "internalType": "enum LibUnipassSig.KeyType",
         "name": "_keyType",
         "type": "uint8"
       }
     ],
     "name": "InvalidKeyType",
-    "type": "error"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "enum ModuleRole.Role",
-        "name": "_role",
-        "type": "uint8"
-      }
-    ],
-    "name": "InvalidRole",
     "type": "error"
   },
   {
@@ -200,6 +189,22 @@ const abi = `[
       }
     ],
     "name": "IsImplementationWhiteListRevert",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_requested",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_available",
+        "type": "uint256"
+      }
+    ],
+    "name": "NotEnoughGas",
     "type": "error"
   },
   {
@@ -296,12 +301,6 @@ const abi = `[
     "inputs": [
       {
         "indexed": false,
-        "internalType": "enum ModuleRole.Role",
-        "name": "_role",
-        "type": "uint8"
-      },
-      {
-        "indexed": false,
         "internalType": "bytes4",
         "name": "_permission",
         "type": "bytes4"
@@ -309,7 +308,19 @@ const abi = `[
       {
         "indexed": false,
         "internalType": "uint32",
-        "name": "_threshold",
+        "name": "_ownerWeight",
+        "type": "uint32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint32",
+        "name": "_assetsOpWeight",
+        "type": "uint32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint32",
+        "name": "_guardianWeight",
         "type": "uint32"
       }
     ],
@@ -326,7 +337,7 @@ const abi = `[
         "type": "uint256"
       }
     ],
-    "name": "CancelLockKeysetHsah",
+    "name": "CancelLockKeysetHash",
     "type": "event"
   },
   {
@@ -353,6 +364,19 @@ const abi = `[
       }
     ],
     "name": "RemovePermission",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "_source",
+        "type": "bytes32"
+      }
+    ],
+    "name": "SetSource",
     "type": "event"
   },
   {
@@ -590,18 +614,23 @@ const abi = `[
   {
     "inputs": [
       {
-        "internalType": "enum ModuleRole.Role",
-        "name": "_role",
-        "type": "uint8"
-      },
-      {
         "internalType": "bytes4",
         "name": "_permission",
         "type": "bytes4"
       },
       {
         "internalType": "uint32",
-        "name": "_threshold",
+        "name": "_ownerWeight",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint32",
+        "name": "_assetsOpWeight",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint32",
+        "name": "_guardianWeight",
         "type": "uint32"
       }
     ],
@@ -623,7 +652,7 @@ const abi = `[
         "type": "bytes"
       }
     ],
-    "name": "cancelLockKeysetHsah",
+    "name": "cancelLockKeysetHash",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -787,14 +816,32 @@ const abi = `[
     "name": "getRoleOfPermission",
     "outputs": [
       {
-        "internalType": "enum ModuleRole.Role",
-        "name": "role",
-        "type": "uint8"
+        "internalType": "uint32",
+        "name": "ownerWeight",
+        "type": "uint32"
       },
       {
         "internalType": "uint32",
-        "name": "threshold",
+        "name": "assetsOpWeight",
         "type": "uint32"
+      },
+      {
+        "internalType": "uint32",
+        "name": "guardianWeight",
+        "type": "uint32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getSource",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "source",
+        "type": "bytes32"
       }
     ],
     "stateMutability": "view",
@@ -995,9 +1042,9 @@ const abi = `[
     "name": "permissions",
     "outputs": [
       {
-        "internalType": "bytes5",
+        "internalType": "bytes12",
         "name": "",
-        "type": "bytes5"
+        "type": "bytes12"
       }
     ],
     "stateMutability": "view",
@@ -1044,6 +1091,79 @@ const abi = `[
       }
     ],
     "name": "removePermission",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "_ownerWeight",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint32",
+        "name": "_assetsOpWeight",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint32",
+        "name": "_guardianWeight",
+        "type": "uint32"
+      },
+      {
+        "components": [
+          {
+            "internalType": "enum ModuleTransaction.CallType",
+            "name": "callType",
+            "type": "uint8"
+          },
+          {
+            "internalType": "bool",
+            "name": "revertOnError",
+            "type": "bool"
+          },
+          {
+            "internalType": "address",
+            "name": "target",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "gasLimit",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "value",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bytes",
+            "name": "data",
+            "type": "bytes"
+          }
+        ],
+        "internalType": "struct ModuleTransaction.Transaction[]",
+        "name": "_txs",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "selfExecute",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "_source",
+        "type": "bytes32"
+      }
+    ],
+    "name": "setSource",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1103,9 +1223,9 @@ const abi = `[
   {
     "inputs": [
       {
-        "internalType": "uint256",
+        "internalType": "uint32",
         "name": "_metaNonce",
-        "type": "uint256"
+        "type": "uint32"
       }
     ],
     "name": "unlockKeysetHash",
@@ -1226,26 +1346,24 @@ const abi = `[
         "type": "bool"
       },
       {
-        "components": [
-          {
-            "internalType": "uint32",
-            "name": "ownerWeight",
-            "type": "uint32"
-          },
-          {
-            "internalType": "uint32",
-            "name": "assetsOpWeight",
-            "type": "uint32"
-          },
-          {
-            "internalType": "uint32",
-            "name": "guardianWeight",
-            "type": "uint32"
-          }
-        ],
-        "internalType": "struct RoleWeight",
-        "name": "roleWeightRet",
-        "type": "tuple"
+        "internalType": "enum IDkimKeys.EmailType",
+        "name": "emailType",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint32",
+        "name": "ownerWeight",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint32",
+        "name": "assetsOpWeight",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint32",
+        "name": "guardianWeight",
+        "type": "uint32"
       }
     ],
     "stateMutability": "view",

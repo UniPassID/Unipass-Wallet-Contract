@@ -92,6 +92,10 @@ export class KeyEmailAddress extends KeyBase {
         subject = `UniPass-Call-Contract-${digestHash}`;
         break;
       }
+      case EmailType.SyncAccount: {
+        subject = `UniPass-Deploy-Account-${digestHash}`;
+        break;
+      }
       default:
         throw new Error(`Invalid EmailType: ${this.emailType}`);
     }

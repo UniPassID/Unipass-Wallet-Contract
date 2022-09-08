@@ -37,6 +37,7 @@ abstract contract ModuleAuth is ModuleAuthBase, IERC1271 {
      * @param _hash The Hash To Valdiate Signature
      * @param _signature The Transaction Signature
      * @return succ Whether The Signature is Valid
+     * @return emailType The Email Type From Key Email Address
      * @return ownerWeight The Threshold Weight of Role Owner
      * @return assetsOpWeight The Threshold Weight Of Role AssetsOp
      * @return guardianWeight The Threshold Weight Of Role Guardian
@@ -48,125 +49,109 @@ abstract contract ModuleAuth is ModuleAuthBase, IERC1271 {
         override
         returns (
             bool succ,
+            IDkimKeys.EmailType emailType,
             uint32 ownerWeight,
             uint32 assetsOpWeight,
             uint32 guardianWeight
         )
     {
         if (_signature.length == 0) {
-            return (true, 0, 0, 0);
+            return (true, IDkimKeys.EmailType.None, 0, 0, 0);
         }
-        uint256 index = 0;
+        uint256 index;
         bool isSessionKey = _signature.mcReadUint8(index) == 1;
         ++index;
 
         if (isSessionKey) {
-            uint32 timestamp;
-            (timestamp, index) = _signature.cReadUint32(index);
-            require(block.timestamp < timestamp, "_validateSignature: INVALID_TIMESTAMP");
-            (assetsOpWeight, index) = _signature.cReadUint32(index);
-            address sessionKey = LibSignatureValidator.recoverSigner(_hash, _signature[index:index + 66]);
-            index += 66;
-            bytes32 digestHash = LibUnipassSig._subDigest(
-                keccak256(abi.encodePacked(sessionKey, timestamp, assetsOpWeight)),
-                block.chainid
-            );
-            (bool success, , uint32 assetsOpWeightRet, ) = _validateSignatureInner(digestHash, _signature, index);
-            succ = success && assetsOpWeightRet >= assetsOpWeight;
+            bytes32 digestHash;
+            {
+                uint32 timestamp;
+                (timestamp, index) = _signature.cReadUint32(index);
+                require(block.timestamp < timestamp, "_validateSignature: INVALID_TIMESTAMP");
+                (assetsOpWeight, index) = _signature.cReadUint32(index);
+                address sessionKey = LibSignatureValidator.recoverSigner(_hash, _signature[index:index + 66]);
+                index += 66;
+                digestHash = LibUnipassSig._subDigest(
+                    keccak256(abi.encodePacked(sessionKey, timestamp, assetsOpWeight)),
+                    block.chainid
+                );
+            }
+            bool success;
+            uint96 weights;
+            (success, emailType, weights) = _validateSignatureInner(digestHash, index, _signature);
+            succ = success && (weights << 32) >> 64 >= assetsOpWeight;
         } else {
-            (succ, ownerWeight, assetsOpWeight, guardianWeight) = _validateSignatureInner(_hash, _signature, index);
+            uint96 weights;
+            (succ, emailType, weights) = _validateSignatureInner(_hash, index, _signature);
+            ownerWeight = uint32(weights >> 64);
+            assetsOpWeight = uint32((weights << 32) >> 64);
+            guardianWeight = uint32((weights << 64) >> 64);
         }
     }
 
     function _parseKey(
         bytes32 _hash,
-        bytes calldata _signature,
-        uint256 _index
+        uint256 _index,
+        bytes calldata _signature
     )
         private
         view
         returns (
             bool isSig,
+            IDkimKeys.EmailType emailType,
             LibUnipassSig.KeyType keyType,
             bytes32 ret,
             uint256 index
         )
     {
-        (isSig, keyType, ret, index) = LibUnipassSig._parseKey(dkimKeys, _hash, _signature, _index);
+        (isSig, emailType, keyType, ret, index) = LibUnipassSig._parseKey(dkimKeys, _hash, _signature, _index);
     }
 
     function _validateSignatureInner(
         bytes32 _hash,
-        bytes calldata _signature,
-        uint256 _index
+        uint256 _index,
+        bytes calldata _signature
     )
         internal
         view
         returns (
             bool succ,
-            uint32 ownerWeight,
-            uint32 assetsOpWeight,
-            uint32 guardianWeight
+            IDkimKeys.EmailType emailType,
+            uint96 weights
         )
     {
-        bool isSig;
-        LibUnipassSig.KeyType keyType;
-        bytes32 ret;
-        (isSig, keyType, ret, _index) = _parseKey(_hash, _signature, _index);
-        uint32 singleOwnerWeight;
-        uint32 singleAssetsOpWeight;
-        uint32 singleGuardianWeight;
-        (singleOwnerWeight, singleAssetsOpWeight, singleGuardianWeight, _index) = _parseRoleWeight(_signature, _index);
-        if (isSig) {
-            ownerWeight += singleOwnerWeight;
-            assetsOpWeight += singleAssetsOpWeight;
-            guardianWeight += singleGuardianWeight;
-        }
-
         bytes32 keysetHash;
-        if (keyType == LibUnipassSig.KeyType.Secp256k1 || keyType == LibUnipassSig.KeyType.ERC1271Wallet) {
-            keysetHash = keccak256(
-                abi.encodePacked(
-                    keyType,
-                    address(uint160(uint256(ret))),
-                    singleOwnerWeight,
-                    singleAssetsOpWeight,
-                    singleGuardianWeight
-                )
-            );
-        } else {
-            keysetHash = keccak256(abi.encodePacked(keyType, ret, singleOwnerWeight, singleAssetsOpWeight, singleGuardianWeight));
-        }
         while (_index < _signature.length - 1) {
-            (isSig, keyType, ret, _index) = _parseKey(_hash, _signature, _index);
-            (singleOwnerWeight, singleAssetsOpWeight, singleGuardianWeight, _index) = _parseRoleWeight(_signature, _index);
+            IDkimKeys.EmailType tmpEmailType;
+            bool isSig;
+            LibUnipassSig.KeyType keyType;
+            bytes32 ret;
+            (isSig, tmpEmailType, keyType, ret, _index) = _parseKey(_hash, _index, _signature);
+            if (emailType == IDkimKeys.EmailType.None && tmpEmailType != IDkimKeys.EmailType.None) {
+                emailType = tmpEmailType;
+            } else if (emailType != IDkimKeys.EmailType.None && tmpEmailType != IDkimKeys.EmailType.None) {
+                require(emailType == tmpEmailType, "_validateSignatureInner: INVALID_EMAILTYPE");
+            }
+            uint96 singleWeights = uint96(bytes12(_signature.mcReadBytesN(_index, 12)));
+            _index += 12;
             if (isSig) {
-                ownerWeight += singleOwnerWeight;
-                assetsOpWeight += singleAssetsOpWeight;
-                guardianWeight += singleGuardianWeight;
+                weights += singleWeights;
             }
             if (keyType == LibUnipassSig.KeyType.Secp256k1 || keyType == LibUnipassSig.KeyType.ERC1271Wallet) {
-                keysetHash = keccak256(
-                    abi.encodePacked(
-                        keysetHash,
-                        keyType,
-                        address(uint160(uint256(ret))),
-                        singleOwnerWeight,
-                        singleAssetsOpWeight,
-                        singleGuardianWeight
-                    )
-                );
+                keysetHash = keysetHash == bytes32(0)
+                    ? keccak256(abi.encodePacked(keyType, address(uint160(uint256(ret))), singleWeights))
+                    : keccak256(abi.encodePacked(keysetHash, keyType, address(uint160(uint256(ret))), singleWeights));
             } else {
-                keysetHash = keccak256(
-                    abi.encodePacked(keysetHash, keyType, ret, singleOwnerWeight, singleAssetsOpWeight, singleGuardianWeight)
-                );
+                keysetHash = keysetHash == bytes32(0)
+                    ? keccak256(abi.encodePacked(keyType, ret, singleWeights))
+                    : keccak256(abi.encodePacked(keysetHash, keyType, ret, singleWeights));
             }
         }
 
         succ = isValidKeysetHash(keysetHash);
     }
 
-    function _parseRoleWeight(bytes calldata _signature, uint256 _index)
+    function _parseRoleWeight(uint256 _index, bytes calldata _signature)
         private
         pure
         returns (
@@ -188,8 +173,12 @@ abstract contract ModuleAuth is ModuleAuthBase, IERC1271 {
      */
     function isValidSignature(bytes32 _hash, bytes calldata _signature) external view override returns (bytes4 magicValue) {
         // Validate signatures
-        (bool isValid, , uint32 assetsOpWeight, ) = validateSignature(_hash, _signature);
-        if (isValid && assetsOpWeight >= LibRole.ASSETS_OP_THRESHOLD) {
+        (bool isValid, IDkimKeys.EmailType emailType, , uint32 assetsOpWeight, ) = validateSignature(_hash, _signature);
+        if (
+            isValid &&
+            (emailType == IDkimKeys.EmailType.None || emailType == IDkimKeys.EmailType.CallOtherContract) &&
+            assetsOpWeight >= LibRole.ASSETS_OP_THRESHOLD
+        ) {
             magicValue = LibUnipassSig.SELECTOR_ERC1271_BYTES32_BYTES;
         }
     }

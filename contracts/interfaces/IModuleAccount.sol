@@ -24,7 +24,7 @@ interface IModuleAccount {
 
     function unlockKeysetHash(uint32 _metaNonce) external;
 
-    function cancelLockKeysetHsah(uint32 _metaNonce, bytes calldata _signature) external;
+    function cancelLockKeysetHash(uint32 _metaNonce, bytes calldata _signature) external;
 
     function updateTimeLockDuring(
         uint32 _metaNonce,
