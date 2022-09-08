@@ -34,6 +34,7 @@ library LibUnipassSig {
         view
         returns (
             bool isSig,
+            IDkimKeys.EmailType emailType,
             KeyType keyType,
             bytes32 ret,
             uint256 index
@@ -77,7 +78,7 @@ library LibUnipassSig {
                 bytes memory sigHashHex;
                 bytes32 pepper = _signature.mcReadBytes32(index);
                 index += 32;
-                (succ, ret, sigHashHex, index) = LibDkimAuth._dkimVerify(_dkimKeys, _signature, index, pepper);
+                (succ, emailType, ret, sigHashHex, index) = LibDkimAuth._dkimVerify(_dkimKeys, pepper, _signature, index);
                 require(succ, "_validateSignature: INVALID_DKIM");
                 require(
                     keccak256((LibBytes.toHex(uint256(_hash), 32))) == keccak256(sigHashHex),

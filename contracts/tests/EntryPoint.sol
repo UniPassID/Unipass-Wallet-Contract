@@ -104,7 +104,7 @@ contract EntryPoint is StakeManager {
         UserOpInfo[] memory opInfos = new UserOpInfo[](opslen);
 
         unchecked {
-            for (uint256 i = 0; i < opslen; i++) {
+            for (uint256 i; i < opslen; i++) {
                 uint256 preGas = gasleft();
                 UserOperation calldata op = ops[i];
 
@@ -126,9 +126,9 @@ contract EntryPoint is StakeManager {
                 );
             }
 
-            uint256 collected = 0;
+            uint256 collected;
 
-            for (uint256 i = 0; i < ops.length; i++) {
+            for (uint256 i; i < ops.length; i++) {
                 uint256 preGas = gasleft();
                 UserOperation calldata op = ops[i];
                 UserOpInfo memory opInfo = opInfos[i];
@@ -269,7 +269,7 @@ contract EntryPoint is StakeManager {
         unchecked {
             uint256 preGas = gasleft();
             _createSenderIfNeeded(op);
-            uint256 missingWalletFunds = 0;
+            uint256 missingWalletFunds;
             address sender = op.getSender();
             if (paymentMode != PaymentMode.paymasterDeposit) {
                 uint256 bal = balanceOf(sender);

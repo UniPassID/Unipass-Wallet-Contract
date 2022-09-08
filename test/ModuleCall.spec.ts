@@ -155,6 +155,7 @@ describe("ModuleCall", function () {
             metaNonce,
             newKeysetHash,
             false,
+            Role.Owner,
             selectedKeys
           );
           const ret = await executeCall([tx], chainId, nonce, [], proxyTestModuleCall, undefined, txParams);
@@ -170,7 +171,15 @@ describe("ModuleCall", function () {
         await init();
         const newKeysetHash = Wallet.createRandom().privateKey;
         let selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
-        const tx = await generateUpdateKeysetHashTx(chainId, proxyTestModuleCall, metaNonce, newKeysetHash, false, selectedKeys);
+        const tx = await generateUpdateKeysetHashTx(
+          chainId,
+          proxyTestModuleCall,
+          metaNonce,
+          newKeysetHash,
+          false,
+          Role.Owner,
+          selectedKeys
+        );
         const ret = await executeCall([tx], chainId, nonce, [], proxyTestModuleCall, undefined, txParams);
         expect(ret.status).to.equal(1);
         const lockInfo = await proxyTestModuleCall.getLockInfo();
@@ -185,7 +194,15 @@ describe("ModuleCall", function () {
         await init();
         const newKeysetHash = Wallet.createRandom().privateKey;
         let selectedKeys = selectKeys(keys, Role.Guardian, GUARDIAN_THRESHOLD);
-        const tx = await generateUpdateKeysetHashTx(chainId, proxyTestModuleCall, metaNonce, newKeysetHash, false, selectedKeys);
+        const tx = await generateUpdateKeysetHashTx(
+          chainId,
+          proxyTestModuleCall,
+          metaNonce,
+          newKeysetHash,
+          false,
+          Role.Guardian,
+          selectedKeys
+        );
         const ret = await executeCall([tx], chainId, nonce, [], proxyTestModuleCall, undefined, txParams);
         expect(ret.status).to.equal(1);
         const lockInfo = await proxyTestModuleCall.getLockInfo();
@@ -200,7 +217,15 @@ describe("ModuleCall", function () {
         await init();
         const newKeysetHash = Wallet.createRandom().privateKey;
         const selectedKeys = selectKeys(keys, Role.Guardian, GUARDIAN_TIMELOCK_THRESHOLD);
-        const tx = await generateUpdateKeysetHashTx(chainId, proxyTestModuleCall, metaNonce, newKeysetHash, true, selectedKeys);
+        const tx = await generateUpdateKeysetHashTx(
+          chainId,
+          proxyTestModuleCall,
+          metaNonce,
+          newKeysetHash,
+          true,
+          Role.Guardian,
+          selectedKeys
+        );
         const ret = await executeCall([tx], chainId, nonce, [], proxyTestModuleCall, undefined, txParams);
         expect(ret.status).to.equal(1);
         const lockInfo = await proxyTestModuleCall.getLockInfo();
@@ -235,6 +260,7 @@ describe("ModuleCall", function () {
           metaNonce,
           newKeysetHash,
           true,
+          Role.Guardian,
           selectKeys(keys, Role.Guardian, GUARDIAN_TIMELOCK_THRESHOLD)
         );
         ret = await executeCall([tx], chainId, nonce, [], proxyTestModuleCall, undefined, txParams);
@@ -268,6 +294,7 @@ describe("ModuleCall", function () {
           metaNonce,
           newKeysetHash,
           true,
+          Role.Guardian,
           selectKeys(keys, Role.Guardian, GUARDIAN_TIMELOCK_THRESHOLD)
         );
         let ret = await executeCall([tx], chainId, nonce, [], proxyTestModuleCall, undefined, txParams);
@@ -527,7 +554,15 @@ describe("ModuleCall", function () {
       const newKeysetHash = hexlify(randomBytes(32));
       const requestId = hexlify(randomBytes(32));
       const selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
-      const tx = await generateUpdateKeysetHashTx(chainId, proxyTestModuleCall, metaNonce, newKeysetHash, false, selectedKeys);
+      const tx = await generateUpdateKeysetHashTx(
+        chainId,
+        proxyTestModuleCall,
+        metaNonce,
+        newKeysetHash,
+        false,
+        Role.Owner,
+        selectedKeys
+      );
       let op = DefaultsForUserOp;
       op.sender = proxyTestModuleCall.address;
       op.nonce = eip4337WalletNonce;
@@ -552,7 +587,15 @@ describe("ModuleCall", function () {
     const value = ethers.utils.parseEther("10");
     const newKeysetHash = `0x${Buffer.from(randomBytes(32)).toString("hex")}`;
     const selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
-    const tx1 = await generateUpdateKeysetHashTx(chainId, proxyTestModuleCall, metaNonce, newKeysetHash, false, selectedKeys);
+    const tx1 = await generateUpdateKeysetHashTx(
+      chainId,
+      proxyTestModuleCall,
+      metaNonce,
+      newKeysetHash,
+      false,
+      Role.Owner,
+      selectedKeys
+    );
     const tx2 = await generateTransferTx(to.address, ethers.constants.Zero, value);
     const sessionKey = Wallet.createRandom();
 
@@ -580,7 +623,15 @@ describe("ModuleCall", function () {
     const value = ethers.utils.parseEther("10");
     const newKeysetHash = `0x${Buffer.from(randomBytes(32)).toString("hex")}`;
     const selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
-    const tx1 = await generateUpdateKeysetHashTx(chainId, proxyTestModuleCall, metaNonce, newKeysetHash, false, selectedKeys);
+    const tx1 = await generateUpdateKeysetHashTx(
+      chainId,
+      proxyTestModuleCall,
+      metaNonce,
+      newKeysetHash,
+      false,
+      Role.Owner,
+      selectedKeys
+    );
     const tx2 = await generateTransferTx(to.address, ethers.constants.Zero, value);
     const tx: Transaction = {
       revertOnError: true,

@@ -31,9 +31,9 @@ contract TestDkimVerify is DkimKeys {
             emailHeader = _data[index:index + len];
             index += len;
         }
-        emailHash = _getEmailFrom(_data, _index, emailHeader, _pepper);
+        emailHash = _getEmailFrom(_pepper, _data, _index, emailHeader);
         bytes calldata subjectHeader = _getSubjectHeader(_data, _index, emailHeader);
         sigHashHex = _parseSubjectHeader(subjectHeader);
-        (ret, index) = _validateEmailDkim(_data, _index, emailHeader, index);
+        (ret, index) = _validateEmailDkim(_index, _data, index, emailHeader);
     }
 }

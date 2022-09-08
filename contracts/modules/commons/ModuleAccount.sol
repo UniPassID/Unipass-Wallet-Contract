@@ -29,7 +29,7 @@ abstract contract ModuleAccount is IModuleAccount, ModuleSelfAuth, ModuleAuthBas
     event UpdateKeysetHash(uint256 _metaNonce, bytes32 newKeysetHash);
     event UpdateKeysetHashWithTimeLock(uint256 _metaNonce, bytes32 newKeysetHash);
     event UnlockKeysetHash(uint256 _metaNonce);
-    event CancelLockKeysetHsah(uint256 _metaNonce);
+    event CancelLockKeysetHash(uint256 _metaNonce);
     event UpdateTimeLockDuring(uint256 _metaNonce, uint32 _newTimeLockDuring);
     event UpdateImplementation(uint256 _metaNonce, address _newImplementation);
     event SyncAccount(uint256 _metaNonce, bytes32 _newKeysetHash, uint32 _newTimeLockDuring, address newImplementation);
@@ -76,8 +76,11 @@ abstract contract ModuleAccount is IModuleAccount, ModuleSelfAuth, ModuleAuthBas
             ZERO_CHAINID
         );
 
-        (bool success, uint32 ownerWeight, , ) = validateSignature(digestHash, _signature);
-        require(success, "syncAccount: INVALID_SIG");
+        (bool success, IDkimKeys.EmailType emailType, uint32 ownerWeight, , ) = validateSignature(digestHash, _signature);
+        require(
+            success && (emailType == IDkimKeys.EmailType.SyncAccount || emailType == IDkimKeys.EmailType.None),
+            "syncAccount: INVALID_SIG"
+        );
 
         require(ownerWeight >= LibRole.OWNER_THRESHOLD, "syncAccount: INVALID_WEIGHT");
         if (!isValidKeysetHash(_keysetHash)) {
@@ -111,11 +114,17 @@ abstract contract ModuleAccount is IModuleAccount, ModuleSelfAuth, ModuleAuthBas
             ZERO_CHAINID
         );
 
-        (bool success, uint32 ownerWeight, , uint32 guardianWeight) = validateSignature(digestHash, _signature);
+        (bool success, IDkimKeys.EmailType emailType, uint32 ownerWeight, , uint32 guardianWeight) = validateSignature(
+            digestHash,
+            _signature
+        );
         require(success, "updateKeysetHash: INVALID_SIG");
 
         require(
-            ownerWeight >= LibRole.OWNER_THRESHOLD || guardianWeight >= LibRole.GUARDIAN_THRESHOLD,
+            (emailType == IDkimKeys.EmailType.UpdateKeysetHash && ownerWeight >= LibRole.OWNER_THRESHOLD) ||
+                (emailType == IDkimKeys.EmailType.LockKeysetHash && guardianWeight >= LibRole.GUARDIAN_THRESHOLD) ||
+                (emailType == IDkimKeys.EmailType.None &&
+                    (ownerWeight >= LibRole.OWNER_THRESHOLD || guardianWeight >= LibRole.GUARDIAN_THRESHOLD)),
             "updateKeysetHash: INVALID_WEIGHT"
         );
 
@@ -149,8 +158,11 @@ abstract contract ModuleAccount is IModuleAccount, ModuleSelfAuth, ModuleAuthBas
             ZERO_CHAINID
         );
 
-        (bool success, , , uint32 guardianWeight) = validateSignature(digestHash, _signature);
-        require(success, "updateKeysetHashWithTimeLock: INVALID_SIG");
+        (bool success, IDkimKeys.EmailType emailType, , , uint32 guardianWeight) = validateSignature(digestHash, _signature);
+        require(
+            success && (emailType == IDkimKeys.EmailType.LockKeysetHash || emailType == IDkimKeys.EmailType.None),
+            "updateKeysetHashWithTimeLock: INVALID_SIG"
+        );
 
         require(guardianWeight >= LibRole.GUARDIAN_TIMELOCK_THRESHOLD, "updateKeysetHashWithTimeLock: INVALID_WEIGHT");
 
@@ -177,7 +189,7 @@ abstract contract ModuleAccount is IModuleAccount, ModuleSelfAuth, ModuleAuthBas
      * @param _metaNonce The Account layer transaction Signature Nonce
      * @param _signature The internal signature of Accont layer transction
      */
-    function cancelLockKeysetHsah(uint32 _metaNonce, bytes calldata _signature) external onlySelf {
+    function cancelLockKeysetHash(uint32 _metaNonce, bytes calldata _signature) external onlySelf {
         _validateMetaNonce(_metaNonce);
         _requireLocked();
         bytes32 digestHash = LibUnipassSig._subDigest(
@@ -185,15 +197,18 @@ abstract contract ModuleAccount is IModuleAccount, ModuleSelfAuth, ModuleAuthBas
             ZERO_CHAINID
         );
 
-        (bool success, uint32 ownerWeight, , ) = validateSignature(digestHash, _signature);
-        require(success, "cancelLockKeysetHsah: INVALID_SIG");
+        (bool success, IDkimKeys.EmailType emailType, uint32 ownerWeight, , ) = validateSignature(digestHash, _signature);
+        require(
+            success && (emailType == IDkimKeys.EmailType.CancelLockKeysetHash || emailType == IDkimKeys.EmailType.None),
+            "cancelLockKeysetHash: INVALID_SIG"
+        );
 
-        require(ownerWeight >= LibRole.OWNER_CANCEL_TIMELOCK_THRESHOLD, "cancelLockKeysetHsah: INVALID_WEIGHT");
+        require(ownerWeight >= LibRole.OWNER_CANCEL_TIMELOCK_THRESHOLD, "cancelLockKeysetHash: INVALID_WEIGHT");
 
         _unlockKeysetHash();
         _writeMetaNonce(_metaNonce);
 
-        emit CancelLockKeysetHsah(_metaNonce);
+        emit CancelLockKeysetHash(_metaNonce);
     }
 
     /**
@@ -214,8 +229,11 @@ abstract contract ModuleAccount is IModuleAccount, ModuleSelfAuth, ModuleAuthBas
             ZERO_CHAINID
         );
 
-        (bool success, uint32 ownerWeight, , ) = validateSignature(digestHash, _signature);
-        require(success, "updateTimeLockDuring: INVALID_SIG");
+        (bool success, IDkimKeys.EmailType emailType, uint32 ownerWeight, , ) = validateSignature(digestHash, _signature);
+        require(
+            success && (emailType == IDkimKeys.EmailType.UpdateTimeLockDuring || emailType == IDkimKeys.EmailType.None),
+            "updateTimeLockDuring: INVALID_SIG"
+        );
 
         require(ownerWeight >= LibRole.OWNER_THRESHOLD, "updateTimeLockDuring: INVALID_WEIGHT");
         _setLockDuring(_newTimeLockDuring);
@@ -242,8 +260,11 @@ abstract contract ModuleAccount is IModuleAccount, ModuleSelfAuth, ModuleAuthBas
             ZERO_CHAINID
         );
 
-        (bool success, uint32 ownerWeight, , ) = validateSignature(digestHash, _signature);
-        require(success, "updateImplementation: INVALID_SIG");
+        (bool success, IDkimKeys.EmailType emailType, uint32 ownerWeight, , ) = validateSignature(digestHash, _signature);
+        require(
+            success && (emailType == IDkimKeys.EmailType.UpdateImplementation || emailType == IDkimKeys.EmailType.None),
+            "updateImplementation: INVALID_SIG"
+        );
 
         require(ownerWeight >= LibRole.OWNER_THRESHOLD, "updateImplementation: INVALID_WEIGHT");
         _setImplementation(_newImplementation);

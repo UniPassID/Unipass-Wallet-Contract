@@ -24,49 +24,4 @@ abstract contract ModuleIgnoreAuthUpgradable is ModuleAuthUpgradable {
     function isValidKeysetHash(bytes32 _keysetHash) public view override returns (bool) {
         return (_keysetHash != bytes32(0) && getKeysetHash() == _keysetHash) || true;
     }
-
-    /**
-     * @param _hash The Hash To Valdiate Signature
-     * @param _signature The Transaction Signature
-     * @return succ Whether The Signature is Valid
-     * @return ownerWeight The Threshold Weight of Role Owner
-     * @return assetsOpWeight The Threshold Weight Of Role AssetsOp
-     * @return guardianWeight The Threshold Weight Of Role Guardian
-     */
-    function validateSignature(bytes32 _hash, bytes calldata _signature)
-        public
-        view
-        virtual
-        override
-        returns (
-            bool succ,
-            uint32 ownerWeight,
-            uint32 assetsOpWeight,
-            uint32 guardianWeight
-        )
-    {
-        if (_signature.length == 0) {
-            return (true, 0, 0, 0);
-        }
-        uint256 index = 0;
-        bool isSessionKey = _signature.mcReadUint8(index) == 1;
-        ++index;
-
-        if (isSessionKey) {
-            uint32 timestamp;
-            (timestamp, index) = _signature.cReadUint32(index);
-            require(block.timestamp < timestamp, "_validateSignature: INVALID_TIMESTAMP");
-            (assetsOpWeight, index) = _signature.cReadUint32(index);
-            address sessionKey = LibSignatureValidator.recoverSigner(_hash, _signature[index:index + 66]);
-            index += 66;
-            bytes32 digestHash = LibUnipassSig._subDigest(
-                keccak256(abi.encodePacked(sessionKey, timestamp, assetsOpWeight)),
-                block.chainid
-            );
-            (bool success, , uint32 assetsOpWeightRet, ) = _validateSignatureInner(digestHash, _signature, index);
-            succ = success && assetsOpWeightRet >= assetsOpWeight;
-        } else {
-            (succ, ownerWeight, assetsOpWeight, guardianWeight) = _validateSignatureInner(_hash, _signature, index);
-        }
-    }
 }

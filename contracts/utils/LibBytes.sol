@@ -178,7 +178,7 @@ library LibBytes {
 
     function toLower(bytes calldata bStr) internal pure returns (bytes memory) {
         bytes memory bLower = new bytes(bStr.length);
-        for (uint256 i = 0; i < bStr.length; i++) {
+        for (uint256 i; i < bStr.length; i++) {
             // Uppercase character...
             if ((uint8(bStr[i]) >= 65) && (uint8(bStr[i]) <= 90)) {
                 // So we add 32 to make it lowercase
@@ -192,7 +192,7 @@ library LibBytes {
 
     function toLowerMemory(bytes memory bStr) internal pure returns (bytes memory) {
         bytes memory bLower = new bytes(bStr.length);
-        for (uint256 i = 0; i < bStr.length; i++) {
+        for (uint256 i; i < bStr.length; i++) {
             // Uppercase character...
             if ((uint8(bStr[i]) >= 65) && (uint8(bStr[i]) <= 90)) {
                 // So we add 32 to make it lowercase

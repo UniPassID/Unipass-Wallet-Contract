@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
+import "../../interfaces/IDkimKeys.sol";
+
 import "hardhat/console.sol";
 
 /**
@@ -12,6 +14,7 @@ abstract contract ModuleAuthBase {
      * @param _hash The Hash To Valdiate Signature
      * @param _signature The Transaction Signature
      * @return succ Whether The Signature is Valid
+     * @return emailType The EmailType From KeyEmailAddress
      * @return ownerWeight The Threshold Weight of Role Owner
      * @return assetsOpWeight The Threshold Weight Of Role AssetsOp
      * @return guardianWeight The Threshold Weight Of Role Guardian
@@ -22,6 +25,7 @@ abstract contract ModuleAuthBase {
         virtual
         returns (
             bool succ,
+            IDkimKeys.EmailType emailType,
             uint32 ownerWeight,
             uint32 assetsOpWeight,
             uint32 guardianWeight

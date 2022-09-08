@@ -21,6 +21,7 @@ export interface DkimParams {
 }
 
 export enum EmailType {
+  None,
   UpdateKeysetHash,
   LockKeysetHash,
   CancelLockKeysetHash,

@@ -101,12 +101,19 @@ export async function generateSyncAccountTx(
     )
   );
 
+  const dealedKeys = keys.map((v) => {
+    if (v[0] instanceof KeyEmailAddress) {
+      v[0].emailType = EmailType.SyncAccount;
+    }
+    return v;
+  });
+
   const data = contract.interface.encodeFunctionData("syncAccount", [
     metaNonce,
     newKeysetHash,
     newTimeLockDuring,
     newImplementation,
-    await generateSignature(digestHash, chainId, contract.address, keys, undefined),
+    await generateSignature(digestHash, chainId, contract.address, dealedKeys, undefined),
   ]);
 
   let tx = {
@@ -126,6 +133,7 @@ export async function generateUpdateKeysetHashTx(
   metaNonce: number,
   newKeysetHash: string,
   withTimeLock: boolean,
+  role: Role,
   keys: [KeyBase, boolean][]
 ) {
   const digestHash = subdigest(
@@ -148,7 +156,11 @@ export async function generateUpdateKeysetHashTx(
       contract.address,
       keys.map((v) => {
         if (v[0] instanceof KeyEmailAddress) {
-          v[0].emailType = EmailType.UpdateKeysetHash;
+          if (role == Role.Guardian) {
+            v[0].emailType = EmailType.LockKeysetHash;
+          } else if (role == Role.Owner) {
+            v[0].emailType = EmailType.UpdateKeysetHash;
+          }
         }
         return v;
       }),
@@ -192,9 +204,15 @@ export async function generateCancelLockKeysetHashTx(
     contract.address,
     keccak256(solidityPack(["uint8", "uint32"], [ActionType.CancelLockKeysetHash, metaNonce]))
   );
-  const data = contract.interface.encodeFunctionData("cancelLockKeysetHsah", [
+  const dealedKeys = keys.map((v) => {
+    if (v[0] instanceof KeyEmailAddress) {
+      v[0].emailType = EmailType.CancelLockKeysetHash;
+    }
+    return v;
+  });
+  const data = contract.interface.encodeFunctionData("cancelLockKeysetHash", [
     metaNonce,
-    await generateSignature(digestHash, chainId, contract.address, keys, undefined),
+    await generateSignature(digestHash, chainId, contract.address, dealedKeys, undefined),
   ]);
 
   let tx = {
@@ -220,10 +238,16 @@ export async function generateUpdateTimeLockDuringTx(
     contract.address,
     keccak256(solidityPack(["uint8", "uint32", "uint32"], [ActionType.UpdateTimeLockDuring, metaNonce, newTimeLockDuring]))
   );
+  const dealedKeys = keys.map((v) => {
+    if (v[0] instanceof KeyEmailAddress) {
+      v[0].emailType = EmailType.UpdateTimeLockDuring;
+    }
+    return v;
+  });
   const data = contract.interface.encodeFunctionData("updateTimeLockDuring", [
     metaNonce,
     newTimeLockDuring,
-    await generateSignature(digestHash, chainId, contract.address, keys, undefined),
+    await generateSignature(digestHash, chainId, contract.address, dealedKeys, undefined),
   ]);
 
   let tx = {
@@ -261,10 +285,16 @@ export async function generateUpdateImplementationTx(
     contract.address,
     keccak256(solidityPack(["uint8", "uint32", "address"], [ActionType.UpdateImplementation, metaNonce, newImplementation]))
   );
+  const dealedKeys = keys.map((v) => {
+    if (v[0] instanceof KeyEmailAddress) {
+      v[0].emailType = EmailType.UpdateImplementation;
+    }
+    return v;
+  });
   const data = contract.interface.encodeFunctionData("updateImplementation", [
     metaNonce,
     newImplementation,
-    await generateSignature(digestHash, chainId, contract.address, keys, undefined),
+    await generateSignature(digestHash, chainId, contract.address, dealedKeys, undefined),
   ]);
 
   let tx = {
@@ -355,7 +385,13 @@ export async function executeCall(
   txParams: Overrides
 ) {
   const parsedTxs = await parseTxs(txs);
-  let signature = await generateTransactionSig(chainId, moduleMain.address, parsedTxs, nonce, keys, sessionKey);
+  const dealedKeys = keys.map((v) => {
+    if (v[0] instanceof KeyEmailAddress) {
+      v[0].emailType = EmailType.CallOtherContract;
+    }
+    return v;
+  });
+  let signature = await generateTransactionSig(chainId, moduleMain.address, parsedTxs, nonce, dealedKeys, sessionKey);
 
   const ret = await (await moduleMain.execute(parsedTxs, nonce, signature, txParams)).wait();
   return ret;

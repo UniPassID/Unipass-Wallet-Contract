@@ -12,6 +12,7 @@ import {
   generateUnlockKeysetHashTx,
   generateUpdateKeysetHashTx,
   generateUpdateTimeLockDuringTx,
+  Role,
 } from "./utils/sigPart";
 
 const runs = 256;
@@ -135,7 +136,7 @@ describe("ModuleMain Benchmark", function () {
           const keysetHash = getKeysetHash(keys);
           const wallet = await deployer.deployProxyContract(moduleMain.interface, moduleMain.address, keysetHash, txParams);
 
-          const transaction = await generateUpdateKeysetHashTx(chainId, wallet, 1, newKeysetHash, false, [
+          const transaction = await generateUpdateKeysetHashTx(chainId, wallet, 1, newKeysetHash, false, Role.Owner, [
             [keys[0], false],
             [keys[1], true],
             [keys[2], true],
@@ -157,7 +158,7 @@ describe("ModuleMain Benchmark", function () {
           const keysetHash = getKeysetHash(keys);
           const wallet = await deployer.deployProxyContract(moduleMain.interface, moduleMain.address, keysetHash, txParams);
 
-          const transaction = await generateUpdateKeysetHashTx(chainId, wallet, 1, newKeysetHash, false, [
+          const transaction = await generateUpdateKeysetHashTx(chainId, wallet, 1, newKeysetHash, false, Role.Owner, [
             [keys[0], true],
             [keys[1], true],
             [keys[2], false],
@@ -179,7 +180,7 @@ describe("ModuleMain Benchmark", function () {
           const keysetHash = getKeysetHash(keys);
           const wallet = await deployer.deployProxyContract(moduleMain.interface, moduleMain.address, keysetHash, txParams);
 
-          const transaction = await generateUpdateKeysetHashTx(chainId, wallet, 1, newKeysetHash, true, [
+          const transaction = await generateUpdateKeysetHashTx(chainId, wallet, 1, newKeysetHash, true, Role.Guardian, [
             [keys[0], false],
             [keys[1], true],
             [keys[2], true],
@@ -209,7 +210,7 @@ describe("ModuleMain Benchmark", function () {
 
           let tx = await executeCall([transaction], chainId, 1, [], wallet, undefined, txParams);
 
-          transaction = await generateUpdateKeysetHashTx(chainId, wallet, 2, newKeysetHash, true, [
+          transaction = await generateUpdateKeysetHashTx(chainId, wallet, 2, newKeysetHash, true, Role.Guardian, [
             [keys[0], false],
             [keys[1], true],
             [keys[2], true],
