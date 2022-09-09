@@ -91,6 +91,9 @@ async function main() {
   const ModuleGuest = await ethers.getContractFactory("ModuleGuest");
   const moduleGuest = await deployer.deployContract(ModuleGuest, 0, txParams);
 
+  const GasEstimator = await ethers.getContractFactory("GasEstimator");
+  const gasEstimator = await deployer.deployContract(GasEstimator, 0, txParams);
+
   prompt.start("Start to Initalize White List");
   await addImplementationWhiteList(whiteList, moduleMainUpgradable.address);
   prompt.succeed();
@@ -110,7 +113,8 @@ async function main() {
         },
         { name: "ModuleMain", address: moduleMain.address },
         { name: "ModuleMainUpgradable", address: moduleMainUpgradable.address },
-        { name: "ModuleGuest", address: moduleGuest.address }
+        { name: "ModuleGuest", address: moduleGuest.address },
+        { name: "GasEstimator", address: gasEstimator.address }
       ),
       null,
       2
@@ -139,6 +143,7 @@ async function main() {
     whiteList.address
   );
   await attempVerify("ModuleGuest", ModuleGuest, moduleGuest.address);
+  await attempVerify("GasEstimator", GasEstimator, gasEstimator.address);
 
   prompt.succeed();
 }
