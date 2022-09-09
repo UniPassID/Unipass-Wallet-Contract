@@ -76,7 +76,7 @@ export async function generateTransactionSig(
   sessionKey: SessionKey | undefined
 ): Promise<string> {
   const digestHash = await generateTransactionHash(chainId, address, txs, nonce);
-  let sig: string = await generateSignature(digestHash, chainId, address, keys, sessionKey);
+  let sig: string = await generateSignature(digestHash, address, keys, sessionKey);
 
   return sig;
 }
@@ -113,7 +113,7 @@ export async function generateSyncAccountTx(
     newKeysetHash,
     newTimeLockDuring,
     newImplementation,
-    await generateSignature(digestHash, chainId, contract.address, dealedKeys, undefined),
+    await generateSignature(digestHash, contract.address, dealedKeys, undefined),
   ]);
 
   let tx = {
@@ -152,7 +152,6 @@ export async function generateUpdateKeysetHashTx(
     newKeysetHash,
     await generateSignature(
       digestHash,
-      chainId,
       contract.address,
       keys.map((v) => {
         if (v[0] instanceof KeyEmailAddress) {
@@ -212,7 +211,7 @@ export async function generateCancelLockKeysetHashTx(
   });
   const data = contract.interface.encodeFunctionData("cancelLockKeysetHash", [
     metaNonce,
-    await generateSignature(digestHash, chainId, contract.address, dealedKeys, undefined),
+    await generateSignature(digestHash, contract.address, dealedKeys, undefined),
   ]);
 
   let tx = {
@@ -247,7 +246,7 @@ export async function generateUpdateTimeLockDuringTx(
   const data = contract.interface.encodeFunctionData("updateTimeLockDuring", [
     metaNonce,
     newTimeLockDuring,
-    await generateSignature(digestHash, chainId, contract.address, dealedKeys, undefined),
+    await generateSignature(digestHash, contract.address, dealedKeys, undefined),
   ]);
 
   let tx = {
@@ -294,7 +293,7 @@ export async function generateUpdateImplementationTx(
   const data = contract.interface.encodeFunctionData("updateImplementation", [
     metaNonce,
     newImplementation,
-    await generateSignature(digestHash, chainId, contract.address, dealedKeys, undefined),
+    await generateSignature(digestHash, contract.address, dealedKeys, undefined),
   ]);
 
   let tx = {
@@ -405,7 +404,6 @@ export interface SessionKey {
 
 export async function generateSignature(
   digestHash: string,
-  chainId: number,
   contractAddr: string,
   keys: [KeyBase, boolean][],
   sessionKey: SessionKey | undefined
@@ -422,7 +420,7 @@ export async function generateSignature(
       [1, sessionKey.timestamp, sessionKey.weight, await signerSign(digestHash, sessionKey.key)]
     );
     digestHash = subdigest(
-      chainId,
+      0,
       contractAddr,
       keccak256(solidityPack(["address", "uint32", "uint32"], [sessionKey.key.address, sessionKey.timestamp, sessionKey.weight]))
     );

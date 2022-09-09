@@ -25,6 +25,8 @@ abstract contract ModuleAuth is ModuleAuthBase, IERC1271 {
     //                       KEYSET_HASH_KEY = keccak256("unipass-wallet:module-auth:keyset-hash")
     bytes32 private constant KEYSET_HASH_KEY = bytes32(0x8771a5ac72b51506266988b53b9d8e36c46e1edb814d37bf2337d2f69e4ac9bc);
 
+    uint256 private immutable ZERO_CHAINID = 0;
+
     function _writeKeysetHash(bytes32 _keysetHash) internal {
         ModuleStorage.writeBytes32(KEYSET_HASH_KEY, _keysetHash);
     }
@@ -71,9 +73,10 @@ abstract contract ModuleAuth is ModuleAuthBase, IERC1271 {
                 (assetsOpWeight, index) = _signature.cReadUint32(index);
                 address sessionKey = LibSignatureValidator.recoverSigner(_hash, _signature[index:index + 66]);
                 index += 66;
+                // For using session key in multiple chains, Not hash chainId.
                 digestHash = LibUnipassSig._subDigest(
                     keccak256(abi.encodePacked(sessionKey, timestamp, assetsOpWeight)),
-                    block.chainid
+                    ZERO_CHAINID
                 );
             }
             bool success;
@@ -87,24 +90,6 @@ abstract contract ModuleAuth is ModuleAuthBase, IERC1271 {
             assetsOpWeight = uint32((weights << 32) >> 64);
             guardianWeight = uint32((weights << 64) >> 64);
         }
-    }
-
-    function _parseKey(
-        bytes32 _hash,
-        uint256 _index,
-        bytes calldata _signature
-    )
-        private
-        view
-        returns (
-            bool isSig,
-            IDkimKeys.EmailType emailType,
-            LibUnipassSig.KeyType keyType,
-            bytes32 ret,
-            uint256 index
-        )
-    {
-        (isSig, emailType, keyType, ret, index) = LibUnipassSig._parseKey(dkimKeys, _hash, _signature, _index);
     }
 
     function _validateSignatureInner(
@@ -126,7 +111,7 @@ abstract contract ModuleAuth is ModuleAuthBase, IERC1271 {
             bool isSig;
             LibUnipassSig.KeyType keyType;
             bytes32 ret;
-            (isSig, tmpEmailType, keyType, ret, _index) = _parseKey(_hash, _index, _signature);
+            (isSig, emailType, keyType, ret, _index) = LibUnipassSig._parseKey(dkimKeys, _hash, _signature, _index);
             if (emailType == IDkimKeys.EmailType.None && tmpEmailType != IDkimKeys.EmailType.None) {
                 emailType = tmpEmailType;
             } else if (emailType != IDkimKeys.EmailType.None && tmpEmailType != IDkimKeys.EmailType.None) {
