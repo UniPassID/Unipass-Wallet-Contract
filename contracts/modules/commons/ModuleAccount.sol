@@ -70,6 +70,7 @@ abstract contract ModuleAccount is IModuleAccount, ModuleSelfAuth, ModuleAuthBas
         bytes calldata _signature
     ) external override onlySelf {
         _validateMetaNonceForSyncAccount(_metaNonce);
+        _requireUnLocked();
 
         bytes32 digestHash = LibUnipassSig._subDigest(
             keccak256(abi.encodePacked(uint8(SYNC_ACCOUNT), _metaNonce, _keysetHash, _newTimeLockDuring, _newImplementation)),
@@ -253,6 +254,7 @@ abstract contract ModuleAccount is IModuleAccount, ModuleSelfAuth, ModuleAuthBas
         bytes calldata _signature
     ) external onlySelf {
         _validateMetaNonce(_metaNonce);
+        _requireUnLocked();
         if (!_newImplementation.isContract()) revert InvalidImplementation(_newImplementation);
 
         bytes32 digestHash = LibUnipassSig._subDigest(
