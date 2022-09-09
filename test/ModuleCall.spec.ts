@@ -672,25 +672,25 @@ describe("ModuleCall", function () {
     });
     it("Is Valid Signature Should Not Success For Owner Signature", async () => {
       const selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
-      const signature = await generateSignature(digestHash, chainId, proxyTestModuleCall.address, selectedKeys, undefined);
+      const signature = await generateSignature(digestHash, proxyTestModuleCall.address, selectedKeys, undefined);
       expect(await proxyTestModuleCall.isValidSignature(digestHash, signature)).to.not.equals(SELECTOR_ERC1271_BYTES32_BYTES);
     });
 
     it("Is Valid Signature Should Success For AssetsOp Signature", async () => {
       const selectedKeys = selectKeys(keys, Role.AssetsOp, ASSETS_OP_THRESHOLD);
-      const signature = await generateSignature(digestHash, chainId, proxyTestModuleCall.address, selectedKeys, undefined);
+      const signature = await generateSignature(digestHash, proxyTestModuleCall.address, selectedKeys, undefined);
       expect(await proxyTestModuleCall.isValidSignature(digestHash, signature)).to.equals(SELECTOR_ERC1271_BYTES32_BYTES);
     });
 
     it("Is Valid Signature Should Not Success For Gurdian Signature", async () => {
       const selectedKeys = selectKeys(keys, Role.Guardian, GUARDIAN_THRESHOLD);
-      const signature = await generateSignature(digestHash, chainId, proxyTestModuleCall.address, selectedKeys, undefined);
+      const signature = await generateSignature(digestHash, proxyTestModuleCall.address, selectedKeys, undefined);
       expect(await proxyTestModuleCall.isValidSignature(digestHash, signature)).to.not.equals(SELECTOR_ERC1271_BYTES32_BYTES);
     });
 
     it("Is Valid Signature Should Success For SessionKey Signature", async () => {
       const selectedKeys = selectKeys(keys, Role.AssetsOp, ASSETS_OP_THRESHOLD);
-      const signature = await generateSignature(digestHash, chainId, proxyTestModuleCall.address, selectedKeys, {
+      const signature = await generateSignature(digestHash, proxyTestModuleCall.address, selectedKeys, {
         timestamp: Math.ceil(Date.now() / 1000) + 5000,
         weight: 100,
         key: Wallet.createRandom(),
