@@ -1,22 +1,26 @@
 [
   {
     "contractName": "DkimKeys",
-    "address": "0xC8210aD539Eedfe3D374D4363722A999FB15d166"
+    "address": "0xe59C516F6eaE143B2563f8006D69dDC1f417bba3"
   },
   {
     "contractName": "ModuleWhiteList",
-    "address": "0x65E295742466499530029915195FEFeA3623c038"
+    "address": "0x6b688e748AeA655EF5d950dDd62d92BD8613B88b"
   },
   {
     "contractName": "ModuleMain",
-    "address": "0x32ab2e39ca105b1718f805413FB01C1d94b939ae"
+    "address": "0x8038Ce789995256c437E461e785A63EcF8c84B0b"
   },
   {
     "contractName": "ModuleMainUpgradable",
-    "address": "0xc10c9634e4b356d80D6D24f9571641Db9b76b493"
+    "address": "0x68e3603b590c5b647654EeB3820fF5e9DB817BCD"
   },
   {
     "contractName": "ModuleGuest",
-    "address": "0xcA649FC2De330ff14Ba404c339649B20Cc8Bd180"
+    "address": "0xCB0F96A80bdaE9B7e453C6cee0895DEc3a47cAf0"
+  },
+  {
+    "contractName": "GasEstimator",
+    "address": "0x6041ae26F00BCec8c04a27190cB75f400a6582d3"
   }
 ]

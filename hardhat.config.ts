@@ -47,6 +47,14 @@ const config: HardhatUserConfig = {
       url: process.env.POLYGON_TESTNET_URL || "",
       accounts: process.env.POLYGON_TESTNET_PRIVATE_KEY !== undefined ? [process.env.POLYGON_TESTNET_PRIVATE_KEY] : [],
     },
+    bsc_testnet: {
+      url: process.env.BSC_TESTNET_URL || "",
+      accounts: process.env.BSC_TESTNET_PRIVATE_KEY !== undefined ? [process.env.BSC_TESTNET_PRIVATE_KEY] : [],
+    },
+    rangers_testnet: {
+      url: process.env.RANGERS_TESTNET_URL || "",
+      accounts: process.env.RANGERS_TESTNET_PRIVATE_KEY !== undefined ? [process.env.RANGERS_TESTNET_PRIVATE_KEY] : [],
+    },
   },
   gasReporter: {
     enabled: process.env.REPORT_GAS !== undefined,

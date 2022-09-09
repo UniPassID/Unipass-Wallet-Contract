@@ -28,7 +28,7 @@ describe("GasEstimation", function () {
   let ModuleMainGasEstimator: ContractFactory;
   let moduleGuest: Contract;
   let moduleWhiteList: Contract;
-  let gasEstimation: Contract;
+  let gasEstimator: Contract;
   let deployer: Deployer;
   let dkimKeys: Contract;
   let fakeKeys: KeyBase[];
@@ -78,7 +78,7 @@ describe("GasEstimation", function () {
     ModuleMainGasEstimator = await ethers.getContractFactory("ModuleMainGasEstimator");
 
     const GasEstimation = await ethers.getContractFactory("GasEstimator");
-    gasEstimation = await deployer.deployContract(GasEstimation, 0, txParams);
+    gasEstimator = await deployer.deployContract(GasEstimation, 0, txParams);
 
     const ModuleGuest = await ethers.getContractFactory("ModuleGuest");
     moduleGuest = await deployer.deployContract(ModuleGuest, 0, txParams);
@@ -126,7 +126,7 @@ describe("GasEstimation", function () {
     const nonce = 1;
     const signature = await generateTransactionSig(chainId, moduleMainGasEstimator.address, [tx], nonce, [], undefined);
     const txData = moduleMainGasEstimator.interface.encodeFunctionData("execute", [[tx], nonce, signature]);
-    const estimate = await gasEstimation.callStatic.estimate(moduleMainGasEstimator.address, txData);
+    const estimate = await gasEstimator.callStatic.estimate(moduleMainGasEstimator.address, txData);
     const realTx = await executeCall([tx], chainId, nonce, [], moduleMainGasEstimator, undefined, txParams);
     expect(estimate.gas.toNumber() + txBaseCost(txData)).to.approximately(realTx.gasUsed.toNumber(), 5000);
   });
@@ -174,7 +174,7 @@ describe("GasEstimation", function () {
       nonce,
       "0x",
     ]);
-    const estimate = await gasEstimation.callStatic.estimate(moduleGuest.address, moduleGuestTxData);
+    const estimate = await gasEstimator.callStatic.estimate(moduleGuest.address, moduleGuestTxData);
     const realTx = await (await moduleGuest.execute([deployTx, moduleMainTx, transferTx], nonce, signature, { value })).wait();
     expect(estimate.gas.toNumber() + txBaseCost(moduleGuestTxData)).to.approximately(realTx.gasUsed.toNumber(), 5000);
   });
