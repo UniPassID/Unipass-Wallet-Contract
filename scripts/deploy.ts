@@ -29,14 +29,14 @@ const attempVerify = async <T extends ContractFactory>(name: string, _: T, addre
       address: address,
       constructorArguments: args,
     });
-  } catch {}
+  } catch { }
 
   try {
     await tenderly.verify({
       name: name,
       address: address,
     });
-  } catch {}
+  } catch { }
 };
 
 async function main() {
@@ -94,6 +94,9 @@ async function main() {
   const GasEstimator = await ethers.getContractFactory("GasEstimator");
   const gasEstimator = await deployer.deployContract(GasEstimator, 0, txParams);
 
+  const FeeEstimator = await ethers.getContractFactory("FeeEstimator");
+  const feeEstimator = await deployer.deployContract(FeeEstimator, 0, txParams);
+
   prompt.start("Start to Initalize White List");
   await addImplementationWhiteList(whiteList, moduleMainUpgradable.address);
   prompt.succeed();
@@ -114,7 +117,8 @@ async function main() {
         { name: "ModuleMain", address: moduleMain.address },
         { name: "ModuleMainUpgradable", address: moduleMainUpgradable.address },
         { name: "ModuleGuest", address: moduleGuest.address },
-        { name: "GasEstimator", address: gasEstimator.address }
+        { name: "GasEstimator", address: gasEstimator.address },
+        { name: "FeeEstimator", address: feeEstimator.address }
       ),
       null,
       2
@@ -144,6 +148,7 @@ async function main() {
   );
   await attempVerify("ModuleGuest", ModuleGuest, moduleGuest.address);
   await attempVerify("GasEstimator", GasEstimator, gasEstimator.address);
+  await attempVerify("FeeEstimator", FeeEstimator, feeEstimator.address);
 
   prompt.succeed();
 }
