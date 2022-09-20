@@ -18,21 +18,23 @@ abstract contract ModuleTransaction {
     }
 
     error InvalidCallType(CallType);
-    error TxFailed(bytes32 _txHash, bytes _reason);
+    error TxFailed(bytes32 _txHash, uint256 _index, bytes _reason);
 
-    event TxExecuted(bytes32 _txHash);
-    event TxFailedEvent(bytes32 _txHash, bytes _reason);
-    event TxPayFeeFailed(bytes32 _txHash, bytes _reason);
+    event NotEnoughGasEvent(bytes32 _txHash, uint256 _index, uint256 _requested, uint256 _available);
+    event TxExecuted(bytes32 _txHash, uint256 _index);
+    event TxFailedEvent(bytes32 _txHash, uint256 _index, bytes _reason);
+    event TxPayFeeFailed(bytes32 _txHash, uint256 _index, bytes _reason);
 
     function _revertBytes(
         bool _revertOnError,
         bytes32 _txHash,
+        uint256 _index,
         bytes memory _reason
     ) internal {
         if (_revertOnError) {
-            revert TxFailed(_txHash, _reason);
+            revert TxFailed(_txHash, _index, _reason);
         } else {
-            emit TxFailedEvent(_txHash, _reason);
+            emit TxFailedEvent(_txHash, _index, _reason);
         }
     }
 }
