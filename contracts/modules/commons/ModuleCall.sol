@@ -97,7 +97,14 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, Modu
         for (uint256 i; i < _txs.length; i++) {
             Transaction calldata transaction = _txs[i];
             uint256 gasLimit = transaction.gasLimit;
-            if (gasleft() < gasLimit) revert NotEnoughGas(gasLimit, gasleft());
+            if (gasleft() < gasLimit) {
+                if (transaction.revertOnError) {
+                    revert NotEnoughGas(gasLimit, gasleft());
+                } else {
+                    emit NotEnoughGasEvent(_txHash, i, gasLimit, gasleft());
+                    return;
+                }
+            }
 
             bool success;
 
@@ -125,9 +132,9 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, Modu
                 revert InvalidCallType(transaction.callType);
             }
             if (success) {
-                emit TxExecuted(_txHash);
+                emit TxExecuted(_txHash, i);
             } else {
-                _revertBytes(transaction.revertOnError, _txHash, LibOptim.returnData());
+                _revertBytes(transaction.revertOnError, _txHash, i, LibOptim.returnData());
             }
         }
     }
