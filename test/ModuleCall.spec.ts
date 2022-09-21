@@ -462,7 +462,7 @@ describe("ModuleCall", function () {
       ret = executeCall([tx], chainId, nonce, selectedKeys, proxyTestModuleCall, undefined, txParams);
       const txHash = await generateTransactionHash(chainId, proxyTestModuleCall.address, await parseTxs([tx]), nonce);
       await expect(ret).to.revertedWith(
-        `VM Exception while processing transaction: reverted with custom error 'TxFailed("${txHash}", "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001c5f7265717569726557686974654c6973743a204e4f545f574849544500000000")'`
+        `VM Exception while processing transaction: reverted with custom error 'TxFailed("${txHash}", 0, "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001c5f7265717569726557686974654c6973743a204e4f545f574849544500000000")'`
       );
     });
   });
