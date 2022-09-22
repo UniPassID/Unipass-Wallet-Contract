@@ -84,14 +84,15 @@ abstract contract ModuleAccount is IModuleAccount, ModuleSelfAuth, ModuleAuthBas
         );
 
         require(ownerWeight >= LibRole.OWNER_THRESHOLD, "syncAccount: INVALID_WEIGHT");
+
+        if (getImplementation() != _newImplementation) {
+            _setImplementation(_newImplementation);
+        }
         if (!isValidKeysetHash(_keysetHash)) {
             _updateKeysetHash(_keysetHash);
         }
         if (_getLockDuring() != _newTimeLockDuring) {
             _setLockDuring(_newTimeLockDuring);
-        }
-        if (getImplementation() != _newImplementation) {
-            _setImplementation(_newImplementation);
         }
         _writeMetaNonce(_metaNonce);
 
