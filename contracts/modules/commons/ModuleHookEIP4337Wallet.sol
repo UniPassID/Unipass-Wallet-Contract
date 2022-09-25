@@ -180,10 +180,6 @@ contract ModuleHookEIP4337Wallet is ModuleTransaction, IEIP4337Wallet, ModuleSel
                 value: _transaction.value,
                 gas: _transaction.gasLimit == 0 ? gasleft() : _transaction.gasLimit
             }(_transaction.data);
-        } else if (_transaction.callType == CallType.DelegateCall) {
-            (success, result) = _transaction.target.delegatecall{
-                gas: _transaction.gasLimit == 0 ? gasleft() : _transaction.gasLimit
-            }(_transaction.data);
         } else {
             revert InvalidCallType(_transaction.callType);
         }
