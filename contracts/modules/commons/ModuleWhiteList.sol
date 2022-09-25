@@ -21,9 +21,7 @@ contract ModuleWhiteList is ModuleAdminAuth {
     }
 
     /**
-     * @dev For mapping whilteList.whiteList, value is the index of whilteList.addresses + 1.
-     *      If value == 0, address not exists, if value > 0, value - 1 equals addresses' index.
-     * @param _addr Whilte List Address
+     * @param _addr Whilte List Address For Hooks
      * @param _isWhite Add _addr to white list or remove from white list
      */
     function updateHookWhiteList(address _addr, bool _isWhite) external onlyAdmin {
@@ -41,9 +39,7 @@ contract ModuleWhiteList is ModuleAdminAuth {
     }
 
     /**
-     * @dev For mapping whilteList.whiteList, value is the index of whilteList.addresses + 1.
-     *      If value == 0, address not exists, if value > 0, value - 1 equals addresses' index.
-     * @param _addr Whilte List Address
+     * @param _addr Whilte List Address For Implementations
      * @param _isWhite Add _addr to white list or remove from white list
      */
     function updateImplementationWhiteList(address _addr, bool _isWhite) external onlyAdmin {
