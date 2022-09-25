@@ -73,10 +73,12 @@ describe("ModuleMain", function () {
     greeter1 = await deployer.deployContract(Greeter, 1, txParams);
     greeter2 = await deployer.deployContract(Greeter, 2, txParams);
 
-    moduleWhiteListAdmin = Wallet.createRandom();
+    moduleWhiteListAdmin = Wallet.createRandom().connect(signer.provider!);
     await transferEth(moduleWhiteListAdmin.address, 1);
     const ModuleWhiteList = await ethers.getContractFactory("ModuleWhiteList");
-    const moduleWhiteList = await deployer.deployContract(ModuleWhiteList, 0, txParams, moduleWhiteListAdmin.address);
+    const moduleWhiteList = await (
+      await deployer.deployContract(ModuleWhiteList, 0, txParams, moduleWhiteListAdmin.address)
+    ).connect(moduleWhiteListAdmin);
     let ret = await (await moduleWhiteList.updateImplementationWhiteList(greeter1.address, true)).wait();
     expect(ret.status).to.equals(1);
     ret = await (await moduleWhiteList.updateHookWhiteList(greeter2.address, true)).wait();
@@ -434,7 +436,9 @@ describe("ModuleMain", function () {
 
       await transferEth(moduleWhiteListAdmin.address, 1);
       const ModuleWhiteList = await ethers.getContractFactory("ModuleWhiteList");
-      const moduleWhiteList = await localDeployer.deployContract(ModuleWhiteList, 0, txParams, moduleWhiteListAdmin.address);
+      const moduleWhiteList = await (
+        await localDeployer.deployContract(ModuleWhiteList, 0, txParams, moduleWhiteListAdmin.address)
+      ).connect(moduleWhiteListAdmin.connect(signer.provider!));
       let ret = await (await moduleWhiteList.updateImplementationWhiteList(localGreeter1.address, true)).wait();
       expect(ret.status).to.equals(1);
       ret = await (await moduleWhiteList.updateHookWhiteList(localGreeter2.address, true)).wait();

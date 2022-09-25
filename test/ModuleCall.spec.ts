@@ -73,9 +73,9 @@ describe("ModuleCall", function () {
     greeter1 = await Greeter.deploy();
     greeter2 = await Greeter.deploy();
 
-    const moduleWhiteListAdmin: Wallet = Wallet.createRandom();
+    const moduleWhiteListAdmin: Wallet = Wallet.createRandom().connect(signer.provider!);
     await transferEth(moduleWhiteListAdmin.address, 1);
-    const ModuleWhiteList = await ethers.getContractFactory("ModuleWhiteList");
+    const ModuleWhiteList = await (await ethers.getContractFactory("ModuleWhiteList")).connect(moduleWhiteListAdmin);
     moduleWhiteList = await ModuleWhiteList.deploy(moduleWhiteListAdmin.address);
     let ret = await (await moduleWhiteList.updateImplementationWhiteList(greeter1.address, true)).wait();
     expect(ret.status).to.equals(1);
