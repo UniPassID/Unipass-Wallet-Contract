@@ -26,7 +26,7 @@ contract ModuleWhiteList is ModuleAdminAuth {
      * @param _addr Whilte List Address
      * @param _isWhite Add _addr to white list or remove from white list
      */
-    function updateHookWhiteList(address _addr, bool _isWhite) external {
+    function updateHookWhiteList(address _addr, bool _isWhite) external onlyAdmin {
         bool isWhite = hooks[_addr];
         if (isWhite != _isWhite) {
             hooks[_addr] = _isWhite;
@@ -46,7 +46,7 @@ contract ModuleWhiteList is ModuleAdminAuth {
      * @param _addr Whilte List Address
      * @param _isWhite Add _addr to white list or remove from white list
      */
-    function updateImplementationWhiteList(address _addr, bool _isWhite) external {
+    function updateImplementationWhiteList(address _addr, bool _isWhite) external onlyAdmin {
         bool isWhite = implementations[_addr];
         if (isWhite != _isWhite) {
             implementations[_addr] = _isWhite;

@@ -61,10 +61,10 @@ describe("GasEstimation", function () {
     greeter1 = await Greeter.deploy();
     greeter2 = await Greeter.deploy();
 
-    const moduleWhiteListAdmin: Wallet = Wallet.createRandom();
+    const moduleWhiteListAdmin: Wallet = Wallet.createRandom().connect(signer.provider!);
     await transferEth(moduleWhiteListAdmin.address, 1);
     const ModuleWhiteList = await ethers.getContractFactory("ModuleWhiteList");
-    moduleWhiteList = await ModuleWhiteList.deploy(moduleWhiteListAdmin.address);
+    moduleWhiteList = await (await ModuleWhiteList.deploy(moduleWhiteListAdmin.address)).connect(moduleWhiteListAdmin);
     let ret = await (await moduleWhiteList.updateImplementationWhiteList(greeter1.address, true)).wait();
     expect(ret.status).to.equals(1);
     ret = await (await moduleWhiteList.updateHookWhiteList(greeter2.address, true)).wait();
