@@ -149,8 +149,9 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, Modu
             index += 32;
             guardianWeight = uint32(uint256(callData.mcReadBytes32(index)));
             index += 32;
+        } else {
+            (ownerWeight, assetsWeight, guardianWeight) = getRoleOfPermission(selector);
         }
-        (ownerWeight, assetsWeight, guardianWeight) = getRoleOfPermission(selector);
     }
 
     /**
