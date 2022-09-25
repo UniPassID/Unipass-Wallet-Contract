@@ -14,8 +14,7 @@ abstract contract ModuleTransaction {
     }
 
     enum CallType {
-        Call,
-        DelegateCall
+        Call
     }
 
     error InvalidCallType(CallType);

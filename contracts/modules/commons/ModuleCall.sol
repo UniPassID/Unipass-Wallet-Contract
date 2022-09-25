@@ -119,8 +119,6 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, Modu
                     gasLimit == 0 ? gasleft() : gasLimit,
                     transaction.data
                 );
-            } else if (transaction.callType == CallType.DelegateCall) {
-                success = LibOptim.delegatecall(transaction.target, gasLimit == 0 ? gasleft() : gasLimit, transaction.data);
             } else {
                 revert InvalidCallType(transaction.callType);
             }
