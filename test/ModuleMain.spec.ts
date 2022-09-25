@@ -29,6 +29,7 @@ describe("ModuleMain", function () {
   let testERC1271Wallet: [Contract, Wallet][] = [];
   let moduleMain: Contract;
   let ModuleMain: ContractFactory;
+  let moduleMainUpgradable: Contract;
   let ModuleMainUpgradable: ContractFactory;
   let proxyModuleMain: Contract;
   let deployer: Deployer;
@@ -88,7 +89,7 @@ describe("ModuleMain", function () {
     dkimKeys = await deployer.deployContract(DkimKeys, 0, txParams, dkimKeysAdmin.address);
 
     ModuleMainUpgradable = await ethers.getContractFactory("ModuleMainUpgradable");
-    const moduleMainUpgradable = await deployer.deployContract(
+    moduleMainUpgradable = await deployer.deployContract(
       ModuleMainUpgradable,
       0,
       txParams,
@@ -585,10 +586,11 @@ describe("ModuleMain", function () {
         target: proxyModuleMain.address,
         value: ethers.constants.Zero,
         data: executeTxData,
+        revertOnError: true,
       };
 
       hre.changeNetwork("local1");
-      const ret = await (await localModuleGuest.execute([deployTx, executeTx], 1, "0x")).wait();
+      const ret = await (await localModuleGuest.execute([deployTx, executeTx], 0, "0x")).wait();
       const [signer] = await ethers.getSigners();
       proxyModuleMain = new Contract(proxyModuleMain.address, ModuleMain.interface, signer);
       expect(ret.status).to.equals(1);
@@ -597,7 +599,7 @@ describe("ModuleMain", function () {
       expect(await proxyModuleMain.getKeysetHash()).to.equals(keysetHash);
       const lockInfo = await proxyModuleMain.getLockInfo();
       expect(lockInfo.lockDuringRet).to.equals(timeLockDuring);
-      expect(await proxyModuleMain.getImplementation()).to.equals(moduleMain.address);
+      expect(await proxyModuleMain.getImplementation()).to.equals(moduleMainUpgradable.address);
       hre.changeNetwork("hardhat");
     });
   });

@@ -106,16 +106,20 @@ abstract contract ModuleAuth is ModuleAuthBase, IERC1271 {
         )
     {
         bytes32 keysetHash;
+        IDkimKeys.EmailType tmpEmailType;
         while (_index < _signature.length - 1) {
-            IDkimKeys.EmailType tmpEmailType;
             bool isSig;
             LibUnipassSig.KeyType keyType;
             bytes32 ret;
             (isSig, emailType, keyType, ret, _index) = LibUnipassSig._parseKey(dkimKeys, _hash, _signature, _index);
             if (emailType == IDkimKeys.EmailType.None && tmpEmailType != IDkimKeys.EmailType.None) {
                 emailType = tmpEmailType;
-            } else if (emailType != IDkimKeys.EmailType.None && tmpEmailType != IDkimKeys.EmailType.None) {
-                require(emailType == tmpEmailType, "_validateSignatureInner: INVALID_EMAILTYPE");
+            } else if (emailType != IDkimKeys.EmailType.None) {
+                if (tmpEmailType != IDkimKeys.EmailType.None) {
+                    require(emailType == tmpEmailType, "_validateSignatureInner: INVALID_EMAILTYPE");
+                } else {
+                    tmpEmailType = emailType;
+                }
             }
             uint96 singleWeights = uint96(bytes12(_signature.mcReadBytesN(_index, 12)));
             _index += 12;
