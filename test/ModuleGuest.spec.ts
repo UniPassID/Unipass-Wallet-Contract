@@ -64,23 +64,6 @@ describe("ModuleGuest", function () {
     expect(await callReceiverMock.lastValA()).to.equal(valA);
     expect(await callReceiverMock.lastValB()).to.equal(valB);
   });
-  it("A DelegateCall Should Revert", async function () {
-    txs = [
-      {
-        callType: CallType.DelegateCall,
-        revertOnError: true,
-        gasLimit: optimalGasLimit,
-        target: callReceiverMock.address,
-        value: ethers.constants.Zero,
-        data: data1,
-      },
-    ];
-    let ret = moduleGuest.execute(txs, 0, "0x");
-    await expect(ret).to.be.revertedWith(
-      `VM Exception while processing transaction: reverted with custom error 'InvalidCallType(1)'`
-    );
-  });
-
   it("A Reverted Tx Should Revert", async function () {
     const data2 = callReceiverMock.interface.encodeFunctionData("setRevertFlag", [true]);
     txs.unshift({
