@@ -5,7 +5,7 @@ import "./commons/ModuleTransaction.sol";
 import "../utils/LibOptim.sol";
 
 contract ModuleGuest is ModuleTransaction {
-    error NotEnoughGas(uint256 _requested, uint256 _available);
+    error NotEnoughGas(bytes32 _txHash, uint256 _index, uint256 _requested, uint256 _available);
 
     function _subDigest(bytes32 _digest, uint256 _chainId) internal view returns (bytes32) {
         return keccak256(abi.encodePacked("\x19\x01", _chainId, address(this), _digest));
