@@ -234,6 +234,26 @@ describe("ModuleMain", function () {
     nonce++;
   });
 
+  it("Test Sync Account", async () => {
+    const selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
+    const tx = await generateSyncAccountTx(
+      chainId,
+      proxyModuleMain,
+      metaNonce,
+      keysetHash,
+      30,
+      moduleMainUpgradable.address,
+      selectedKeys
+    );
+
+    const ret = await executeCall([tx], chainId, nonce, [], proxyModuleMain, undefined, txParams);
+    expect(ret.status).to.equal(1);
+    expect(await proxyModuleMain.getKeysetHash()).to.equals(keysetHash);
+    expect(await proxyModuleMain.getImplementation()).to.equals(moduleMainUpgradable.address);
+    metaNonce++;
+    nonce++;
+  });
+
   it("Test Transfer Eth", async () => {
     const { chainId } = await proxyModuleMain.provider.getNetwork();
     const sessionKey = Wallet.createRandom();
