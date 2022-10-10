@@ -88,9 +88,7 @@ abstract contract ModuleAccount is IModuleAccount, ModuleSelfAuth, ModuleAuthBas
         if (getImplementation() != _newImplementation) {
             _setImplementation(_newImplementation);
         }
-        if (!isValidKeysetHash(_keysetHash)) {
-            _updateKeysetHash(_keysetHash);
-        }
+        _updateKeysetHash(_keysetHash);
         if (_getLockDuring() != _newTimeLockDuring) {
             _setLockDuring(_newTimeLockDuring);
         }
