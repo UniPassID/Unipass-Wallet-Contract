@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import "./ModuleHooks.sol";
 import "../../interfaces/IModuleAccount.sol";
-import "../../interfaces/IModuleCall.sol";
+import "../../interfaces/IModuleSource.sol";
 import "../../utils/LibRole.sol";
 
 contract ModuleRole is ModuleSelfAuth {
@@ -21,7 +21,7 @@ contract ModuleRole is ModuleSelfAuth {
     ) internal {
         bytes12 roleWeight = (bytes12)((bytes4)(_ownerWeight)) |
             (bytes12(bytes4(_assetsOpWeight)) >> 32) |
-            (bytes12(bytes4(_guardianWeight)) >> 64);
+            (bytes12(bytes4(_guardianWeight + 1)) >> 64);
 
         permissions[_permission] = roleWeight;
     }
@@ -47,12 +47,14 @@ contract ModuleRole is ModuleSelfAuth {
             _permission == IModuleAccount.updateKeysetHashWithTimeLock.selector ||
             _permission == IModuleAccount.updateTimeLockDuring.selector ||
             _permission == IModuleAccount.updateImplementation.selector ||
+            _permission == IModuleAccount.unlockKeysetHash.selector ||
             _permission == ModuleHooks.addHook.selector ||
             _permission == ModuleHooks.removeHook.selector ||
             _permission == this.addPermission.selector ||
             _permission == this.removePermission.selector ||
             _permission == IModuleAccount.cancelLockKeysetHash.selector ||
-            _permission == IModuleAccount.syncAccount.selector
+            _permission == IModuleAccount.syncAccount.selector ||
+            _permission == IModuleSource.setSource.selector
         ) {
             revert ConstantPermission(_permission);
         }
@@ -69,12 +71,14 @@ contract ModuleRole is ModuleSelfAuth {
             _permission == IModuleAccount.updateKeysetHashWithTimeLock.selector ||
             _permission == IModuleAccount.updateTimeLockDuring.selector ||
             _permission == IModuleAccount.updateImplementation.selector ||
+            _permission == IModuleAccount.unlockKeysetHash.selector ||
             _permission == ModuleHooks.addHook.selector ||
             _permission == ModuleHooks.removeHook.selector ||
             _permission == this.addPermission.selector ||
             _permission == this.removePermission.selector ||
             _permission == IModuleAccount.cancelLockKeysetHash.selector ||
-            _permission == IModuleAccount.syncAccount.selector
+            _permission == IModuleAccount.syncAccount.selector ||
+            _permission == IModuleSource.setSource.selector
         ) {
             revert ConstantPermission(_permission);
         }
@@ -103,7 +107,9 @@ contract ModuleRole is ModuleSelfAuth {
             _permission == IModuleAccount.updateTimeLockDuring.selector ||
             _permission == IModuleAccount.updateImplementation.selector ||
             _permission == IModuleAccount.cancelLockKeysetHash.selector ||
-            _permission == IModuleAccount.syncAccount.selector
+            _permission == IModuleAccount.unlockKeysetHash.selector ||
+            _permission == IModuleAccount.syncAccount.selector ||
+            _permission == IModuleSource.setSource.selector
         ) {
             ownerWeight = LibRole.SYNC_TX_THRESHOLD;
         } else if (
@@ -115,9 +121,10 @@ contract ModuleRole is ModuleSelfAuth {
             ownerWeight = LibRole.OWNER_THRESHOLD;
         } else {
             bytes12 roleWeight = permissions[_permission];
+            require(uint96(roleWeight) != 0, "getRoleOfPermission: NO_PERMISSION");
             ownerWeight = uint32((bytes4)(roleWeight));
             assetsOpWeight = uint32((bytes4)(roleWeight << 32));
-            guardianWeight = uint32((bytes4)(roleWeight << 64));
+            guardianWeight = uint32((bytes4)(roleWeight << 64)) - 1;
         }
     }
 }

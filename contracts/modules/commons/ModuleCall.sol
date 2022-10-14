@@ -146,18 +146,22 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, Modu
             uint32 guardianWeight
         )
     {
-        uint256 index;
-        bytes4 selector;
-        (selector, index) = callData.cReadBytes4(index);
-        if (selector == this.selfExecute.selector) {
-            ownerWeight = uint32(uint256(callData.mcReadBytes32(index)));
-            index += 32;
-            assetsWeight = uint32(uint256(callData.mcReadBytes32(index)));
-            index += 32;
-            guardianWeight = uint32(uint256(callData.mcReadBytes32(index)));
-            index += 32;
+        if (callData.length < 4) {
+            assetsWeight = 100;
         } else {
-            (ownerWeight, assetsWeight, guardianWeight) = getRoleOfPermission(selector);
+            uint256 index;
+            bytes4 selector;
+            (selector, index) = callData.cReadBytes4(index);
+            if (selector == this.selfExecute.selector) {
+                ownerWeight = uint32(uint256(callData.mcReadBytes32(index)));
+                index += 32;
+                assetsWeight = uint32(uint256(callData.mcReadBytes32(index)));
+                index += 32;
+                guardianWeight = uint32(uint256(callData.mcReadBytes32(index)));
+                index += 32;
+            } else if (selector == this.execute.selector) {} else {
+                (ownerWeight, assetsWeight, guardianWeight) = getRoleOfPermission(selector);
+            }
         }
     }
 

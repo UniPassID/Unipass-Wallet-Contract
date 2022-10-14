@@ -167,6 +167,9 @@ describe("ModuleMain", function () {
   it("Test Get Signature Weight From Call Data For ModuleMain", async () => {
     for (const [func, funcFragment] of Object.entries(moduleMain.interface.functions)) {
       if (funcFragment.stateMutability !== "pure" && funcFragment.stateMutability !== "view") {
+        if (funcFragment.name == "execute" || funcFragment.name == "selfExecute") {
+          continue;
+        }
         await moduleMain.getRoleOfPermission(keccak256(Buffer.from(func, "utf-8")).slice(0, 10));
       }
     }
@@ -175,6 +178,9 @@ describe("ModuleMain", function () {
   it("Test Get Signature Weight From Call Data For ModuleMainUpgradable", async () => {
     for (const [func, funcFragment] of Object.entries(ModuleMainUpgradable.interface.functions)) {
       if (funcFragment.stateMutability !== "pure" && funcFragment.stateMutability !== "view") {
+        if (funcFragment.name == "execute" || funcFragment.name == "selfExecute") {
+          continue;
+        }
         await moduleMain.getRoleOfPermission(keccak256(Buffer.from(func, "utf-8")).slice(0, 10));
       }
     }
