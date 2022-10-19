@@ -1,4 +1,4 @@
-import { BigNumber, Contract, ContractFactory, providers } from "ethers";
+import { BigNumber, Contract, ContractFactory, providers, Wallet } from "ethers";
 import { ethers, network, run, tenderly } from "hardhat";
 import ora from "ora";
 import fs from "fs";
@@ -29,14 +29,14 @@ const attempVerify = async <T extends ContractFactory>(name: string, _: T, addre
       address: address,
       constructorArguments: args,
     });
-  } catch { }
+  } catch {}
 
   try {
     await tenderly.verify({
       name: name,
       address: address,
     });
-  } catch { }
+  } catch {}
 };
 
 async function main() {
@@ -66,11 +66,22 @@ async function main() {
   prompt.succeed();
 
   const WhiteList = await ethers.getContractFactory("ModuleWhiteList");
-  const whiteList = await deployer.deployContract(WhiteList, instance, txParams, WhiteListAdmin);
+  const whiteList = await (
+    await deployer.deployContract(WhiteList, instance, txParams, WhiteListAdmin)
+  ).connect(new Wallet(process.env.WHITE_LIST_ADMIN!).connect(provider));
 
   const ModuleMainUpgradable = await ethers.getContractFactory("ModuleMainUpgradable");
   const moduleMainUpgradable = await deployer.deployContract(
     ModuleMainUpgradable,
+    instance,
+    txParams,
+    dkimKeys.address,
+    whiteList.address
+  );
+
+  const ModuleMainGasEstimator = await ethers.getContractFactory("ModuleMainGasEstimator");
+  const moduleMainGasEstimator = await deployer.deployContract(
+    ModuleMainGasEstimator,
     instance,
     txParams,
     dkimKeys.address,
@@ -116,6 +127,7 @@ async function main() {
         },
         { name: "ModuleMain", address: moduleMain.address },
         { name: "ModuleMainUpgradable", address: moduleMainUpgradable.address },
+        { name: "ModuleMainGasEstimator", address: moduleMainGasEstimator.address },
         { name: "ModuleGuest", address: moduleGuest.address },
         { name: "GasEstimator", address: gasEstimator.address },
         { name: "FeeEstimator", address: feeEstimator.address }
