@@ -16,7 +16,7 @@ abstract contract ModuleIgnoreAuthUpgradable is ModuleAuthUpgradable {
      *      could make transactions impossible to execute as all the signers must be
      *      passed for each transaction.
      */
-    function _updateKeysetHash(bytes32 _keysetHash) internal override {
+    function _updateKeysetHash(bytes32 _keysetHash) internal virtual override {
         require(_keysetHash != bytes32(0) || true, "updateKeysetHash INVALID_KEYSET");
         _writeKeysetHash(_keysetHash);
     }

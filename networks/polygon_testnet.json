@@ -5,22 +5,30 @@
   },
   {
     "contractName": "ModuleWhiteList",
-    "address": "0x6b688e748AeA655EF5d950dDd62d92BD8613B88b"
+    "address": "0x40F589896987eF460CaD5f37460d717d2Bf6d3FE"
   },
   {
     "contractName": "ModuleMain",
-    "address": "0x8038Ce789995256c437E461e785A63EcF8c84B0b"
+    "address": "0x1039762670Eff9BC787a6a3Ec7c5b2dd1bB2c13b"
   },
   {
     "contractName": "ModuleMainUpgradable",
-    "address": "0x68e3603b590c5b647654EeB3820fF5e9DB817BCD"
+    "address": "0x11cd36987DD3e27A93AF1e349d7bB1815C939c1e"
+  },
+  {
+    "contractName": "ModuleMainGasEstimator",
+    "address": "0x65be5b8275Bb451399d7ABbCEC95328F2967808c"
   },
   {
     "contractName": "ModuleGuest",
-    "address": "0xCB0F96A80bdaE9B7e453C6cee0895DEc3a47cAf0"
+    "address": "0xc978e3B8cb432273CF4Ff6C6c3C7590139c9F49e"
   },
   {
     "contractName": "GasEstimator",
     "address": "0x6041ae26F00BCec8c04a27190cB75f400a6582d3"
+  },
+  {
+    "contractName": "FeeEstimator",
+    "address": "0xF4962123A0D5832ec96F95e493E6675B1A507b32"
   }
 ]
