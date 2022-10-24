@@ -11,6 +11,7 @@ import "../modules/commons/ModuleAccount.sol";
 contract ModuleMainGasEstimator is ModuleIgnoreAuthUpgradable, ModuleAccount, ModuleHooks, ModuleCall, ModuleSource {
     IModuleWhiteList private immutable WHITE_LIST;
     bool private immutable IS_MODULEMAIN;
+    address private immutable MODULE_MAIN_UPGRADABLE;
 
     /**
      * @param _dkimKeys The Address Of DkimKeys, which is used for Dkim Verify
@@ -18,10 +19,12 @@ contract ModuleMainGasEstimator is ModuleIgnoreAuthUpgradable, ModuleAccount, Mo
     constructor(
         IDkimKeys _dkimKeys,
         IModuleWhiteList _whiteList,
+        address _moduleMain,
         bool _isModuleMain
     ) ModuleIgnoreAuthUpgradable(_dkimKeys) {
         WHITE_LIST = _whiteList;
         IS_MODULEMAIN = _isModuleMain;
+        MODULE_MAIN_UPGRADABLE = _moduleMain;
     }
 
     function _updateKeysetHash(bytes32 _keysetHash) internal virtual override(ModuleIgnoreAuthUpgradable, ModuleAuthBase) {
@@ -29,7 +32,7 @@ contract ModuleMainGasEstimator is ModuleIgnoreAuthUpgradable, ModuleAccount, Mo
         _writeKeysetHash(_keysetHash);
 
         if (IS_MODULEMAIN) {
-            _setImplementation(0x1111111111111111111111111111111111111111);
+            _setImplementation(MODULE_MAIN_UPGRADABLE);
         }
     }
 

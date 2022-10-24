@@ -55,6 +55,10 @@ const config: HardhatUserConfig = {
       url: process.env.RANGERS_TESTNET_URL || "",
       accounts: process.env.RANGERS_TESTNET_PRIVATE_KEY !== undefined ? [process.env.RANGERS_TESTNET_PRIVATE_KEY] : [],
     },
+    goerli_testnet: {
+      url: process.env.GOERLI_TESTNET_URL || "",
+      accounts: process.env.GOERLI_TESTNET_PRIVATE_KEY !== undefined ? [process.env.GOERLI_TESTNET_PRIVATE_KEY] : [],
+    },
   },
   gasReporter: {
     enabled: process.env.REPORT_GAS !== undefined,
