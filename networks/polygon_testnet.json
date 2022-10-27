@@ -16,10 +16,6 @@
     "address": "0x11cd36987DD3e27A93AF1e349d7bB1815C939c1e"
   },
   {
-    "contractName": "ModuleMainGasEstimator",
-    "address": "0x65be5b8275Bb451399d7ABbCEC95328F2967808c"
-  },
-  {
     "contractName": "ModuleGuest",
     "address": "0xc978e3B8cb432273CF4Ff6C6c3C7590139c9F49e"
   },
