@@ -4,8 +4,7 @@ import ora from "ora";
 import fs from "fs";
 import { Deployer } from "../test/utils/deployer";
 import { expect } from "chai";
-import { formatBytes32String, parseEther, solidityPack } from "ethers/lib/utils";
-import NodeRSA from "node-rsa";
+import { parseEther } from "ethers/lib/utils";
 
 const DkimKeysAdmin: string = "0x4d802eb3F2027Ae2d22daa101612BAe022a849Dc";
 const WhiteListAdmin: string = "0xd2bef91743Db86f6c4a621542240400e9C171f0b";
@@ -69,28 +68,6 @@ async function main() {
   const dkimKeys = nativeDkimKeys.attach(erc1967.address);
   prompt.succeed();
 
-  prompt.start("Start To Proxy Gas Estimating DkimKeys");
-  const gasEstimatingErc1967 = await deployer.deployContract(
-    ERC1967,
-    gasEstimatingInstance,
-    txParams,
-    nativeDkimKeys.address,
-    calldata
-  );
-  const gasEstimatingDkimKeys = nativeDkimKeys
-    .attach(gasEstimatingErc1967.address)
-    .connect(new Wallet(process.env.DKIM_KEYS_ADMIN!).connect(provider));
-  const keyServer = solidityPack(["bytes32", "bytes32"], [formatBytes32String("s2055"), formatBytes32String("unipass.com")]);
-  if ((await gasEstimatingDkimKeys.getDKIMKey(keyServer)) !== "0x") {
-    const unipassPrivateKey = new NodeRSA();
-    unipassPrivateKey.importKey(process.env.UNIPASS_PRIVATE_KEY!);
-    const ret = await (
-      await gasEstimatingDkimKeys.updateDKIMKey(keyServer, unipassPrivateKey.exportKey("components-public").n.subarray(1))
-    ).wait();
-    expect(ret.status).to.equals(1);
-  }
-  prompt.succeed();
-
   const WhiteList = await ethers.getContractFactory("ModuleWhiteList");
   const whiteList = await (
     await deployer.deployContract(WhiteList, instance, txParams, WhiteListAdmin)
@@ -140,7 +117,7 @@ async function main() {
       ModuleMainGasEstimator,
       instance,
       txParams,
-      gasEstimatingDkimKeys.address,
+      dkimKeys.address,
       whiteList.address,
       moduleMain.address,
       true
@@ -152,7 +129,7 @@ async function main() {
       ModuleMainGasEstimator,
       instance,
       txParams,
-      gasEstimatingDkimKeys.address,
+      dkimKeys.address,
       whiteList.address,
       moduleMainUpgradable.address,
       false
