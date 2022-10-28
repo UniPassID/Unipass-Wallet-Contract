@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
+import "@openzeppelin/contracts/utils/math/Math.sol";
+
 import "hardhat/console.sol";
 
 /* solhint-disable no-inline-assembly */
@@ -173,6 +175,23 @@ library LibBytes {
             let word := calldataload(add(index, data.offset))
             a := and(shr(224, word), 0xffffffff)
             newIndex := add(index, 4)
+        }
+    }
+
+    /**
+     * @dev Convert a `uint32` to its ASCII `bytes32`
+     */
+    function uint32ToASSCIIBytes32(uint32 value) internal pure returns (bytes32) {
+        unchecked {
+            uint256 digestCapacity;
+            uint256 ret;
+            while (true) {
+                ret |= (((uint256(value) % 10) + 48) << (digestCapacity * 8));
+                value /= 10;
+                if (value == 0) break;
+                ++digestCapacity;
+            }
+            return bytes32(ret << (22 * 8));
         }
     }
 
