@@ -23,10 +23,13 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
         issRightIndex,
         kidLeftIndex,
         kidRightIndex,
+        subLeftIndex,
+        subRightIndex,
+        nonceLeftIndex,
         iatLeftIndex,
         expLeftIndex
     }
-    uint256 constant OpenIDParamsIndexNum = 6;
+    uint256 constant OpenIDParamsIndexNum = 9;
 
     /**
      * openIDPublicKey: kecaak256(issuser + key id) => public key
@@ -45,6 +48,15 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
         openIDPublicKey[
             keccak256(abi.encodePacked("https://accounts.google.com", "77cc0ef4c7181cf4c0dcef7b60ae28cc9022c76b"))
         ] = hex"c8247565af478e94f8f46ca64509584ac360f33ecf646161e5adba21a0a8f3ac4fb8071fe95ba6aca606e9a2bd635061f6a27d301575a1a8e66ad4ee5ed73e16dab0a87f49cdb6fffa60981b2971d3c32aafcdf2755fdf21aeb88a5a55941cff2c70de0ca21835ea502c6aa530d43a895b8cf4c5fd35eb0ddffb70b9daa0cff2e5dc5664a62d03b15388c15f9f38fdf31fa87f7b460f6c822321cc4252cdcf7b4ae472351545fdf20df3d04e368db5487d420e831888b5c5ee435347a02ef42fe8275b477c0cc4d0e9f2e9e1168ac269e9e50fcba5cc1fed653d1fb7abb13ce1c4c76f45a47ea6cdf22c6dc4d9ed56817f0e8a61468fb1938272ca58d787b1a3";
+
+        openIDPublicKey[
+            keccak256(
+                abi.encodePacked(
+                    "https:\\/\\/cognito-idp.us-east-1.amazonaws.com\\/us-east-1_37CBi928o",
+                    "kRPZ1hNWuJm+hLZF7FdcVBGflXCB4uDdmWAe8H7ad2g="
+                )
+            )
+        ] = hex"d74ee879c2948502878b5c12054b51bd3fdde0afeef878428e3a8de2ac71910b9b73bde05ac88df71499c36ad6bde17881765414cc9d68d1c42ade78a730bd5e734578ad4a72e02582e0344227553e5a22e743092e99cd8af728ac5f8957a8fed352f24bda2e38197cec39ee8d843f49be4b84958068d51d59da35f20a0ab91f23b6b7a4aa556e1deb19b5283720fc42f7b08ca78f7d51cef4a1a097b1c94f2a1e347b805935767f83b605528373e4b44a407ba27ea5fbd6322ae1f0634189241db40c617fc7aa9b524315fa2b057e996e2848c56a2ad88c7d94296609ee8de0c0e77c2ed3e3a864e3f91a86fdb6149c2db7740b9ce8c641e237a768dd44a8a9";
 
         __UUPSUpgradeable_init();
     }
@@ -65,48 +77,17 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
 
     function _authorizeUpgrade(address newImplementation) internal override onlyAdmin {}
 
-    function _getOpenIDPublicKeyFromParams(
-        uint256 _index,
-        bytes calldata _data,
-        bytes calldata _payload,
-        bytes calldata _header
-    ) internal view returns (bytes memory publicKey) {
-        bytes calldata iss;
-        {
-            uint32 issLeftIndex;
-            (issLeftIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.issLeftIndex) * 4 + _index);
-            uint32 issRightIndex;
-            (issRightIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.issRightIndex) * 4 + _index);
-
-            // As Iss will be verified by rsa in the header, there is no need to check iss
-            iss = _payload[issLeftIndex:issRightIndex];
-        }
-
-        bytes calldata kid;
-        {
-            uint32 kidLeftIndex;
-            (kidLeftIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.kidLeftIndex) * 4 + _index);
-            uint32 kidRightIndex;
-            (kidRightIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.kidRightIndex) * 4 + _index);
-
-            // As Kid will be verified by rsa in the header, there is no need to check kid
-            kid = _header[kidLeftIndex:kidRightIndex];
-        }
-
-        publicKey = getOpenIDPublicKey(keccak256(abi.encodePacked(iss, kid)));
-    }
-
     function _validateTimestamp(
         uint256 _index,
         bytes calldata _data,
         bytes calldata _payload
-    ) internal view {
+    ) private view {
         bytes calldata iat;
         {
             uint32 iatLeftIndex;
             (iatLeftIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.iatLeftIndex) * 4 + _index);
 
-            require(bytes32(_payload[iatLeftIndex - 6:iatLeftIndex]) == bytes32('"iat":'), "validateIDToken: INVALID_IAT");
+            require(bytes32(_payload[iatLeftIndex - 6:iatLeftIndex]) == bytes32('"iat":'), "_validateTimestamp: INVALID_IAT");
             iat = _payload[iatLeftIndex:iatLeftIndex + 10];
         }
 
@@ -115,7 +96,7 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
             uint32 expLeftIndex;
             (expLeftIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.expLeftIndex) * 4 + _index);
 
-            require(bytes32(_payload[expLeftIndex - 6:expLeftIndex]) == bytes32('"exp":'), "validateIDToken: INVALID_EXP");
+            require(bytes32(_payload[expLeftIndex - 6:expLeftIndex]) == bytes32('"exp":'), "_validateTimestamp: INVALID_EXP");
             exp = _payload[expLeftIndex:expLeftIndex + 10];
         }
 
@@ -123,12 +104,22 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
         require(timestamp > bytes32(iat) && timestamp < bytes32(exp), "_validateTimestamp: INVALID_TIMESTAMP");
     }
 
-    function validateIDToken(uint256 _index, bytes calldata _data) external view returns (bool succ) {
+    function validateAccessToken(uint256 _index, bytes calldata _data)
+        external
+        view
+        returns (
+            bool succ,
+            uint256 index,
+            bytes32 issHash,
+            bytes32 subHash,
+            bytes32 nonceHash
+        )
+    {
         bytes calldata header;
         bytes calldata payload;
         bytes calldata signature;
         {
-            uint256 index = OpenIDParamsIndexNum * 4 + _index;
+            index = OpenIDParamsIndexNum * 4 + _index;
             uint32 len;
             (len, index) = _data.cReadUint32(index);
             header = _data[index:index + len];
@@ -138,18 +129,94 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
             index += len;
             (len, index) = _data.cReadUint32(index);
             signature = _data[index:index + len];
+            index += len;
         }
 
-        bytes memory publicKey = _getOpenIDPublicKeyFromParams(_index, _data, payload, header);
-        require(publicKey.length > 0, "validateIDToken: INVALID_PUB_KEY");
+        bytes memory publicKey;
+        (issHash, publicKey) = _getPublicKeyAndIssHash(_index, _data, header, payload);
 
         _validateTimestamp(_index, _data, payload);
 
-        // FIXME
-        // Should encode with Base64Url
-        // Not allow `?` or `\` in the header and payload
-        bytes memory message = abi.encodePacked(LibBase64.urlEncode(header), ".", LibBase64.urlEncode(payload));
+        succ = LibRsa.rsapkcs1Verify(
+            sha256(abi.encodePacked(LibBase64.urlEncode(header), ".", LibBase64.urlEncode(payload))),
+            publicKey,
+            hex"010001",
+            signature
+        );
 
-        succ = LibRsa.rsapkcs1Verify(sha256(message), publicKey, hex"010001", signature);
+        nonceHash = keccak256(_getNonce(_index, _data, payload));
+
+        subHash = keccak256(_getSub(_index, _data, payload));
+    }
+
+    function _getNonce(
+        uint256 _index,
+        bytes calldata _data,
+        bytes calldata _payload
+    ) internal pure returns (bytes calldata nonce) {
+        uint32 nonceLeftIndex;
+        (nonceLeftIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.nonceLeftIndex) * 4 + _index);
+
+        require(bytes32(_payload[nonceLeftIndex - 9:nonceLeftIndex]) == bytes32('"nonce":"'), "_getNonce: INVALID_NONCE");
+        nonce = _payload[nonceLeftIndex:nonceLeftIndex + 66];
+    }
+
+    function _getSub(
+        uint256 _index,
+        bytes calldata _data,
+        bytes calldata _payload
+    ) internal pure returns (bytes calldata sub) {
+        uint32 subLeftIndex;
+        (subLeftIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.subLeftIndex) * 4 + _index);
+        require(bytes7(_payload[subLeftIndex - 7:subLeftIndex]) == bytes7('"sub":"'), "_getSub: INVALID_SUB_LEFT");
+
+        uint32 subRightIndex;
+        (subRightIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.subRightIndex) * 4 + _index);
+        bytes2 suffix = bytes2(_payload[subRightIndex:subRightIndex + 2]);
+        require(suffix == bytes2('",') || suffix == bytes2('"}'), "_getSub: INVALID_SUB_RIGHT");
+
+        sub = _payload[subLeftIndex:subRightIndex];
+    }
+
+    function _getPublicKeyAndIssHash(
+        uint256 _index,
+        bytes calldata _data,
+        bytes calldata _header,
+        bytes calldata _payload
+    ) private view returns (bytes32 issHash, bytes memory publicKey) {
+        bytes calldata iss = _getIss(_index, _data, _payload);
+        issHash = keccak256(iss);
+
+        bytes memory kid = _getKid(_index, _data, _header);
+        publicKey = getOpenIDPublicKey(keccak256(abi.encodePacked(iss, kid)));
+        require(publicKey.length > 0, "validateIDToken: INVALID_PUB_KEY");
+    }
+
+    function _getIss(
+        uint256 _index,
+        bytes calldata _data,
+        bytes calldata _payload
+    ) internal pure returns (bytes calldata iss) {
+        uint32 issLeftIndex;
+        (issLeftIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.issLeftIndex) * 4 + _index);
+        uint32 issRightIndex;
+        (issRightIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.issRightIndex) * 4 + _index);
+
+        // As Iss will be verified by rsa in the header, there is no need to check iss
+        iss = _payload[issLeftIndex:issRightIndex];
+    }
+
+    function _getKid(
+        uint256 _index,
+        bytes calldata _data,
+        bytes calldata _header
+    ) internal pure returns (bytes calldata kid) {
+        uint32 kidLeftIndex;
+        (kidLeftIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.kidLeftIndex) * 4 + _index);
+        uint32 kidRightIndex;
+        (kidRightIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.kidRightIndex) * 4 + _index);
+
+        // As Kid will be verified by rsa in the header, there is no need to check kid
+        kid = _header[kidLeftIndex:kidRightIndex];
     }
 }

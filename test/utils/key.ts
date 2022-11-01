@@ -1,12 +1,15 @@
-import { BytesLike, Contract, Wallet } from "ethers";
-import { arrayify, hexlify, joinSignature, randomBytes, solidityPack } from "ethers/lib/utils";
+import { BytesLike, constants, Contract, Wallet } from "ethers";
+import { arrayify, hexlify, joinSignature, keccak256, randomBytes, solidityPack, toUtf8Bytes } from "ethers/lib/utils";
 import { EmailType, getSignEmailWithDkim, parseEmailParams, pureEmailHash, SerializeDkimParams } from "./email";
 import { Role, signerSign } from "./sigPart";
+import * as jose from "jose";
+import { OPENID_AUDIENCE, OPENID_ISSUER, OPENID_KID } from "./common";
+import NodeRSA from "node-rsa";
 
 export enum KeyType {
   Secp256k1,
   ERC1271Wallet,
-  EmailAddress,
+  OpenIDWithEmail,
 }
 
 export interface RoleWeight {
@@ -55,68 +58,197 @@ export class KeySecp256k1 extends KeyBase {
   }
 }
 
-export class KeyEmailAddress extends KeyBase {
-  constructor(
-    readonly emailAddress: string,
-    readonly pepper: string,
-    readonly unipassPrivateKey: string,
-    roleWeight: RoleWeight,
-    public emailType: EmailType
-  ) {
+export interface EmailOptions {
+  _isEmailOptions: true;
+  emailAddress: string;
+  pepper: string;
+  unipassPrivateKey: string;
+  emailType: EmailType;
+
+  openIDHash: string;
+}
+
+export function isEmailOptions(v: any): v is EmailOptions {
+  return v._isEmailOptions;
+}
+
+export function isOpenIDOptions(v: any): v is EmailOptions {
+  return v._isOpenIDOptions;
+}
+
+export interface OpenIDOptions {
+  _isOpenIDOptions: true;
+  unipassPrivateKey: string;
+  issuer: string;
+  audience: string;
+  sub: string;
+  kid: string;
+
+  emailHash: string;
+}
+
+export class KeyOpenIDWithEmail extends KeyBase {
+  constructor(readonly inner: EmailOptions | OpenIDOptions, roleWeight: RoleWeight) {
     super(roleWeight);
   }
   public async generateSignature(digestHash: string): Promise<string> {
-    let subject: string;
-    switch (this.emailType) {
-      case EmailType.UpdateKeysetHash: {
-        subject = `UniPass-Update-Account-${digestHash}`;
-        break;
+    if (isEmailOptions(this.inner)) {
+      let subject: string;
+      switch (this.inner.emailType) {
+        case EmailType.UpdateKeysetHash: {
+          subject = `UniPass-Update-Account-${digestHash}`;
+          break;
+        }
+        case EmailType.LockKeysetHash: {
+          subject = `UniPass-Start-Recovery-${digestHash}`;
+          break;
+        }
+        case EmailType.CancelLockKeysetHash: {
+          subject = `UniPass-Cancel-Recovery-${digestHash}`;
+          break;
+        }
+        case EmailType.UpdateTimeLockDuring: {
+          subject = `UniPass-Update-Timelock-${digestHash}`;
+          break;
+        }
+        case EmailType.UpdateImplementation: {
+          subject = `UniPass-Update-Implementation-${digestHash}`;
+          break;
+        }
+        case EmailType.CallOtherContract: {
+          subject = `UniPass-Call-Contract-${digestHash}`;
+          break;
+        }
+        case EmailType.SyncAccount: {
+          subject = `UniPass-Deploy-Account-${digestHash}`;
+          break;
+        }
+        default:
+          throw new Error(`Invalid EmailType: ${this.inner.emailType}`);
       }
-      case EmailType.LockKeysetHash: {
-        subject = `UniPass-Start-Recovery-${digestHash}`;
-        break;
-      }
-      case EmailType.CancelLockKeysetHash: {
-        subject = `UniPass-Cancel-Recovery-${digestHash}`;
-        break;
-      }
-      case EmailType.UpdateTimeLockDuring: {
-        subject = `UniPass-Update-Timelock-${digestHash}`;
-        break;
-      }
-      case EmailType.UpdateImplementation: {
-        subject = `UniPass-Update-Implementation-${digestHash}`;
-        break;
-      }
-      case EmailType.CallOtherContract: {
-        subject = `UniPass-Call-Contract-${digestHash}`;
-        break;
-      }
-      case EmailType.SyncAccount: {
-        subject = `UniPass-Deploy-Account-${digestHash}`;
-        break;
-      }
-      default:
-        throw new Error(`Invalid EmailType: ${this.emailType}`);
+      let email = await getSignEmailWithDkim(subject, this.inner.emailAddress, "test@unipass.me", this.inner.unipassPrivateKey);
+      let { params } = await parseEmailParams(email);
+      return solidityPack(
+        ["uint8", "uint8", "uint8", "bytes32", "bytes32", "bytes", "bytes"],
+        [
+          KeyType.OpenIDWithEmail,
+          1,
+          1,
+          this.inner.openIDHash,
+          this.inner.pepper,
+          SerializeDkimParams(params, this.inner.emailType),
+          this.serializeRoleWeight(),
+        ]
+      );
+    } else {
+      let access_token = await new jose.SignJWT({ nonce: digestHash })
+        .setProtectedHeader({ alg: "RS256", kid: this.inner.kid })
+        .setIssuer(this.inner.issuer)
+        .setAudience(this.inner.audience)
+        .setExpirationTime("2h")
+        .setIssuedAt(Date.now() / 1000 - 300)
+        .setSubject(this.inner.sub)
+        .sign(await jose.importPKCS8(this.inner.unipassPrivateKey, "RS256"));
+      const [headerBase64, payloadBase64, signatureBase64] = access_token.split(".");
+      const header = Buffer.from(headerBase64, "base64").toString();
+      const payload = Buffer.from(payloadBase64, "base64").toString();
+
+      const signature = Buffer.from(signatureBase64, "base64");
+      const issLeftIndex = payload.indexOf('"iss":"') + 7;
+      let issRightIndex = payload.indexOf('",', issLeftIndex);
+      issRightIndex = issRightIndex >= 0 ? issRightIndex : payload.indexOf('"}', issLeftIndex);
+      const kidLeftIndex = header.indexOf('"kid":"') + 7;
+      let kidRightIndex = header.indexOf('",', kidLeftIndex);
+      kidRightIndex = kidRightIndex >= 0 ? kidRightIndex : header.indexOf('"}', kidLeftIndex);
+
+      const iatLeftIndex = payload.indexOf('"iat":') + 6;
+      const expLeftIndex = payload.indexOf('"exp":') + 6;
+
+      const subLeftIndex = payload.indexOf('"sub":"') + 7;
+      let subRightIndex = payload.indexOf('",', subLeftIndex);
+      subRightIndex = subRightIndex >= 0 ? subRightIndex : payload.indexOf('"}', subLeftIndex);
+
+      const nonceLeftIndex = payload.indexOf('"nonce":"') + 9;
+
+      return solidityPack(
+        [
+          "uint8",
+          "uint8",
+          "uint8",
+          "bytes32",
+          "uint32",
+          "uint32",
+          "uint32",
+          "uint32",
+          "uint32",
+          "uint32",
+          "uint32",
+          "uint32",
+          "uint32",
+          "uint32",
+          "bytes",
+          "uint32",
+          "bytes",
+          "uint32",
+          "bytes",
+          "bytes",
+        ],
+        [
+          KeyType.OpenIDWithEmail,
+          1,
+          2,
+          this.inner.emailHash,
+          issLeftIndex,
+          issRightIndex,
+          kidLeftIndex,
+          kidRightIndex,
+          subLeftIndex,
+          subRightIndex,
+          nonceLeftIndex,
+          iatLeftIndex,
+          expLeftIndex,
+          toUtf8Bytes(header).length,
+          toUtf8Bytes(header),
+          toUtf8Bytes(payload).length,
+          toUtf8Bytes(payload),
+          signature.length,
+          signature,
+          this.serializeRoleWeight(),
+        ]
+      );
     }
-    let email = await getSignEmailWithDkim(subject, this.emailAddress, "test@unipass.me", this.unipassPrivateKey);
-    let { params } = await parseEmailParams(email);
-    return solidityPack(
-      ["uint8", "uint8", "bytes32", "bytes", "bytes"],
-      [KeyType.EmailAddress, 1, this.pepper, SerializeDkimParams(params, this.emailType), this.serializeRoleWeight()]
+  }
+
+  getHash(): string {
+    if (isEmailOptions(this.inner)) {
+      return keccak256(
+        solidityPack(["bytes32", "bytes32"], [pureEmailHash(this.inner.emailAddress, this.inner.pepper), this.inner.openIDHash])
+      );
+    }
+    return keccak256(
+      solidityPack(
+        ["bytes32", "bytes32"],
+        [
+          this.inner.emailHash,
+          keccak256(
+            solidityPack(
+              ["bytes32", "bytes32"],
+              [keccak256(toUtf8Bytes(this.inner.issuer)), keccak256(toUtf8Bytes(this.inner.sub))]
+            )
+          ),
+        ]
+      )
     );
   }
+
   public async generateKey(): Promise<string> {
     return solidityPack(
       ["uint8", "uint8", "bytes32", "bytes"],
-      [KeyType.EmailAddress, 0, pureEmailHash(this.emailAddress, this.pepper), this.serializeRoleWeight()]
+      [KeyType.OpenIDWithEmail, 0, this.getHash(), this.serializeRoleWeight()]
     );
   }
   public serialize(): string {
-    return solidityPack(
-      ["uint8", "bytes32", "bytes"],
-      [KeyType.EmailAddress, pureEmailHash(this.emailAddress, this.pepper), this.serializeRoleWeight()]
-    );
+    return solidityPack(["uint8", "bytes32", "bytes"], [KeyType.OpenIDWithEmail, this.getHash(), this.serializeRoleWeight()]);
   }
 }
 
@@ -144,23 +276,42 @@ export class KeyERC1271Wallet extends KeyBase {
   }
 }
 
-export async function randomKeys(len: number, unipassPrivateKey: string, contracts: [Contract, Wallet][]): Promise<KeyBase[]> {
+export async function randomKeys(len: number, unipassPrivateKey: NodeRSA, contracts: [Contract, Wallet][]): Promise<KeyBase[]> {
   let ret: KeyBase[] = [];
   for (let i = 0; i < len; i++) {
     for (const role of [Role.Owner, Role.AssetsOp, Role.Guardian]) {
-      let random = randomInt(2);
+      let random = randomInt(3);
       if (random === 0) {
         ret.push(new KeySecp256k1(Wallet.createRandom(), randomRoleWeight(role)));
       } else if (random === 1) {
         ret.push(new KeyERC1271Wallet(contracts[i][0].address, contracts[i][1], randomRoleWeight(role)));
-      } else {
+      } else if (random === 2) {
         ret.push(
-          new KeyEmailAddress(
-            `${Buffer.from(randomBytes(10)).toString("hex")}@unipass.com`,
-            hexlify(randomBytes(32)),
-            unipassPrivateKey,
-            randomRoleWeight(role),
-            EmailType.CallOtherContract
+          new KeyOpenIDWithEmail(
+            {
+              _isEmailOptions: true,
+              emailAddress: `${Buffer.from(randomBytes(10)).toString("hex")}@unipass.com`,
+              pepper: hexlify(randomBytes(32)),
+              unipassPrivateKey: unipassPrivateKey.exportKey("pkcs1"),
+              emailType: EmailType.CallOtherContract,
+              openIDHash: constants.HashZero,
+            },
+            randomRoleWeight(role)
+          )
+        );
+      } else if (random === 3) {
+        ret.push(
+          new KeyOpenIDWithEmail(
+            {
+              _isOpenIDOptions: true,
+              unipassPrivateKey: unipassPrivateKey.exportKey("pkcs8"),
+              issuer: OPENID_ISSUER,
+              kid: OPENID_KID,
+              audience: OPENID_AUDIENCE,
+              sub: hexlify(randomBytes(10)),
+              emailHash: constants.HashZero,
+            },
+            randomRoleWeight(role)
           )
         );
       }
@@ -173,29 +324,39 @@ export async function randomNewWallet(unipassPrivateKey: string): Promise<KeyBas
   let ret: KeyBase[] = [];
   ret.push(new KeySecp256k1(Wallet.createRandom(), { ownerWeight: 40, assetsOpWeight: 100, guardianWeight: 0 }));
   ret.push(
-    new KeyEmailAddress(
-      `${Buffer.from(randomBytes(10)).toString("hex")}@unipass.com`,
-      hexlify(randomBytes(32)),
-      unipassPrivateKey,
+    new KeyOpenIDWithEmail(
+      {
+        _isEmailOptions: true,
+        emailAddress: `${Buffer.from(randomBytes(10)).toString("hex")}@unipass.com`,
+        pepper: hexlify(randomBytes(32)),
+        unipassPrivateKey,
+
+        emailType: EmailType.CallOtherContract,
+        openIDHash: constants.HashZero,
+      },
       {
         ownerWeight: 60,
         assetsOpWeight: 0,
         guardianWeight: 60,
-      },
-      EmailType.CallOtherContract
+      }
     )
   );
   ret.push(
-    new KeyEmailAddress(
-      `${Buffer.from(randomBytes(10)).toString("hex")}@unipass.com`,
-      hexlify(randomBytes(32)),
-      unipassPrivateKey,
+    new KeyOpenIDWithEmail(
+      {
+        _isEmailOptions: true,
+        emailAddress: `${Buffer.from(randomBytes(10)).toString("hex")}@unipass.com`,
+        pepper: hexlify(randomBytes(32)),
+        unipassPrivateKey,
+
+        emailType: EmailType.CallOtherContract,
+        openIDHash: constants.HashZero,
+      },
       {
         ownerWeight: 40,
         assetsOpWeight: 0,
         guardianWeight: 0,
-      },
-      EmailType.CallOtherContract
+      }
     )
   );
 

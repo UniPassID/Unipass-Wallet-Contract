@@ -19,8 +19,9 @@ contract ModuleMain is ModuleAuthFixed, ModuleAccount, ModuleHooks, ModuleCall, 
         address _factory,
         address _moduleMainUpgradable,
         IDkimKeys _dkimKeys,
+        IOpenID _openID,
         IModuleWhiteList _whiteList
-    ) ModuleAuthFixed(_factory, _moduleMainUpgradable, _dkimKeys) {
+    ) ModuleAuthFixed(_factory, _moduleMainUpgradable, _dkimKeys, _openID) {
         WHITE_LIST = _whiteList;
     }
 

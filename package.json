@@ -51,6 +51,7 @@
     "solidity-coverage": "^0.7.21",
     "ts-node": "^10.8.1",
     "typechain": "^5.2.0",
+    "jose": "^4.10.4",
     "typescript": "^4.7.4"
   },
   "dependencies": {

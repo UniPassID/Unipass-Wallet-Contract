@@ -1,20 +1,10 @@
 import { expect } from "chai";
-import {
-  BigNumber,
-  BytesLike,
-  Contract,
-  ContractFactory,
-  ContractInterface,
-  Overrides,
-  providers,
-  Signer,
-} from "ethers";
+import { BigNumber, BytesLike, Contract, ContractFactory, ContractInterface, Overrides, providers, Signer } from "ethers";
 import { getCreate2Address, Interface, keccak256 } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import { Transaction } from "ethereumjs-tx";
 
-const CreationCode: string =
-  "0x603a600e3d39601a805130553df3363d3d373d3d3d363d30545af43d82803e903d91601857fd5bf3";
+const CreationCode: string = "0x603a600e3d39601a805130553df3363d3d373d3d3d363d30545af43d82803e903d91601857fd5bf3";
 
 const SingleFactoryAddress = "0xce0042b868300000d44a59004da54a005ffdcf9f";
 const SingleFactoryInterface = new Interface(`[
@@ -49,12 +39,8 @@ const SingleFactoryInterface = new Interface(`[
 export class Deployer {
   readonly singleFactoryContract: Contract;
   readonly provider: providers.Provider;
-  constructor(readonly signer: Signer) {
-    this.singleFactoryContract = new Contract(
-      SingleFactoryAddress,
-      SingleFactoryInterface,
-      signer
-    );
+  constructor(public signer: Signer) {
+    this.singleFactoryContract = new Contract(SingleFactoryAddress, SingleFactoryInterface, signer);
     if (this.signer.provider === undefined) {
       throw new Error("Expected Provider");
     }
@@ -71,9 +57,7 @@ export class Deployer {
     if (await this.isDeployed(this.singleFactoryContract.address)) {
       return;
     }
-    const balance = await this.provider.getBalance(
-      "0xBb6e024b9cFFACB947A71991E386681B1Cd1477D"
-    );
+    const balance = await this.provider.getBalance("0xBb6e024b9cFFACB947A71991E386681B1Cd1477D");
     if (balance < ethers.utils.parseEther("0.0247")) {
       const value = ethers.utils.parseEther("0.0247").sub(balance);
       ret = await (
@@ -94,46 +78,26 @@ export class Deployer {
       r: "0x247000",
       s: "0x2470",
     });
-    ret = await (
-      await this.provider.sendTransaction(`0x${tx.serialize().toString("hex")}`)
-    ).wait();
+    ret = await (await this.provider.sendTransaction(`0x${tx.serialize().toString("hex")}`)).wait();
     expect(ret.status).to.equals(1);
-    expect(await this.isDeployed(this.singleFactoryContract.address)).to.be
-      .true;
+    expect(await this.isDeployed(this.singleFactoryContract.address)).to.be.true;
   }
 
   public static getInitCode(addr: BytesLike): string {
-    return ethers.utils.solidityPack(
-      ["bytes", "uint256"],
-      [CreationCode, addr]
-    );
+    return ethers.utils.solidityPack(["bytes", "uint256"], [CreationCode, addr]);
   }
 
-  public getDeployedContractAddr(
-    salt: BytesLike,
-    initCodeHash: BytesLike
-  ): string {
-    return getCreate2Address(
-      this.singleFactoryContract.address,
-      salt,
-      initCodeHash
-    );
+  public getDeployedContractAddr(salt: BytesLike, initCodeHash: BytesLike): string {
+    return getCreate2Address(this.singleFactoryContract.address, salt, initCodeHash);
   }
 
   public async isDeployed(addr: string): Promise<boolean> {
     return (await this.provider.getCode(addr)) !== "0x";
   }
 
-  public getProxyContractAddress(
-    contractAddr: BytesLike,
-    salt: BytesLike
-  ): string {
+  public getProxyContractAddress(contractAddr: BytesLike, salt: BytesLike): string {
     const code = Deployer.getInitCode(contractAddr);
-    return ethers.utils.getCreate2Address(
-      this.singleFactoryContract.address,
-      salt,
-      keccak256(code)
-    );
+    return ethers.utils.getCreate2Address(this.singleFactoryContract.address, salt, keccak256(code));
   }
 
   public async deployContract<T extends ContractFactory>(
@@ -146,32 +110,16 @@ export class Deployer {
     if (deployTx.data === undefined) {
       throw new Error("Expected Data For Deploy Tx");
     }
-    const salt = ethers.utils.hexZeroPad(
-      BigNumber.from(instance).toHexString(),
-      32
-    );
-    const deployedContractAddr = this.getDeployedContractAddr(
-      salt,
-      keccak256(deployTx.data)
-    );
+    const salt = ethers.utils.hexZeroPad(BigNumber.from(instance).toHexString(), 32);
+    const deployedContractAddr = this.getDeployedContractAddr(salt, keccak256(deployTx.data));
     if (await this.isDeployed(deployedContractAddr)) {
-      return new Contract(
-        deployedContractAddr,
-        contractFactory.interface,
-        this.signer
-      );
+      return new Contract(deployedContractAddr, contractFactory.interface, this.signer);
     }
-    let ret = await (
-      await this.singleFactoryContract.deploy(deployTx.data, salt, txParams)
-    ).wait();
+    let ret = await (await this.singleFactoryContract.deploy(deployTx.data, salt, txParams)).wait();
 
     expect(ret.status).to.equals(1);
     expect(await this.isDeployed(deployedContractAddr)).to.be.true;
-    return new Contract(
-      deployedContractAddr,
-      contractFactory.interface,
-      this.signer
-    );
+    return new Contract(deployedContractAddr, contractFactory.interface, this.signer);
   }
 
   public async deployProxyContract(
@@ -181,16 +129,11 @@ export class Deployer {
     txParams: Overrides
   ): Promise<Contract> {
     const initCode = Deployer.getInitCode(contractAddr);
-    const deployedContractAddr = this.getDeployedContractAddr(
-      salt,
-      keccak256(initCode)
-    );
+    const deployedContractAddr = this.getDeployedContractAddr(salt, keccak256(initCode));
     if (await this.isDeployed(deployedContractAddr)) {
       return new Contract(deployedContractAddr, contractInterface, this.signer);
     }
-    const ret = await (
-      await this.singleFactoryContract.deploy(initCode, salt, txParams)
-    ).wait();
+    const ret = await (await this.singleFactoryContract.deploy(initCode, salt, txParams)).wait();
     expect(ret.status).to.equals(1);
     expect(await this.isDeployed(deployedContractAddr)).to.be.true;
     return new Contract(deployedContractAddr, contractInterface, this.signer);

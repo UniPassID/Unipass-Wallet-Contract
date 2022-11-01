@@ -19,6 +19,7 @@ abstract contract ModuleTransaction {
 
     error InvalidCallType(CallType);
     error TxFailed(bytes32 _txHash, uint256 _index, bytes _reason);
+    error NotEnoughGas(uint256 _index, uint256 _requested, uint256 _available);
 
     event NotEnoughGasEvent(bytes32 _txHash, uint256 _index, uint256 _requested, uint256 _available);
     event TxExecuted(bytes32 _txHash, uint256 _index);

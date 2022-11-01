@@ -1,13 +1,19 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { expect } from "chai";
-import { Contract } from "ethers";
-import { hexlify, solidityPack, toUtf8Bytes } from "ethers/lib/utils";
+import { constants, Contract } from "ethers";
+import { hexlify, keccak256, randomBytes, solidityPack, toUtf8Bytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import { Deployer } from "./utils/deployer";
+import * as jose from "jose";
+import NodeRSA from "node-rsa";
+import { expect } from "chai";
+import { OPENID_AUDIENCE, OPENID_ISSUER, OPENID_KID } from "./utils/common";
 
 describe("Test Open ID", function () {
   let openID: Contract;
   let signer: SignerWithAddress;
+  let jwt: string;
+  let privateKey: jose.KeyLike;
+  let sub: string;
   this.beforeAll(async () => {
     const OpenID = await ethers.getContractFactory("OpenID");
     [signer] = await ethers.getSigners();
@@ -24,53 +30,79 @@ describe("Test Open ID", function () {
     const calldata = OpenID.interface.encodeFunctionData("initialize");
     const erc1967 = await deployer.deployContract(ERC1967, instance, txParams, openID.address, calldata);
     openID = openID.attach(erc1967.address);
+
+    const nodeRsa = new NodeRSA({ b: 2048 });
+    privateKey = await jose.importPKCS8(nodeRsa.exportKey("pkcs8-pem"), "RS256");
+
+    const ret = await (
+      await openID.updateOpenIDPublidKey(
+        keccak256(solidityPack(["bytes", "bytes"], [toUtf8Bytes(OPENID_ISSUER), toUtf8Bytes(OPENID_KID)])),
+        nodeRsa.exportKey("components-public").n.slice(1)
+      )
+    ).wait();
+    expect(ret.status).to.equals(1);
+  });
+
+  this.beforeEach(async () => {
+    sub = hexlify(randomBytes(16));
+    jwt = await new jose.SignJWT({ nonce: constants.HashZero })
+      .setProtectedHeader({ alg: "RS256", kid: OPENID_KID })
+      .setIssuer(OPENID_ISSUER)
+      .setAudience(OPENID_AUDIENCE)
+      .setExpirationTime("2h")
+      .setIssuedAt(Date.now() / 1000 - 300)
+      .setSubject(sub)
+      .sign(privateKey);
   });
 
   it("Verify Open ID Should Success", async () => {
-    const header = JSON.stringify(
-      JSON.parse(
-        `{
-          "alg": "RS256",
-          "kid": "77cc0ef4c7181cf4c0dcef7b60ae28cc9022c76b",
-          "typ": "JWT"
-        }`
-      )
-    );
-    const payload = JSON.stringify(
-      JSON.parse(
-        `{
-          "iss": "https://accounts.google.com",
-          "azp": "407408718192.apps.googleusercontent.com",
-          "aud": "407408718192.apps.googleusercontent.com",
-          "sub": "104331660410164053021",
-          "at_hash": "A0Zv-6rRrH-WQEfJZ4P--g",
-          "nonce": "Hello-UniPass",
-          "iat": 1666947794,
-          "exp": 1666951394,
-          "jti": "1645661f9a9fc55b384d6fd171ccf51715fd4055"
-        }`
-      )
-    );
+    const [headerBase64, payloadBase64, signatureBase64] = jwt.split(".");
+    const header = Buffer.from(headerBase64, "base64").toString();
+    const payload = Buffer.from(payloadBase64, "base64").toString();
 
-    const signature = Buffer.from(
-      "gnla3zOnCSqbf_Ap_42aywqkVj0UiUzbHajI7B7A3JPET3S5JvFNVL-Hdx1LInKtVxdzL-znFL5jn68cYBb2ECz4XB_7x_PajZ4XBJ6ly925Es326bqAuMgaI_bX6PCr_Nii_OM38vfG7SwFK1TVsqbwgNDLt2QGtWTZRBIjkYusQlyCOzAVIf76UaNIEJh9gYvIBBy5e-B6ww4x0-oZ7CAz7pozeUgjNDXUFxQKDHLcB4K5S2LncqziMVvEJCktu0KuIMXu7c6ib1O5YUlsMguNY0aw5n6CyCZlJZS1c_UPr3cH7hBJ6r5KuDJ0RNg6_rH_q-Y83pwNxRcOgS-6Fg",
-      "base64"
-    );
+    const signature = Buffer.from(signatureBase64, "base64");
     const issLeftIndex = payload.indexOf('"iss":"') + 7;
-    const issRightIndex = payload.indexOf('",', issLeftIndex);
+    let issRightIndex = payload.indexOf('",', issLeftIndex);
+    issRightIndex = issRightIndex >= 0 ? issRightIndex : payload.indexOf('"}', issLeftIndex);
     const kidLeftIndex = header.indexOf('"kid":"') + 7;
-    const kidRightIndex = header.indexOf('",', kidLeftIndex);
+    let kidRightIndex = header.indexOf('",', kidLeftIndex);
+    kidRightIndex = kidRightIndex >= 0 ? kidRightIndex : header.indexOf('"}', kidLeftIndex);
 
     const iatLeftIndex = payload.indexOf('"iat":') + 6;
     const expLeftIndex = payload.indexOf('"exp":') + 6;
 
+    const subLeftIndex = payload.indexOf('"sub":"') + 7;
+    let subRightIndex = payload.indexOf('",', subLeftIndex);
+    subRightIndex = subRightIndex >= 0 ? subRightIndex : payload.indexOf('"}', subLeftIndex);
+
+    const nonceLeftIndex = payload.indexOf('"nonce":"') + 9;
+
     const data = solidityPack(
-      ["uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "uint32", "bytes", "uint32", "bytes", "uint32", "bytes"],
+      [
+        "uint32",
+        "uint32",
+        "uint32",
+        "uint32",
+        "uint32",
+        "uint32",
+        "uint32",
+        "uint32",
+        "uint32",
+        "uint32",
+        "bytes",
+        "uint32",
+        "bytes",
+        "uint32",
+        "bytes",
+      ],
       [
         issLeftIndex,
         issRightIndex,
         kidLeftIndex,
         kidRightIndex,
+        subLeftIndex,
+        subRightIndex,
+        nonceLeftIndex,
         iatLeftIndex,
         expLeftIndex,
         toUtf8Bytes(header).length,
@@ -81,7 +113,10 @@ describe("Test Open ID", function () {
         signature,
       ]
     );
-    const succ = await openID.callStatic.validateIDToken(0, data);
+    const [succ, , issHash, subHash, nonceHash] = await openID.callStatic.validateAccessToken(0, data);
     expect(succ).to.true;
+    expect(issHash).to.equals(keccak256(toUtf8Bytes(OPENID_ISSUER)));
+    expect(subHash).to.equals(keccak256(toUtf8Bytes(sub)));
+    expect(nonceHash).to.equals(keccak256(toUtf8Bytes(constants.HashZero)));
   });
 });

@@ -1,9 +1,17 @@
 import { expect } from "chai";
-import { Contract, ContractFactory, Overrides, Wallet } from "ethers";
-import { BytesLike, formatBytes32String, randomBytes, solidityPack } from "ethers/lib/utils";
+import { constants, Contract, ContractFactory, Overrides, Wallet } from "ethers";
+import { BytesLike, formatBytes32String, keccak256, randomBytes, solidityPack, toUtf8Bytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import NodeRSA from "node-rsa";
-import { getKeysetHash, GUARDIAN_TIMELOCK_THRESHOLD, optimalGasLimit, OWNER_THRESHOLD, transferEth } from "./utils/common";
+import {
+  getKeysetHash,
+  GUARDIAN_TIMELOCK_THRESHOLD,
+  OPENID_ISSUER,
+  OPENID_KID,
+  optimalGasLimit,
+  OWNER_THRESHOLD,
+  transferEth,
+} from "./utils/common";
 import { Deployer } from "./utils/deployer";
 import { KeyBase, randomKeys, selectKeys } from "./utils/key";
 import {
@@ -35,12 +43,14 @@ describe("GasEstimation", function () {
   let dkimKeysAdmin: Wallet;
   let txParams: Overrides;
   let metaNonce: number;
-  let unipassPrivateKey: string;
+  let unipassPrivateKey: NodeRSA;
   let testERC1271Wallet: [Contract, Wallet][] = [];
   let Greeter: ContractFactory;
   let greeter1: Contract;
   let greeter2: Contract;
   let chainId: number;
+  let openIDAdmin: Wallet;
+  let openID: Contract;
   this.beforeAll(async function () {
     const [signer] = await ethers.getSigners();
     deployer = await new Deployer(signer).init();
@@ -64,7 +74,7 @@ describe("GasEstimation", function () {
     const moduleWhiteListAdmin: Wallet = Wallet.createRandom().connect(signer.provider!);
     await transferEth(moduleWhiteListAdmin.address, 1);
     const ModuleWhiteList = await ethers.getContractFactory("ModuleWhiteList");
-    moduleWhiteList = await (await ModuleWhiteList.deploy(moduleWhiteListAdmin.address)).connect(moduleWhiteListAdmin);
+    moduleWhiteList = (await ModuleWhiteList.deploy(moduleWhiteListAdmin.address)).connect(moduleWhiteListAdmin);
     let ret = await (await moduleWhiteList.updateImplementationWhiteList(greeter1.address, true)).wait();
     expect(ret.status).to.equals(1);
     ret = await (await moduleWhiteList.updateHookWhiteList(greeter2.address, true)).wait();
@@ -75,6 +85,15 @@ describe("GasEstimation", function () {
     await transferEth(dkimKeysAdmin.address, 10);
     dkimKeys = await deployer.deployContract(DkimKeys, 0, txParams, dkimKeysAdmin.address);
 
+    const OpenID = await ethers.getContractFactory("OpenID");
+    openIDAdmin = Wallet.createRandom().connect(signer.provider!);
+    await transferEth(openIDAdmin.address, 10);
+    openID = (await deployer.deployContract(OpenID, 0, txParams, openIDAdmin.address)).connect(openIDAdmin);
+    const ERC1967 = await ethers.getContractFactory("ERC1967Proxy");
+    const calldata = OpenID.interface.encodeFunctionData("initialize");
+    const erc1967 = await deployer.deployContract(ERC1967, 0, txParams, openID.address, calldata);
+    openID = openID.attach(erc1967.address);
+
     ModuleMainGasEstimator = await ethers.getContractFactory("ModuleMainGasEstimator");
 
     const GasEstimation = await ethers.getContractFactory("GasEstimator");
@@ -83,23 +102,35 @@ describe("GasEstimation", function () {
     const ModuleGuest = await ethers.getContractFactory("ModuleGuest");
     moduleGuest = await deployer.deployContract(ModuleGuest, 0, txParams);
 
-    chainId = await (await moduleGuest.provider.getNetwork()).chainId;
+    chainId = (await moduleGuest.provider.getNetwork()).chainId;
 
-    const privateKey = new NodeRSA({ b: 2048 });
-    unipassPrivateKey = privateKey.exportKey("pkcs1");
+    unipassPrivateKey = new NodeRSA({ b: 2048 });
     ret = await (
       await dkimKeys
         .connect(dkimKeysAdmin)
         .updateDKIMKey(
           solidityPack(["bytes32", "bytes32"], [formatBytes32String("s2055"), formatBytes32String("unipass.com")]),
-          privateKey.exportKey("components-public").n.subarray(1)
+          unipassPrivateKey.exportKey("components-public").n.subarray(1)
         )
+    ).wait();
+    expect(ret.status).to.equals(1);
+    ret = await (
+      await openID.updateOpenIDPublidKey(
+        keccak256(solidityPack(["bytes", "bytes"], [toUtf8Bytes(OPENID_ISSUER), toUtf8Bytes(OPENID_KID)])),
+        unipassPrivateKey.exportKey("components-public").n.slice(1)
+      )
     ).wait();
     expect(ret.status).to.equals(1);
     fakeKeys = await randomKeys(10, unipassPrivateKey, testERC1271Wallet);
   });
   this.beforeEach(async function () {
-    moduleMainGasEstimator = await ModuleMainGasEstimator.deploy(dkimKeys.address, moduleWhiteList.address);
+    moduleMainGasEstimator = await ModuleMainGasEstimator.deploy(
+      dkimKeys.address,
+      openID.address,
+      moduleWhiteList.address,
+      constants.AddressZero,
+      false
+    );
 
     const txRet = await (
       await ethers.getSigners()
