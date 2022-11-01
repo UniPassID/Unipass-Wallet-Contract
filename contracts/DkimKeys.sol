@@ -303,7 +303,7 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
             bool ret,
             EmailType emailType,
             bytes32 emailHash,
-            bytes memory sigHashHex,
+            bytes32 subjectHash,
             uint256 index
         )
     {
@@ -317,7 +317,9 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
         }
 
         emailHash = _getEmailFrom(_pepper, _data, _index, emailHeader);
-        (sigHashHex, emailType) = _validateEmailSubject(_index, _data, emailHeader);
+        bytes memory subject;
+        (subject, emailType) = _validateEmailSubject(_index, _data, emailHeader);
+        subjectHash = keccak256(subject);
         (ret, index) = _validateEmailDkim(_index, _data, index, emailHeader);
     }
 

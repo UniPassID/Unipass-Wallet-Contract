@@ -14,7 +14,11 @@ contract ModuleMainUpgradable is ModuleAuthUpgradable, ModuleAccount, ModuleHook
     /**
      * @param _dkimKeys The Address Of DkimKeys, which is used for Dkim Verify
      */
-    constructor(IDkimKeys _dkimKeys, IModuleWhiteList _whiteList) ModuleAuthUpgradable(_dkimKeys) {
+    constructor(
+        IDkimKeys _dkimKeys,
+        IOpenID _openID,
+        IModuleWhiteList _whiteList
+    ) ModuleAuthUpgradable(_dkimKeys, _openID) {
         WHITE_LIST = _whiteList;
     }
 

@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { constants, Contract, ContractFactory, Overrides, Wallet } from "ethers";
-import { formatBytes32String, hexlify, randomBytes, solidityPack } from "ethers/lib/utils";
+import { formatBytes32String, hexlify, keccak256, randomBytes, solidityPack, toUtf8Bytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import NodeRSA from "node-rsa";
 import {
@@ -8,6 +8,8 @@ import {
   getKeysetHash,
   GUARDIAN_THRESHOLD,
   GUARDIAN_TIMELOCK_THRESHOLD,
+  OPENID_ISSUER,
+  OPENID_KID,
   OWNER_CANCEL_TIMELOCK_THRESHOLD,
   OWNER_THRESHOLD,
   SELECTOR_ERC1271_BYTES32_BYTES,
@@ -48,12 +50,14 @@ describe("ModuleCall", function () {
   let txParams: Overrides;
   let nonce: number;
   let metaNonce: number;
-  let unipassPrivateKey: string;
+  let unipassPrivateKey: NodeRSA;
   let testERC1271Wallet: [Contract, Wallet][] = [];
   let Greeter: ContractFactory;
   let greeter1: Contract;
   let greeter2: Contract;
   let moduleWhiteList: Contract;
+  let openIDAdmin: Wallet;
+  let openID: Contract;
   this.beforeAll(async function () {
     const TestERC1271Wallet = await ethers.getContractFactory("TestERC1271Wallet");
     const [signer] = await ethers.getSigners();
@@ -87,12 +91,23 @@ describe("ModuleCall", function () {
     await transferEth(dkimKeysAdmin.address, 10);
     dkimKeys = await deployer.deployContract(DkimKeys, 0, txParams, dkimKeysAdmin.address);
 
+    const OpenID = await ethers.getContractFactory("OpenID");
+    openIDAdmin = Wallet.createRandom().connect(signer.provider!);
+    await transferEth(openIDAdmin.address, 10);
+    openID = (await deployer.deployContract(OpenID, 0, txParams, openIDAdmin.address)).connect(openIDAdmin);
+
+    const ERC1967 = await ethers.getContractFactory("ERC1967Proxy");
+    const calldata = OpenID.interface.encodeFunctionData("initialize");
+    const erc1967 = await deployer.deployContract(ERC1967, 0, txParams, openID.address, calldata);
+    openID = openID.attach(erc1967.address);
+
     const ModuleMainUpgradable = await ethers.getContractFactory("ModuleMainUpgradable");
     const moduleMainUpgradable = await deployer.deployContract(
       ModuleMainUpgradable,
       0,
       txParams,
       dkimKeys.address,
+      openID.address,
       moduleWhiteList.address
     );
     ret = await (await moduleWhiteList.updateImplementationWhiteList(moduleMainUpgradable.address, true)).wait();
@@ -106,19 +121,26 @@ describe("ModuleCall", function () {
       deployer.singleFactoryContract.address,
       moduleMainUpgradable.address,
       dkimKeys.address,
+      openID.address,
       moduleWhiteList.address
     );
 
     chainId = (await dkimKeys.provider.getNetwork()).chainId;
-    const privateKey = new NodeRSA({ b: 2048 });
-    unipassPrivateKey = privateKey.exportKey("pkcs1");
+    unipassPrivateKey = new NodeRSA({ b: 2048 });
     ret = await (
       await dkimKeys
         .connect(dkimKeysAdmin)
         .updateDKIMKey(
           solidityPack(["bytes32", "bytes32"], [formatBytes32String("s2055"), formatBytes32String("unipass.com")]),
-          privateKey.exportKey("components-public").n.subarray(1)
+          unipassPrivateKey.exportKey("components-public").n.subarray(1)
         )
+    ).wait();
+    expect(ret.status).to.equals(1);
+    ret = await (
+      await openID.updateOpenIDPublidKey(
+        keccak256(solidityPack(["bytes", "bytes"], [toUtf8Bytes(OPENID_ISSUER), toUtf8Bytes(OPENID_KID)])),
+        unipassPrivateKey.exportKey("components-public").n.slice(1)
+      )
     ).wait();
     expect(ret.status).to.equals(1);
   });

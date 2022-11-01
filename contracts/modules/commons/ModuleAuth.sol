@@ -16,10 +16,13 @@ abstract contract ModuleAuth is ModuleAuthBase, IERC1271 {
     using LibBytes for bytes;
 
     IDkimKeys public immutable dkimKeys;
+    IOpenID public immutable openID;
 
-    constructor(IDkimKeys _dkimKeys) {
+    constructor(IDkimKeys _dkimKeys, IOpenID _openID) {
         require(address(_dkimKeys) != address(0), "INVALID_DKIMKEYS");
         dkimKeys = _dkimKeys;
+        require(address(_openID) != address(0), "INVALID_DKIMKEYS");
+        openID = _openID;
     }
 
     //                       KEYSET_HASH_KEY = keccak256("unipass-wallet:module-auth:keyset-hash")
@@ -92,6 +95,24 @@ abstract contract ModuleAuth is ModuleAuthBase, IERC1271 {
         }
     }
 
+    function _parseKey(
+        bytes32 _hash,
+        bytes calldata _signature,
+        uint256 _index
+    )
+        internal
+        view
+        returns (
+            bool isSig,
+            IDkimKeys.EmailType emailType,
+            LibUnipassSig.KeyType keyType,
+            bytes32 ret,
+            uint256 index
+        )
+    {
+        (isSig, emailType, keyType, ret, index) = LibUnipassSig._parseKey(dkimKeys, openID, _hash, _signature, _index);
+    }
+
     function _validateSignatureInner(
         bytes32 _hash,
         uint256 _index,
@@ -111,7 +132,7 @@ abstract contract ModuleAuth is ModuleAuthBase, IERC1271 {
             bool isSig;
             LibUnipassSig.KeyType keyType;
             bytes32 ret;
-            (isSig, emailType, keyType, ret, _index) = LibUnipassSig._parseKey(dkimKeys, _hash, _signature, _index);
+            (isSig, emailType, keyType, ret, _index) = _parseKey(_hash, _signature, _index);
             if (emailType == IDkimKeys.EmailType.None && tmpEmailType != IDkimKeys.EmailType.None) {
                 emailType = tmpEmailType;
             } else if (emailType != IDkimKeys.EmailType.None) {

@@ -18,10 +18,11 @@ contract ModuleMainGasEstimator is ModuleIgnoreAuthUpgradable, ModuleAccount, Mo
      */
     constructor(
         IDkimKeys _dkimKeys,
+        IOpenID _openID,
         IModuleWhiteList _whiteList,
         address _moduleMain,
         bool _isModuleMain
-    ) ModuleIgnoreAuthUpgradable(_dkimKeys) {
+    ) ModuleIgnoreAuthUpgradable(_dkimKeys, _openID) {
         WHITE_LIST = _whiteList;
         IS_MODULEMAIN = _isModuleMain;
         MODULE_MAIN_UPGRADABLE = _moduleMain;

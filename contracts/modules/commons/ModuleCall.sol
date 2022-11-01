@@ -29,7 +29,6 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, Modu
     error UnknownCallDataSelector(bytes4 _selector);
     error SelectorDoesNotExist(bytes4 _selector);
     error ImmutableSelectorSigWeight(bytes4 _selector);
-    error NotEnoughGas(uint256 _requested, uint256 _available);
 
     function getNonce() public view returns (uint256) {
         return uint256(ModuleStorage.readBytes32(NONCE_KEY));
@@ -99,7 +98,7 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, Modu
             uint256 gasLimit = transaction.gasLimit;
             if (gasleft() < gasLimit) {
                 if (transaction.revertOnError) {
-                    revert NotEnoughGas(gasLimit, gasleft());
+                    revert NotEnoughGas(i, gasLimit, gasleft());
                 } else {
                     emit NotEnoughGasEvent(_txHash, i, gasLimit, gasleft());
                     return;

@@ -2,7 +2,7 @@ import { BigNumber, Contract, Overrides, utils, Wallet } from "ethers";
 import { arrayify, BytesLike, keccak256, solidityPack } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import { EmailType } from "./email";
-import { KeyBase, KeyEmailAddress, RoleWeight } from "./key";
+import { isEmailOptions, KeyBase, KeyOpenIDWithEmail, RoleWeight } from "./key";
 
 export enum ActionType {
   UpdateKeysetHash = 0,
@@ -102,8 +102,8 @@ export async function generateSyncAccountTx(
   );
 
   const dealedKeys = keys.map((v) => {
-    if (v[0] instanceof KeyEmailAddress) {
-      v[0].emailType = EmailType.SyncAccount;
+    if (v[0] instanceof KeyOpenIDWithEmail && isEmailOptions(v[0].inner)) {
+      v[0].inner.emailType = EmailType.SyncAccount;
     }
     return v;
   });
@@ -154,11 +154,11 @@ export async function generateUpdateKeysetHashTx(
       digestHash,
       contract.address,
       keys.map((v) => {
-        if (v[0] instanceof KeyEmailAddress) {
+        if (v[0] instanceof KeyOpenIDWithEmail && isEmailOptions(v[0].inner)) {
           if (role == Role.Guardian) {
-            v[0].emailType = EmailType.LockKeysetHash;
+            v[0].inner.emailType = EmailType.LockKeysetHash;
           } else if (role == Role.Owner) {
-            v[0].emailType = EmailType.UpdateKeysetHash;
+            v[0].inner.emailType = EmailType.UpdateKeysetHash;
           }
         }
         return v;
@@ -204,8 +204,8 @@ export async function generateCancelLockKeysetHashTx(
     keccak256(solidityPack(["uint8", "uint32"], [ActionType.CancelLockKeysetHash, metaNonce]))
   );
   const dealedKeys = keys.map((v) => {
-    if (v[0] instanceof KeyEmailAddress) {
-      v[0].emailType = EmailType.CancelLockKeysetHash;
+    if (v[0] instanceof KeyOpenIDWithEmail && isEmailOptions(v[0].inner)) {
+      v[0].inner.emailType = EmailType.CancelLockKeysetHash;
     }
     return v;
   });
@@ -238,8 +238,8 @@ export async function generateUpdateTimeLockDuringTx(
     keccak256(solidityPack(["uint8", "uint32", "uint32"], [ActionType.UpdateTimeLockDuring, metaNonce, newTimeLockDuring]))
   );
   const dealedKeys = keys.map((v) => {
-    if (v[0] instanceof KeyEmailAddress) {
-      v[0].emailType = EmailType.UpdateTimeLockDuring;
+    if (v[0] instanceof KeyOpenIDWithEmail && isEmailOptions(v[0].inner)) {
+      v[0].inner.emailType = EmailType.UpdateTimeLockDuring;
     }
     return v;
   });
@@ -285,8 +285,8 @@ export async function generateUpdateImplementationTx(
     keccak256(solidityPack(["uint8", "uint32", "address"], [ActionType.UpdateImplementation, metaNonce, newImplementation]))
   );
   const dealedKeys = keys.map((v) => {
-    if (v[0] instanceof KeyEmailAddress) {
-      v[0].emailType = EmailType.UpdateImplementation;
+    if (v[0] instanceof KeyOpenIDWithEmail && isEmailOptions(v[0].inner)) {
+      v[0].inner.emailType = EmailType.UpdateImplementation;
     }
     return v;
   });
@@ -385,8 +385,8 @@ export async function executeCall(
 ) {
   const parsedTxs = await parseTxs(txs);
   const dealedKeys = keys.map((v) => {
-    if (v[0] instanceof KeyEmailAddress) {
-      v[0].emailType = EmailType.CallOtherContract;
+    if (v[0] instanceof KeyOpenIDWithEmail && isEmailOptions(v[0].inner)) {
+      v[0].inner.emailType = EmailType.CallOtherContract;
     }
     return v;
   });

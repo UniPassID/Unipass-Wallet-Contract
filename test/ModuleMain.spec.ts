@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { BigNumber, Contract, ContractFactory, Overrides, Wallet } from "ethers";
-import { formatBytes32String, hexlify, keccak256, randomBytes, solidityPack, toUtf8String } from "ethers/lib/utils";
+import { formatBytes32String, hexlify, keccak256, randomBytes, solidityPack, toUtf8Bytes, toUtf8String } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import * as hre from "hardhat";
 import NodeRSA from "node-rsa";
@@ -8,6 +8,8 @@ import {
   ASSETS_OP_THRESHOLD,
   getKeysetHash,
   GUARDIAN_TIMELOCK_THRESHOLD,
+  OPENID_ISSUER,
+  OPENID_KID,
   optimalGasLimit,
   OWNER_THRESHOLD,
   transferEth,
@@ -45,8 +47,7 @@ describe("ModuleMain", function () {
   let ERC1155TokenId: string;
   let txParams: Overrides;
   let chainId: number;
-  let unipassPrivateKey: string;
-  let privateKey: NodeRSA;
+  let unipassPrivateKey: NodeRSA;
   let nonce: number;
   let metaNonce: number;
   let Greeter: ContractFactory;
@@ -54,6 +55,8 @@ describe("ModuleMain", function () {
   let greeter2: Contract;
   let moduleWhiteListAdmin: Wallet;
   let hooksWhiteList: Contract;
+  let openIDAdmin: Wallet;
+  let openID: Contract;
   this.beforeAll(async function () {
     const TestERC1271Wallet = await ethers.getContractFactory("TestERC1271Wallet");
     const [signer] = await ethers.getSigners();
@@ -87,8 +90,12 @@ describe("ModuleMain", function () {
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     dkimKeysAdmin = Wallet.createRandom().connect(signer.provider!);
     await transferEth(dkimKeysAdmin.address, 1);
+    dkimKeys = (await deployer.deployContract(DkimKeys, 0, txParams, dkimKeysAdmin.address)).connect(dkimKeysAdmin);
 
-    dkimKeys = await deployer.deployContract(DkimKeys, 0, txParams, dkimKeysAdmin.address);
+    const OpenID = await ethers.getContractFactory("OpenID");
+    openIDAdmin = Wallet.createRandom().connect(signer.provider!);
+    await transferEth(openIDAdmin.address, 10);
+    openID = (await deployer.deployContract(OpenID, 0, txParams, openIDAdmin.address)).connect(openIDAdmin);
 
     ModuleMainUpgradable = await ethers.getContractFactory("ModuleMainUpgradable");
     moduleMainUpgradable = await deployer.deployContract(
@@ -96,6 +103,7 @@ describe("ModuleMain", function () {
       0,
       txParams,
       dkimKeys.address,
+      openID.address,
       moduleWhiteList.address
     );
     ret = await (await moduleWhiteList.updateImplementationWhiteList(moduleMainUpgradable.address, true)).wait();
@@ -108,6 +116,7 @@ describe("ModuleMain", function () {
       deployer.singleFactoryContract.address,
       moduleMainUpgradable.address,
       dkimKeys.address,
+      openID.address,
       moduleWhiteList.address
     );
 
@@ -120,15 +129,19 @@ describe("ModuleMain", function () {
     const TestERC1155 = await ethers.getContractFactory("TestERC1155");
     testERC1155 = await TestERC1155.deploy();
 
-    privateKey = new NodeRSA({ b: 2048 });
-    unipassPrivateKey = privateKey.exportKey("pkcs1");
+    unipassPrivateKey = new NodeRSA({ b: 2048 });
     ret = await (
-      await dkimKeys
-        .connect(dkimKeysAdmin)
-        .updateDKIMKey(
-          solidityPack(["bytes32", "bytes32"], [formatBytes32String("s2055"), formatBytes32String("unipass.com")]),
-          privateKey.exportKey("components-public").n.subarray(1)
-        )
+      await dkimKeys.updateDKIMKey(
+        solidityPack(["bytes32", "bytes32"], [formatBytes32String("s2055"), formatBytes32String("unipass.com")]),
+        unipassPrivateKey.exportKey("components-public").n.slice(1)
+      )
+    ).wait();
+    expect(ret.status).to.equals(1);
+    ret = await (
+      await openID.updateOpenIDPublidKey(
+        keccak256(solidityPack(["bytes", "bytes"], [toUtf8Bytes(OPENID_ISSUER), toUtf8Bytes(OPENID_KID)])),
+        unipassPrivateKey.exportKey("components-public").n.slice(1)
+      )
     ).wait();
     expect(ret.status).to.equals(1);
   });
@@ -428,6 +441,7 @@ describe("ModuleMain", function () {
     let localModuleMain: Contract;
     let localDeployer: Deployer;
     let localDkimKeys: Contract;
+    let localOpenID: Contract;
     let localModuleGuest: Contract;
     let localGreeter1: Contract;
     this.beforeAll(async () => {
@@ -448,6 +462,12 @@ describe("ModuleMain", function () {
       localDkimKeys = await localDeployer.deployContract(DkimKeys, 0, txParams, dkimKeysAdmin.address);
       dkimKeysAdmin = dkimKeysAdmin.connect(signer.provider!);
 
+      const OpenID = await ethers.getContractFactory("OpenID");
+      await transferEth(openIDAdmin.address, 1);
+
+      localOpenID = await localDeployer.deployContract(OpenID, 0, txParams, openIDAdmin.address);
+      openIDAdmin = openIDAdmin.connect(signer.provider!);
+
       const ModuleGuest = await ethers.getContractFactory("ModuleGuest");
       localModuleGuest = await localDeployer.deployContract(ModuleGuest, 0, txParams);
 
@@ -456,7 +476,7 @@ describe("ModuleMain", function () {
 
       await transferEth(moduleWhiteListAdmin.address, 1);
       const ModuleWhiteList = await ethers.getContractFactory("ModuleWhiteList");
-      const moduleWhiteList = await (
+      const moduleWhiteList = (
         await localDeployer.deployContract(ModuleWhiteList, 0, txParams, moduleWhiteListAdmin.address)
       ).connect(moduleWhiteListAdmin.connect(signer.provider!));
       let ret = await (await moduleWhiteList.updateImplementationWhiteList(localGreeter1.address, true)).wait();
@@ -470,6 +490,7 @@ describe("ModuleMain", function () {
         0,
         txParams,
         localDkimKeys.address,
+        localOpenID.address,
         moduleWhiteList.address
       );
       ret = await (await moduleWhiteList.updateImplementationWhiteList(moduleMainUpgradable.address, true)).wait();
@@ -484,6 +505,7 @@ describe("ModuleMain", function () {
         deployer.singleFactoryContract.address,
         moduleMainUpgradable.address,
         localDkimKeys.address,
+        localOpenID.address,
         moduleWhiteList.address
       );
 
@@ -492,7 +514,16 @@ describe("ModuleMain", function () {
           .connect(dkimKeysAdmin)
           .updateDKIMKey(
             solidityPack(["bytes32", "bytes32"], [formatBytes32String("s2055"), formatBytes32String("unipass.com")]),
-            privateKey.exportKey("components-public").n.subarray(1)
+            unipassPrivateKey.exportKey("components-public").n.subarray(1)
+          )
+      ).wait();
+      expect(ret.status).to.equals(1);
+      ret = await (
+        await localOpenID
+          .connect(openIDAdmin)
+          .updateOpenIDPublidKey(
+            keccak256(solidityPack(["bytes", "bytes"], [toUtf8Bytes(OPENID_ISSUER), toUtf8Bytes(OPENID_KID)])),
+            unipassPrivateKey.exportKey("components-public").n.slice(1)
           )
       ).wait();
       expect(ret.status).to.equals(1);

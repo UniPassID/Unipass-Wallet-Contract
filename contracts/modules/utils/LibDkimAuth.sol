@@ -11,8 +11,8 @@ library LibDkimAuth {
     function _dkimVerify(
         IDkimKeys _dkimKeys,
         bytes32 _pepper,
-        bytes calldata _data,
-        uint256 _index
+        uint256 _index,
+        bytes calldata _data
     )
         internal
         view
@@ -20,17 +20,18 @@ library LibDkimAuth {
             bool,
             IDkimKeys.EmailType,
             bytes32,
-            bytes memory,
+            bytes32,
             uint256
         )
     {
-        try _dkimKeys.dkimVerify(_pepper, _index, _data) returns (
+        try _dkimKeys.dkimVerify(_pepper, 0, _data[_index:]) returns (
             bool ret,
             IDkimKeys.EmailType emailType,
             bytes32 emailHash,
-            bytes memory sigHashHex,
+            bytes32 sigHashHex,
             uint256 index
         ) {
+            index += _index;
             return (ret, emailType, emailHash, sigHashHex, index);
         } catch (bytes memory reason) {
             revert DkimFailed(reason);

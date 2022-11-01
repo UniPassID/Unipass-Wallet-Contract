@@ -13,8 +13,9 @@ abstract contract ModuleAuthFixed is ModuleAuth, Implementation {
     constructor(
         address _factory,
         address _moduleMainUpgradable,
-        IDkimKeys _dkimKeys
-    ) ModuleAuth(_dkimKeys) {
+        IDkimKeys _dkimKeys,
+        IOpenID _openID
+    ) ModuleAuth(_dkimKeys, _openID) {
         FACTORY = _factory;
         MODULE_MAIN_UPGRADABLE = _moduleMainUpgradable;
         INIT_CODE_HASH = keccak256(abi.encodePacked(Wallet.CREATION_CODE, uint256(uint160(address(this)))));

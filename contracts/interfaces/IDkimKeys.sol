@@ -29,7 +29,7 @@ interface IDkimKeys {
             bool ret,
             EmailType emailType,
             bytes32 emailHash,
-            bytes memory sigHashHex,
+            bytes32 subjectHash,
             uint256 index
         );
 }

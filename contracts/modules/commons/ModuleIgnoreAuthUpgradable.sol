@@ -7,7 +7,7 @@ import "../../Wallet.sol";
 abstract contract ModuleIgnoreAuthUpgradable is ModuleAuthUpgradable {
     using LibBytes for bytes;
 
-    constructor(IDkimKeys _dkimKeys) ModuleAuthUpgradable(_dkimKeys) {}
+    constructor(IDkimKeys _dkimKeys, IOpenID _openID) ModuleAuthUpgradable(_dkimKeys, _openID) {}
 
     /**
      * @notice Updates the signers configuration of the wallet

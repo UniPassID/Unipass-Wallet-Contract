@@ -53,7 +53,6 @@ describe("TestDkimVerify", function () {
             expect(ret.emailHash.startsWith("0x")).to.be.true;
             expect(ret.emailHash.length).to.equal(66);
           } catch (error) {
-            console.log(Buffer.from(arrayify(params.emailHeader)).toString());
             return Promise.reject(error);
           }
         })

@@ -41,6 +41,8 @@ describe("ModuleMain Benchmark", function () {
   let Greeter: ContractFactory;
   let greeter1: Contract;
   let greeter2: Contract;
+  let openIDAdmin: Wallet;
+  let openID: Contract;
   this.beforeAll(async () => {
     const TestERC1271Wallet = await ethers.getContractFactory("TestERC1271Wallet");
     const [signer] = await ethers.getSigners();
@@ -75,12 +77,18 @@ describe("ModuleMain Benchmark", function () {
     ret = await (await moduleWhiteList.updateHookWhiteList(greeter2.address, true)).wait();
     expect(ret.status).to.equals(1);
 
+    const OpenID = await ethers.getContractFactory("OpenID");
+    openIDAdmin = Wallet.createRandom().connect(signer.provider!);
+    await transferEth(openIDAdmin.address, 10);
+    openID = await deployer.deployContract(OpenID, 0, txParams, openIDAdmin.address);
+
     const ModuleMainUpgradable = await ethers.getContractFactory("ModuleMainUpgradable");
     const moduleMainUpgradable = await deployer.deployContract(
       ModuleMainUpgradable,
       instance,
       txParams,
       dkimKeys.address,
+      openID.address,
       moduleWhiteList.address
     );
     ret = await (await moduleWhiteList.updateImplementationWhiteList(moduleMainUpgradable.address, true)).wait();

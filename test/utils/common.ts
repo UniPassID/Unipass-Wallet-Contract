@@ -13,6 +13,10 @@ export const GUARDIAN_THRESHOLD = 100;
 export const GUARDIAN_TIMELOCK_THRESHOLD = 50;
 export const ASSETS_OP_THRESHOLD = 100;
 
+export const OPENID_ISSUER = "unipass-wallet:test:issuer";
+export const OPENID_AUDIENCE = "unipass-wallet:test:audience";
+export const OPENID_KID = "unipass-wallet:test:kid:0";
+
 export function throwError(msg: string) {
   throw msg;
 }

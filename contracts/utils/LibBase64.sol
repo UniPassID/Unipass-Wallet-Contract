@@ -2,6 +2,8 @@
 
 pragma solidity ^0.8.0;
 
+import "hardhat/console.sol";
+
 /* solhint-disable no-inline-assembly */
 
 /// @title Base64
