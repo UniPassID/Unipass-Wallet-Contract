@@ -8,6 +8,7 @@ import {
   ASSETS_OP_THRESHOLD,
   getKeysetHash,
   GUARDIAN_TIMELOCK_THRESHOLD,
+  OPENID_AUDIENCE,
   OPENID_ISSUER,
   OPENID_KID,
   optimalGasLimit,
@@ -141,6 +142,12 @@ describe("ModuleMain", function () {
       await openID.updateOpenIDPublidKey(
         keccak256(solidityPack(["bytes", "bytes"], [toUtf8Bytes(OPENID_ISSUER), toUtf8Bytes(OPENID_KID)])),
         unipassPrivateKey.exportKey("components-public").n.slice(1)
+      )
+    ).wait();
+    expect(ret.status).to.equals(1);
+    ret = await (
+      await openID.addOpenIDAudience(
+        keccak256(solidityPack(["bytes", "bytes"], [toUtf8Bytes(OPENID_ISSUER), toUtf8Bytes(OPENID_AUDIENCE)]))
       )
     ).wait();
     expect(ret.status).to.equals(1);
@@ -524,6 +531,14 @@ describe("ModuleMain", function () {
           .updateOpenIDPublidKey(
             keccak256(solidityPack(["bytes", "bytes"], [toUtf8Bytes(OPENID_ISSUER), toUtf8Bytes(OPENID_KID)])),
             unipassPrivateKey.exportKey("components-public").n.slice(1)
+          )
+      ).wait();
+      expect(ret.status).to.equals(1);
+      ret = await (
+        await localOpenID
+          .connect(openIDAdmin)
+          .addOpenIDAudience(
+            keccak256(solidityPack(["bytes", "bytes"], [toUtf8Bytes(OPENID_ISSUER), toUtf8Bytes(OPENID_AUDIENCE)]))
           )
       ).wait();
       expect(ret.status).to.equals(1);
