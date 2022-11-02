@@ -4,10 +4,11 @@ import ora from "ora";
 import fs from "fs";
 import { Deployer } from "../test/utils/deployer";
 import { expect } from "chai";
-import { parseEther } from "ethers/lib/utils";
+import { keccak256, parseEther, solidityPack, toUtf8Bytes } from "ethers/lib/utils";
 
 const DkimKeysAdmin: string = "0x4d802eb3F2027Ae2d22daa101612BAe022a849Dc";
 const WhiteListAdmin: string = "0xd2bef91743Db86f6c4a621542240400e9C171f0b";
+const OpenIDAdmin: string = "0xBbdbFaD06f7Ba642b2D666D62C3f602e147ECB12";
 
 const prompt = ora();
 const provider = new providers.Web3Provider(network.provider.send);
@@ -64,14 +65,22 @@ async function main() {
   prompt.start("Start To Proxy DkimKeys");
   const ERC1967 = await ethers.getContractFactory("ERC1967Proxy");
   const calldata = DkimKeys.interface.encodeFunctionData("initialize");
-  const erc1967 = await deployer.deployContract(ERC1967, instance, txParams, nativeDkimKeys.address, calldata);
-  const dkimKeys = nativeDkimKeys.attach(erc1967.address);
+  const dkimKeyserc1967 = await deployer.deployContract(ERC1967, instance, txParams, nativeDkimKeys.address, calldata);
+  const dkimKeys = nativeDkimKeys.attach(dkimKeyserc1967.address);
+  prompt.succeed();
+
+  const OpenID = await ethers.getContractFactory("OpenID");
+  const nativeOpenID = await deployer.deployContract(OpenID, instance, txParams, OpenIDAdmin);
+
+  prompt.start("Start To Proxy OpenID");
+  const openIDerc1967 = await deployer.deployContract(ERC1967, instance, txParams, nativeOpenID.address, calldata);
+  const openID = nativeOpenID.attach(openIDerc1967.address).connect(new Wallet(process.env.OPENID_ADMIN!).connect(provider));
   prompt.succeed();
 
   const WhiteList = await ethers.getContractFactory("ModuleWhiteList");
-  const whiteList = await (
-    await deployer.deployContract(WhiteList, instance, txParams, WhiteListAdmin)
-  ).connect(new Wallet(process.env.WHITE_LIST_ADMIN!).connect(provider));
+  const whiteList = (await deployer.deployContract(WhiteList, instance, txParams, WhiteListAdmin)).connect(
+    new Wallet(process.env.WHITE_LIST_ADMIN!).connect(provider)
+  );
 
   const ModuleMainUpgradable = await ethers.getContractFactory("ModuleMainUpgradable");
   const moduleMainUpgradable = await deployer.deployContract(
@@ -79,6 +88,7 @@ async function main() {
     instance,
     txParams,
     dkimKeys.address,
+    openID.address,
     whiteList.address
   );
 
@@ -90,6 +100,7 @@ async function main() {
     deployer.singleFactoryContract.address,
     moduleMainUpgradable.address,
     dkimKeys.address,
+    openID.address,
     whiteList.address
   );
 
@@ -110,6 +121,14 @@ async function main() {
   await addImplementationWhiteList(whiteList, moduleMainUpgradable.address);
   prompt.succeed();
 
+  if (network.name === "polygon_testnet") {
+    prompt.start("Start to Initalize OpenID");
+    const iss = "https://accounts.google.com";
+    const aud = "407408718192.apps.googleusercontent.com";
+    await addOpenIDAudience(openID, iss, aud);
+    prompt.succeed();
+  }
+
   if (network.name === "hardhat") {
     const ModuleMainGasEstimator = await ethers.getContractFactory("ModuleMainGasEstimator");
     prompt.start("writing gas estimating code information to moduleMainGasEstimatorCode");
@@ -118,6 +137,7 @@ async function main() {
       instance,
       txParams,
       dkimKeys.address,
+      openID.address,
       whiteList.address,
       moduleMain.address,
       true
@@ -130,6 +150,7 @@ async function main() {
       instance,
       txParams,
       dkimKeys.address,
+      openID.address,
       whiteList.address,
       moduleMainUpgradable.address,
       false
@@ -149,6 +170,10 @@ async function main() {
         {
           name: "DkimKeys",
           address: dkimKeys.address,
+        },
+        {
+          name: "DkimKeys",
+          address: openID.address,
         },
         {
           name: "ModuleWhiteList",
@@ -175,6 +200,7 @@ async function main() {
     ModuleMainUpgradable,
     moduleMainUpgradable.address,
     dkimKeys.address,
+    openID.address,
     whiteList.address
   );
   await attempVerify(
@@ -184,6 +210,7 @@ async function main() {
     deployer.singleFactoryContract.address,
     moduleMainUpgradable.address,
     dkimKeys.address,
+    openID.address,
     whiteList.address
   );
   await attempVerify("ModuleGuest", ModuleGuest, moduleGuest.address);
@@ -203,6 +230,14 @@ async function addHookWhiteList(whiteList: Contract, addr: string) {
 async function addImplementationWhiteList(whiteList: Contract, addr: string) {
   if (!(await whiteList.isImplementationWhiteList(addr))) {
     const ret = await (await whiteList.updateImplementationWhiteList(addr, true)).wait();
+    expect(ret.status).to.equals(1);
+  }
+}
+
+async function addOpenIDAudience(openID: Contract, issuer: string, audience: string) {
+  const key = keccak256(solidityPack(["bytes", "bytes"], [toUtf8Bytes(issuer), toUtf8Bytes(audience)]));
+  if (!(await openID.isAudienceValid(key))) {
+    const ret = await (await openID.addOpenIDAudience(key)).wait();
     expect(ret.status).to.equals(1);
   }
 }
