@@ -8,6 +8,7 @@ import {
   getKeysetHash,
   GUARDIAN_THRESHOLD,
   GUARDIAN_TIMELOCK_THRESHOLD,
+  OPENID_AUDIENCE,
   OPENID_ISSUER,
   OPENID_KID,
   OWNER_CANCEL_TIMELOCK_THRESHOLD,
@@ -79,7 +80,7 @@ describe("ModuleCall", function () {
 
     const moduleWhiteListAdmin: Wallet = Wallet.createRandom().connect(signer.provider!);
     await transferEth(moduleWhiteListAdmin.address, 1);
-    const ModuleWhiteList = await (await ethers.getContractFactory("ModuleWhiteList")).connect(moduleWhiteListAdmin);
+    const ModuleWhiteList = (await ethers.getContractFactory("ModuleWhiteList")).connect(moduleWhiteListAdmin);
     moduleWhiteList = await ModuleWhiteList.deploy(moduleWhiteListAdmin.address);
     let ret = await (await moduleWhiteList.updateImplementationWhiteList(greeter1.address, true)).wait();
     expect(ret.status).to.equals(1);
@@ -140,6 +141,12 @@ describe("ModuleCall", function () {
       await openID.updateOpenIDPublidKey(
         keccak256(solidityPack(["bytes", "bytes"], [toUtf8Bytes(OPENID_ISSUER), toUtf8Bytes(OPENID_KID)])),
         unipassPrivateKey.exportKey("components-public").n.slice(1)
+      )
+    ).wait();
+    expect(ret.status).to.equals(1);
+    ret = await (
+      await openID.addOpenIDAudience(
+        keccak256(solidityPack(["bytes", "bytes"], [toUtf8Bytes(OPENID_ISSUER), toUtf8Bytes(OPENID_AUDIENCE)]))
       )
     ).wait();
     expect(ret.status).to.equals(1);

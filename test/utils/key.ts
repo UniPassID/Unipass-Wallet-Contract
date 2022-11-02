@@ -168,6 +168,10 @@ export class KeyOpenIDWithEmail extends KeyBase {
       let subRightIndex = payload.indexOf('",', subLeftIndex);
       subRightIndex = subRightIndex >= 0 ? subRightIndex : payload.indexOf('"}', subLeftIndex);
 
+      const audLeftIndex = payload.indexOf('"aud":"') + 7;
+      let audRightIndex = payload.indexOf('",', audLeftIndex);
+      audRightIndex = audRightIndex >= 0 ? audRightIndex : payload.indexOf('"}', audLeftIndex);
+
       const nonceLeftIndex = payload.indexOf('"nonce":"') + 9;
 
       return solidityPack(
@@ -176,6 +180,8 @@ export class KeyOpenIDWithEmail extends KeyBase {
           "uint8",
           "uint8",
           "bytes32",
+          "uint32",
+          "uint32",
           "uint32",
           "uint32",
           "uint32",
@@ -204,6 +210,8 @@ export class KeyOpenIDWithEmail extends KeyBase {
           kidRightIndex,
           subLeftIndex,
           subRightIndex,
+          audLeftIndex,
+          audRightIndex,
           nonceLeftIndex,
           iatLeftIndex,
           expLeftIndex,

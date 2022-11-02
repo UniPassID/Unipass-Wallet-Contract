@@ -17,6 +17,8 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
 
     event UpdateOpenIDPublicKey(bytes32 _key, bytes _publicKey);
     event DeleteOpenIdPublicKey(bytes32 _key);
+    event AddOpenIDAudience(bytes32 _key);
+    event DeleteOpenIDAudience(bytes32 _key);
 
     enum OpenIDParamsIndex {
         issLeftIndex,
@@ -25,16 +27,23 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
         kidRightIndex,
         subLeftIndex,
         subRightIndex,
+        audLeftIndex,
+        audRightIndex,
         nonceLeftIndex,
         iatLeftIndex,
         expLeftIndex
     }
-    uint256 constant OpenIDParamsIndexNum = 9;
+    uint256 constant OpenIDParamsIndexNum = 11;
 
     /**
      * openIDPublicKey: kecaak256(issuser + key id) => public key
      */
     mapping(bytes32 => bytes) openIDPublicKey;
+
+    /**
+     * openIDAudience: keccak256(issuser + audiance) => is valid
+     */
+    mapping(bytes32 => bool) openIDAudience;
 
     constructor(address _admin) ModuleAdminAuth(_admin) {
         _disableInitializers();
@@ -73,6 +82,20 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
     function deleteOpenIDPublicKey(bytes32 _key) external onlyAdmin {
         delete openIDPublicKey[_key];
         emit DeleteOpenIdPublicKey(_key);
+    }
+
+    function isAudienceValid(bytes32 _key) public view returns (bool isValid) {
+        isValid = openIDAudience[_key];
+    }
+
+    function addOpenIDAudience(bytes32 _key) external onlyAdmin {
+        openIDAudience[_key] = true;
+        emit AddOpenIDAudience(_key);
+    }
+
+    function deleteOpenIDAudience(bytes32 _key) external onlyAdmin {
+        delete openIDAudience[_key];
+        emit DeleteOpenIDAudience(_key);
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyAdmin {}
@@ -187,9 +210,12 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
         bytes calldata iss = _getIss(_index, _data, _payload);
         issHash = keccak256(iss);
 
+        bytes calldata aud = _getAud(_index, _data, _payload);
+        require(isAudienceValid(keccak256(abi.encodePacked(iss, aud))), "_getPublicKeyAndIssHash: INVALID_AUD");
+
         bytes memory kid = _getKid(_index, _data, _header);
         publicKey = getOpenIDPublicKey(keccak256(abi.encodePacked(iss, kid)));
-        require(publicKey.length > 0, "validateIDToken: INVALID_PUB_KEY");
+        require(publicKey.length > 0, "_getPublicKeyAndIssHash: INVALID_PUB_KEY");
     }
 
     function _getIss(
@@ -199,10 +225,13 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
     ) internal pure returns (bytes calldata iss) {
         uint32 issLeftIndex;
         (issLeftIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.issLeftIndex) * 4 + _index);
+        require(bytes7(_payload[issLeftIndex - 7:issLeftIndex]) == bytes7('"iss":"'), "_getIss: INVALID_ISS_LEFT");
+
         uint32 issRightIndex;
         (issRightIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.issRightIndex) * 4 + _index);
+        bytes2 suffix = bytes2(_payload[issRightIndex:issRightIndex + 2]);
+        require(suffix == bytes2('",') || suffix == bytes2('"}'), "_getIss: INVALID_ISS_RIGHT");
 
-        // As Iss will be verified by rsa in the header, there is no need to check iss
         iss = _payload[issLeftIndex:issRightIndex];
     }
 
@@ -213,10 +242,30 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
     ) internal pure returns (bytes calldata kid) {
         uint32 kidLeftIndex;
         (kidLeftIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.kidLeftIndex) * 4 + _index);
+        require(bytes7(_header[kidLeftIndex - 7:kidLeftIndex]) == bytes7('"kid":"'), "_getKid: INVALID_KID_LEFT");
+
         uint32 kidRightIndex;
         (kidRightIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.kidRightIndex) * 4 + _index);
+        bytes2 suffix = bytes2(_header[kidRightIndex:kidRightIndex + 2]);
+        require(suffix == bytes2('",') || suffix == bytes2('"}'), "_getIss: INVALID_KID_RIGHT");
 
-        // As Kid will be verified by rsa in the header, there is no need to check kid
         kid = _header[kidLeftIndex:kidRightIndex];
+    }
+
+    function _getAud(
+        uint256 _index,
+        bytes calldata _data,
+        bytes calldata _payload
+    ) internal pure returns (bytes calldata aud) {
+        uint32 audLeftIndex;
+        (audLeftIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.audLeftIndex) * 4 + _index);
+        require(bytes7(_payload[audLeftIndex - 7:audLeftIndex]) == bytes7('"aud":"'), "_getAud: INVALID_AUD_LEFT");
+
+        uint32 audRightIndex;
+        (audRightIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.audRightIndex) * 4 + _index);
+        bytes2 suffix = bytes2(_payload[audRightIndex:audRightIndex + 2]);
+        require(suffix == bytes2('",') || suffix == bytes2('"}'), "_getAud: INVALID_AUD_RIGHT");
+
+        aud = _payload[audLeftIndex:audRightIndex];
     }
 }

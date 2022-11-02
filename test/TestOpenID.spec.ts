@@ -34,10 +34,17 @@ describe("Test Open ID", function () {
     const nodeRsa = new NodeRSA({ b: 2048 });
     privateKey = await jose.importPKCS8(nodeRsa.exportKey("pkcs8-pem"), "RS256");
 
-    const ret = await (
+    let ret = await (
       await openID.updateOpenIDPublidKey(
         keccak256(solidityPack(["bytes", "bytes"], [toUtf8Bytes(OPENID_ISSUER), toUtf8Bytes(OPENID_KID)])),
         nodeRsa.exportKey("components-public").n.slice(1)
+      )
+    ).wait();
+    expect(ret.status).to.equals(1);
+
+    ret = await (
+      await openID.addOpenIDAudience(
+        keccak256(solidityPack(["bytes", "bytes"], [toUtf8Bytes(OPENID_ISSUER), toUtf8Bytes(OPENID_AUDIENCE)]))
       )
     ).wait();
     expect(ret.status).to.equals(1);
@@ -75,10 +82,16 @@ describe("Test Open ID", function () {
     let subRightIndex = payload.indexOf('",', subLeftIndex);
     subRightIndex = subRightIndex >= 0 ? subRightIndex : payload.indexOf('"}', subLeftIndex);
 
+    const audLeftIndex = payload.indexOf('"aud":"') + 7;
+    let audRightIndex = payload.indexOf('",', audLeftIndex);
+    audRightIndex = audRightIndex >= 0 ? audRightIndex : payload.indexOf('"}', audLeftIndex);
+
     const nonceLeftIndex = payload.indexOf('"nonce":"') + 9;
 
     const data = solidityPack(
       [
+        "uint32",
+        "uint32",
         "uint32",
         "uint32",
         "uint32",
@@ -102,6 +115,8 @@ describe("Test Open ID", function () {
         kidRightIndex,
         subLeftIndex,
         subRightIndex,
+        audLeftIndex,
+        audRightIndex,
         nonceLeftIndex,
         iatLeftIndex,
         expLeftIndex,
