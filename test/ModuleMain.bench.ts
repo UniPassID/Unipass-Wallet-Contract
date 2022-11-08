@@ -3,7 +3,7 @@ import { Contract, ContractFactory, Overrides, Wallet } from "ethers";
 import { formatBytes32String, hexlify, hexZeroPad, randomBytes, solidityPack } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import NodeRSA from "node-rsa";
-import { getKeysetHash, transferEth } from "./utils/common";
+import { getKeysetHash, initDkimZK, transferEth } from "./utils/common";
 import { Deployer } from "./utils/deployer";
 import { randomNewWallet } from "./utils/key";
 import {
@@ -43,6 +43,8 @@ describe("ModuleMain Benchmark", function () {
   let greeter2: Contract;
   let openIDAdmin: Wallet;
   let openID: Contract;
+  let dkimZK: Contract;
+  let dkimZKAdmin: Wallet;
   this.beforeAll(async () => {
     const TestERC1271Wallet = await ethers.getContractFactory("TestERC1271Wallet");
     const [signer] = await ethers.getSigners();
@@ -54,15 +56,21 @@ describe("ModuleMain Benchmark", function () {
 
     const instance = 0;
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 20; i++) {
       const wallet = Wallet.createRandom();
       testERC1271Wallet.push([await deployer.deployContract(TestERC1271Wallet, i, txParams, wallet.address), wallet]);
     }
 
+    const DkimZK = await ethers.getContractFactory("DkimZK");
+    dkimZKAdmin = Wallet.createRandom().connect(signer.provider!);
+    await transferEth(dkimZKAdmin.address, 10);
+    dkimZK = (await deployer.deployContract(DkimZK, 0, txParams, dkimZKAdmin.address)).connect(dkimZKAdmin);
+    await initDkimZK(dkimZK);
+
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     const dkimKeysAdmin = Wallet.createRandom().connect(signer.provider!);
     await transferEth(dkimKeysAdmin.address, 10);
-    dkimKeys = await deployer.deployContract(DkimKeys, instance, txParams, dkimKeysAdmin.address);
+    dkimKeys = await deployer.deployContract(DkimKeys, instance, txParams, dkimKeysAdmin.address, dkimZK.address);
 
     Greeter = await ethers.getContractFactory("Greeter");
     greeter1 = await Greeter.deploy();
@@ -105,7 +113,7 @@ describe("ModuleMain Benchmark", function () {
       moduleWhiteList.address
     );
 
-    chainId = await (await moduleMain.provider.getNetwork()).chainId;
+    chainId = (await moduleMain.provider.getNetwork()).chainId;
     const privateKey = new NodeRSA({ b: 2048 });
     unipassPrivateKey = privateKey.exportKey("pkcs1");
     ret = await (

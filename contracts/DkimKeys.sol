@@ -4,8 +4,10 @@ pragma solidity ^0.8.0;
 import "./modules/commons/ModuleAdminAuth.sol";
 import "./modules/utils/LibEmailHash.sol";
 import "./interfaces/IDkimKeys.sol";
+import "./interfaces/IDkimZK.sol";
 import "./utils/LibRsa.sol";
 import "./utils/LibBytes.sol";
+import "./DkimZK.sol";
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
@@ -17,11 +19,17 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
 
     mapping(bytes => bytes) private dkimKeys;
 
+    IDkimZK private immutable INIT_DKIM_ZK;
+    //                       DKIM_ZK_KEY = keccak256("unipass-wallet:dkim-keys:dkim-zk")
+    bytes32 private constant DKIM_ZK_KEY = bytes32(0x08e244ce7c80bf74866107e07498207da4f3ec114139ab51179c7be9b15869d7);
+
     event UpdateDKIMKey(bytes emailServer, bytes oldKey, bytes newKey);
     event DeleteDKIMKey(bytes emailServer, bytes oldKey);
 
     error InvalidEncodings(bytes1 _encodings);
     error InvalidEmailType(EmailType _emailType);
+    error InvalidEmailVerifyType(uint8 _emailVerifyType);
+    error GetEmailHashByZKRevert(bytes _reason);
 
     bytes1 public constant AtSignBytes1 = 0x40;
     bytes1 public constant DotSignBytes1 = 0x2e;
@@ -41,7 +49,11 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
     }
     uint256 constant DkimParamsIndexNum = 11;
 
-    constructor(address _admin) ModuleAdminAuth(_admin) {
+    uint256 private constant VERIFY_BY_ORI_EMAIL = 0;
+    uint256 private constant VERIFY_BY_ZK = 1;
+
+    constructor(address _admin, IDkimZK _dkimZK) ModuleAdminAuth(_admin) {
+        INIT_DKIM_ZK = _dkimZK;
         _disableInitializers();
     }
 
@@ -155,6 +167,19 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
 
     function _authorizeUpgrade(address newImplementation) internal override onlyAdmin {}
 
+    function _writeDkimZK(IDkimKeys _dkimZK) internal {
+        ModuleStorage.writeBytes32(DKIM_ZK_KEY, bytes32(bytes20(address(_dkimZK))));
+    }
+
+    function _readDkimZK() public view returns (IDkimZK dkimZK) {
+        dkimZK = IDkimZK(address(bytes20(ModuleStorage.readBytes32(DKIM_ZK_KEY))));
+    }
+
+    function getDkimZK() public view returns (IDkimZK dkimZK) {
+        dkimZK = _readDkimZK();
+        if (address(dkimZK) == address(0)) dkimZK = INIT_DKIM_ZK;
+    }
+
     function getDKIMKey(bytes memory _emailServer) public view override returns (bytes memory) {
         return dkimKeys[_emailServer];
     }
@@ -170,27 +195,27 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
     }
 
     function _validateEmailSubject(
-        uint256 _index,
+        uint256 _dkimParamsStartIndex,
         bytes calldata _data,
         bytes calldata _emailHeader
     ) internal pure returns (bytes memory sigHashHex, EmailType emailType) {
-        bytes calldata subjectHeader = _getSubjectHeader(_data, _index, _emailHeader);
+        bytes calldata subjectHeader = _getSubjectHeader(_dkimParamsStartIndex, _data, _emailHeader);
         bytes memory decodedSubject = _parseSubjectHeader(subjectHeader);
         uint32 emailTypeInt;
-        (emailTypeInt, ) = _data.cReadUint32(_index + uint256(DkimParamsIndex.emailType) * 4);
+        (emailTypeInt, ) = _data.cReadUint32(_dkimParamsStartIndex + uint256(DkimParamsIndex.emailType));
         emailType = (EmailType)(emailTypeInt);
         sigHashHex = _checkSubjectHeader(decodedSubject, emailType);
     }
 
     function _getSubjectHeader(
+        uint256 _dkimParamsStartIndex,
         bytes calldata _data,
-        uint256 _index,
         bytes calldata _emailHeader
     ) internal pure returns (bytes calldata subjectHeader) {
         uint32 subjectIndex;
-        (subjectIndex, ) = _data.cReadUint32(_index + uint256(DkimParamsIndex.subjectIndex) * 4);
+        (subjectIndex, ) = _data.cReadUint32(_dkimParamsStartIndex + uint256(DkimParamsIndex.subjectIndex) * 4);
         uint32 subjectRightIndex;
-        (subjectRightIndex, ) = _data.cReadUint32(_index + uint256(DkimParamsIndex.subjectRightIndex) * 4);
+        (subjectRightIndex, ) = _data.cReadUint32(_dkimParamsStartIndex + uint256(DkimParamsIndex.subjectRightIndex) * 4);
         // see https://datatracker.ietf.org/doc/html/rfc5322#section-2.2
         if (subjectIndex != 0) {
             require(_emailHeader.mcReadBytesN(subjectIndex - 2, 10) == bytes32("\r\nsubject:"), "FE");
@@ -205,19 +230,22 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
         subjectHeader = _emailHeader[subjectIndex + 8:subjectRightIndex];
     }
 
-    function _getEmailFrom(
-        bytes32 _pepper,
+    function _getEmailFromIndexes(
+        uint256 _dkimParamsStartIndex,
         bytes calldata _data,
-        uint256 _index,
         bytes calldata _emailHeader
-    ) internal pure returns (bytes32 emailHash) {
-        uint32 fromIndex;
-        uint32 fromLeftIndex;
-        uint32 fromRightIndex;
-
-        (fromIndex, ) = _data.cReadUint32(_index + uint256(DkimParamsIndex.fromIndex) * 4);
-        (fromLeftIndex, ) = _data.cReadUint32(_index + uint256(DkimParamsIndex.fromLeftIndex) * 4);
-        (fromRightIndex, ) = _data.cReadUint32(_index + uint256(DkimParamsIndex.fromRightIndex) * 4);
+    )
+        internal
+        pure
+        returns (
+            uint32 fromIndex,
+            uint32 fromLeftIndex,
+            uint32 fromRightIndex
+        )
+    {
+        (fromIndex, ) = _data.cReadUint32(_dkimParamsStartIndex + uint256(DkimParamsIndex.fromIndex) * 4);
+        (fromLeftIndex, ) = _data.cReadUint32(_dkimParamsStartIndex + uint256(DkimParamsIndex.fromLeftIndex) * 4);
+        (fromRightIndex, ) = _data.cReadUint32(_dkimParamsStartIndex + uint256(DkimParamsIndex.fromRightIndex) * 4);
         if (fromIndex != 0) {
             require(_emailHeader.mcReadBytesN(fromIndex - 2, 7) == bytes32("\r\nfrom:"), "FE");
         } else {
@@ -232,21 +260,85 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
         } else {
             require(fromLeftIndex == fromIndex + 5, "AE");
         }
+    }
+
+    function _getEmailFrom(
+        bytes32 _pepper,
+        uint256 _dkimParamsStartIndex,
+        bytes calldata _data,
+        bytes calldata _emailHeader
+    ) internal pure returns (bytes32 emailHash) {
+        (, uint32 fromLeftIndex, uint32 fromRightIndex) = _getEmailFromIndexes(_dkimParamsStartIndex, _data, _emailHeader);
 
         emailHash = LibEmailHash.emailAddressHash(_emailHeader[fromLeftIndex:fromRightIndex + 1], _pepper);
     }
 
+    function _getEmailFromByZK(
+        uint256 _dkimParamsEndIndex,
+        uint256 _dkimParamsStartindex,
+        bytes calldata _data,
+        bytes calldata _emailHeader
+    )
+        internal
+        view
+        returns (
+            bytes32 emailHash,
+            bytes32 emailHeaderHash,
+            uint256 dkimParamsEndIndex
+        )
+    {
+        (, uint32 fromLeftIndex, uint32 fromRightIndex) = _getEmailFromIndexes(_dkimParamsStartindex, _data, _emailHeader);
+
+        (emailHash, emailHeaderHash, dkimParamsEndIndex) = _getEmailHashByZK(
+            fromLeftIndex,
+            fromRightIndex - fromLeftIndex + 1,
+            _dkimParamsEndIndex,
+            _emailHeader,
+            _data
+        );
+    }
+
+    function _getEmailHashByZK(
+        uint32 _fromLeftIndex,
+        uint32 _fromLen,
+        uint256 _dkimParamsEndIndex,
+        bytes calldata _headerPubMatch,
+        bytes calldata _data
+    )
+        internal
+        view
+        returns (
+            bytes32,
+            bytes32,
+            uint256
+        )
+    {
+        IDkimZK dkimZK = getDkimZK();
+        try dkimZK.getEmailHashByZK(_fromLeftIndex, _fromLen, _dkimParamsEndIndex, _headerPubMatch, _data) returns (
+            bytes32 emailHash,
+            bytes32 emailHeaderHash,
+            uint256 index
+        ) {
+            return (emailHash, emailHeaderHash, index);
+        } catch (bytes memory reason) {
+            revert GetEmailHashByZKRevert(reason);
+        }
+    }
+
     function _getDkimInfo(
         bytes calldata _data,
-        uint256 _index,
-        bytes calldata _emailHeader,
-        uint32 dkimHeaderIndex
+        uint256 _dkimParamsStartIndex,
+        bytes calldata _emailHeader
     ) internal pure returns (bytes32 selector, bytes32 sdid) {
+        uint32 dkimHeaderIndex;
+        (dkimHeaderIndex, ) = _data.cReadUint32(_dkimParamsStartIndex + uint256(DkimParamsIndex.dkimHeaderIndex) * 4);
+        require(_emailHeader.mcReadBytesN(dkimHeaderIndex - 2, 17) == bytes32("\r\ndkim-signature:"), "DE");
+
         {
             uint256 selectorIndex;
-            (selectorIndex, ) = _data.cReadUint32(_index + uint256(DkimParamsIndex.selectorIndex) * 4);
+            (selectorIndex, ) = _data.cReadUint32(_dkimParamsStartIndex + uint256(DkimParamsIndex.selectorIndex) * 4);
             uint256 selectorRightIndex;
-            (selectorRightIndex, ) = _data.cReadUint32(_index + uint256(DkimParamsIndex.selectorRightIndex) * 4);
+            (selectorRightIndex, ) = _data.cReadUint32(_dkimParamsStartIndex + uint256(DkimParamsIndex.selectorRightIndex) * 4);
             require(selectorIndex > dkimHeaderIndex, "DHE");
             require(_emailHeader.mcReadBytesN(selectorIndex - 4, 4) == bytes32("; s="), "DSE");
             selector = bytes32(_emailHeader[selectorIndex:selectorRightIndex]);
@@ -254,9 +346,9 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
 
         {
             uint256 sdidIndex;
-            (sdidIndex, ) = _data.cReadUint32(_index + uint256(DkimParamsIndex.sdidIndex) * 4);
+            (sdidIndex, ) = _data.cReadUint32(_dkimParamsStartIndex + uint256(DkimParamsIndex.sdidIndex) * 4);
             uint256 sdidRightIndex;
-            (sdidRightIndex, ) = _data.cReadUint32(_index + uint256(DkimParamsIndex.sdidRightIndex) * 4);
+            (sdidRightIndex, ) = _data.cReadUint32(_dkimParamsStartIndex + uint256(DkimParamsIndex.sdidRightIndex) * 4);
             require(sdidIndex > dkimHeaderIndex, "DHE");
 
             require(_emailHeader.mcReadBytesN(sdidIndex - 4, 4) == bytes32("; d="), "DDE");
@@ -265,37 +357,37 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
     }
 
     function _validateEmailDkim(
-        uint256 _index,
+        uint256 _dkimParamsStartIndex,
         bytes calldata _data,
-        uint256 _emailHeaderIndex,
-        bytes calldata _emailHeader
-    ) internal view returns (bool ret, uint256 emailHeaderIndex) {
-        bytes calldata dkimSig;
-        {
-            uint32 len;
-            (len, emailHeaderIndex) = _data.cReadUint32(_emailHeaderIndex);
-            dkimSig = _data[emailHeaderIndex:emailHeaderIndex + len];
-            emailHeaderIndex += len;
-        }
-
-        uint32 dkimHeaderIndex;
-        (dkimHeaderIndex, ) = _data.cReadUint32(_index + uint256(DkimParamsIndex.dkimHeaderIndex) * 4);
-        require(_emailHeader.mcReadBytesN(dkimHeaderIndex - 2, 17) == bytes32("\r\ndkim-signature:"), "DE");
+        bytes calldata _emailHeader,
+        bytes calldata _dkimSig
+    ) internal view returns (bool ret) {
         bytes32 selector;
-
         bytes32 sdid;
-        (selector, sdid) = _getDkimInfo(_data, _index, _emailHeader, dkimHeaderIndex);
+        (selector, sdid) = _getDkimInfo(_data, _dkimParamsStartIndex, _emailHeader);
 
         bytes memory n = getDKIMKey(abi.encodePacked(selector, sdid));
         require(n.length > 0, "zero");
-        ret = LibRsa.rsapkcs1Verify(sha256(_emailHeader), n, hex"010001", dkimSig);
+        ret = LibRsa.rsapkcs1Verify(sha256(_emailHeader), n, hex"010001", _dkimSig);
     }
 
-    function dkimVerify(
-        bytes32 _pepper,
-        uint256 _index,
-        bytes calldata _data
-    )
+    function _validateEmailDkimByZK(
+        bytes32 _emailHeaderHash,
+        uint256 _dkimParamsStartIndex,
+        bytes calldata _data,
+        bytes calldata _emailHeaderMatch,
+        bytes calldata _dkimSig
+    ) internal view returns (bool ret) {
+        bytes32 selector;
+        bytes32 sdid;
+        (selector, sdid) = _getDkimInfo(_data, _dkimParamsStartIndex, _emailHeaderMatch);
+
+        bytes memory n = getDKIMKey(abi.encodePacked(selector, sdid));
+        require(n.length > 0, "zero");
+        ret = LibRsa.rsapkcs1Verify(_emailHeaderHash, n, hex"010001", _dkimSig);
+    }
+
+    function dkimVerify(uint256 _dkimParamsStartIndex, bytes calldata _data)
         external
         view
         override
@@ -304,23 +396,47 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
             EmailType emailType,
             bytes32 emailHash,
             bytes32 subjectHash,
-            uint256 index
+            uint256 dkimParamsEndIndex
         )
     {
+        uint8 emailVerifyType = _data.mcReadUint8(_dkimParamsStartIndex);
+        ++_dkimParamsStartIndex;
+
         bytes calldata emailHeader;
+        bytes calldata dkimSig;
         {
-            index = DkimParamsIndexNum * 4 + _index;
+            dkimParamsEndIndex = DkimParamsIndexNum * 4 + _dkimParamsStartIndex;
             uint32 len;
-            (len, index) = _data.cReadUint32(index);
-            emailHeader = _data[index:index + len];
-            index += len;
+            (len, dkimParamsEndIndex) = _data.cReadUint32(dkimParamsEndIndex);
+            emailHeader = _data[dkimParamsEndIndex:dkimParamsEndIndex + len];
+            dkimParamsEndIndex += len;
+            (len, dkimParamsEndIndex) = _data.cReadUint32(dkimParamsEndIndex);
+            dkimSig = _data[dkimParamsEndIndex:dkimParamsEndIndex + len];
+            dkimParamsEndIndex += len;
         }
 
-        emailHash = _getEmailFrom(_pepper, _data, _index, emailHeader);
-        bytes memory subject;
-        (subject, emailType) = _validateEmailSubject(_index, _data, emailHeader);
-        subjectHash = keccak256(subject);
-        (ret, index) = _validateEmailDkim(_index, _data, index, emailHeader);
+        {
+            bytes memory subject;
+            (subject, emailType) = _validateEmailSubject(_dkimParamsStartIndex, _data, emailHeader);
+            subjectHash = keccak256(subject);
+        }
+        if (emailVerifyType == VERIFY_BY_ORI_EMAIL) {
+            bytes32 pepper = _data.mcReadBytes32(dkimParamsEndIndex);
+            dkimParamsEndIndex += 32;
+            emailHash = _getEmailFrom(pepper, _dkimParamsStartIndex, _data, emailHeader);
+            ret = _validateEmailDkim(_dkimParamsStartIndex, _data, emailHeader, dkimSig);
+        } else if (emailVerifyType == VERIFY_BY_ZK) {
+            bytes32 emailHeaderHash;
+            (emailHash, emailHeaderHash, dkimParamsEndIndex) = _getEmailFromByZK(
+                dkimParamsEndIndex,
+                _dkimParamsStartIndex,
+                _data,
+                emailHeader
+            );
+            ret = _validateEmailDkimByZK(emailHeaderHash, _dkimParamsStartIndex, _data, emailHeader, dkimSig);
+        } else {
+            revert InvalidEmailVerifyType(emailVerifyType);
+        }
     }
 
     function removeDotForEmailFrom(bytes calldata _emailFrom, uint256 _atSignIndex) internal pure returns (bytes memory fromRet) {
@@ -449,25 +565,5 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
         } else {
             revert InvalidEmailType(_emailType);
         }
-    }
-
-    function checkEmailFrom(bytes calldata _emailFrom, bytes32 _sdid) internal pure returns (bytes memory emailFromRet) {
-        uint256 atSignIndex = _emailFrom.findBytes1(0, AtSignBytes1);
-        bytes32 domain = _emailFrom.mcReadBytes32(atSignIndex + 1);
-
-        require(domain == bytes32("mail.unipass.me") || domain == _sdid, "ED");
-
-        if (
-            _sdid == bytes32("gmail.com") ||
-            _sdid == bytes32("googlemail.com") ||
-            _sdid == bytes32("protonmail.com") ||
-            _sdid == bytes32("proton.me") ||
-            _sdid == bytes32("pm.me")
-        ) {
-            emailFromRet = removeDotForEmailFrom(_emailFrom, atSignIndex);
-        } else {
-            emailFromRet = _emailFrom;
-        }
-        emailFromRet = emailFromRet.toLowerMemory();
     }
 }

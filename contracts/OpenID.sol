@@ -50,23 +50,6 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
     }
 
     function initialize() public initializer {
-        openIDPublicKey[
-            keccak256(abi.encodePacked("https://accounts.google.com", "ee1b9f88cfe3151ddd284a61bf8cecf659b130cf"))
-        ] = hex"ad33b155009d3cc33a9f75d15bb556e5ef1b182a229b14fe9b8714c9a4ed2c221fd48a85251873737ae0771b1da60e5f8e3d4b9f6c86febfb715b905609c3579b382c09ff196b21e2fb1595aa287976bb9b4f2a16240693ec87e48566b944bfa5fa5b6b4b717685b3ff2a7876c46ac5b703b4ba4a24babcc2ef70482e7ef1d21ccd56eb553a47dc333a8d25af7ac104e6a1645af65729bc3f779967dbbf8b4ed1144a941058475e71d81cc2d8d8287df896d99424556c139f4f108f74ea8e919c8541f18e323e572db3c75cb481966b0dcc54afdca80f85982f99f2b5d775543774458270d9e6affee052bcda3fcbd05ad86543d118103d0ab96fb7183f2c959";
-
-        openIDPublicKey[
-            keccak256(abi.encodePacked("https://accounts.google.com", "77cc0ef4c7181cf4c0dcef7b60ae28cc9022c76b"))
-        ] = hex"c8247565af478e94f8f46ca64509584ac360f33ecf646161e5adba21a0a8f3ac4fb8071fe95ba6aca606e9a2bd635061f6a27d301575a1a8e66ad4ee5ed73e16dab0a87f49cdb6fffa60981b2971d3c32aafcdf2755fdf21aeb88a5a55941cff2c70de0ca21835ea502c6aa530d43a895b8cf4c5fd35eb0ddffb70b9daa0cff2e5dc5664a62d03b15388c15f9f38fdf31fa87f7b460f6c822321cc4252cdcf7b4ae472351545fdf20df3d04e368db5487d420e831888b5c5ee435347a02ef42fe8275b477c0cc4d0e9f2e9e1168ac269e9e50fcba5cc1fed653d1fb7abb13ce1c4c76f45a47ea6cdf22c6dc4d9ed56817f0e8a61468fb1938272ca58d787b1a3";
-
-        openIDPublicKey[
-            keccak256(
-                abi.encodePacked(
-                    "https:\\/\\/cognito-idp.us-east-1.amazonaws.com\\/us-east-1_37CBi928o",
-                    "kRPZ1hNWuJm+hLZF7FdcVBGflXCB4uDdmWAe8H7ad2g="
-                )
-            )
-        ] = hex"d74ee879c2948502878b5c12054b51bd3fdde0afeef878428e3a8de2ac71910b9b73bde05ac88df71499c36ad6bde17881765414cc9d68d1c42ade78a730bd5e734578ad4a72e02582e0344227553e5a22e743092e99cd8af728ac5f8957a8fed352f24bda2e38197cec39ee8d843f49be4b84958068d51d59da35f20a0ab91f23b6b7a4aa556e1deb19b5283720fc42f7b08ca78f7d51cef4a1a097b1c94f2a1e347b805935767f83b605528373e4b44a407ba27ea5fbd6322ae1f0634189241db40c617fc7aa9b524315fa2b057e996e2848c56a2ad88c7d94296609ee8de0c0e77c2ed3e3a864e3f91a86fdb6149c2db7740b9ce8c641e237a768dd44a8a9";
-
         __UUPSUpgradeable_init();
     }
 

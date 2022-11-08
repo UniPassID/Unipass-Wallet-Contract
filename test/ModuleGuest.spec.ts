@@ -3,7 +3,7 @@ import { randomInt } from "crypto";
 import { Contract, ContractFactory, Overrides, Wallet } from "ethers";
 import { randomBytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
-import { optimalGasLimit } from "./utils/common";
+import { initDkimZK, optimalGasLimit, transferEth } from "./utils/common";
 import { Deployer } from "./utils/deployer";
 import { CallType, Transaction } from "./utils/sigPart";
 
@@ -24,6 +24,9 @@ describe("ModuleGuest", function () {
   let nonce: number;
   let sig: string;
   let txParams: Overrides;
+
+  let dkimZKAdmin: Wallet;
+  let dkimZK: Contract;
   this.beforeAll(async function () {
     const [signer] = await ethers.getSigners();
     deployer = await new Deployer(signer).init();
@@ -34,9 +37,15 @@ describe("ModuleGuest", function () {
     ModuleGuest = await ethers.getContractFactory("ModuleGuest");
     moduleGuest = await deployer.deployContract(ModuleGuest, 0, txParams);
 
+    const DkimZK = await ethers.getContractFactory("DkimZK");
+    dkimZKAdmin = Wallet.createRandom().connect(signer.provider!);
+    await transferEth(dkimZKAdmin.address, 10);
+    dkimZK = (await deployer.deployContract(DkimZK, 0, txParams, dkimZKAdmin.address)).connect(dkimZKAdmin);
+    await initDkimZK(dkimZK);
+
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     wallet = Wallet.createRandom();
-    dkimKeys = await deployer.deployContract(DkimKeys, 0, txParams, wallet.address);
+    dkimKeys = await deployer.deployContract(DkimKeys, 0, txParams, wallet.address, dkimZK.address);
 
     const CallReceiverMock = await ethers.getContractFactory("CallReceiverMock");
     callReceiverMock = await CallReceiverMock.deploy();

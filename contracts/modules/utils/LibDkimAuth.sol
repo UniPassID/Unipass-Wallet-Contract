@@ -10,7 +10,6 @@ library LibDkimAuth {
 
     function _dkimVerify(
         IDkimKeys _dkimKeys,
-        bytes32 _pepper,
         uint256 _index,
         bytes calldata _data
     )
@@ -24,7 +23,7 @@ library LibDkimAuth {
             uint256
         )
     {
-        try _dkimKeys.dkimVerify(_pepper, 0, _data[_index:]) returns (
+        try _dkimKeys.dkimVerify(0, _data[_index:]) returns (
             bool ret,
             IDkimKeys.EmailType emailType,
             bytes32 emailHash,

@@ -1,10 +1,29 @@
 import { BytesLike, constants, Contract, Wallet } from "ethers";
-import { arrayify, hexlify, joinSignature, keccak256, randomBytes, solidityPack, toUtf8Bytes } from "ethers/lib/utils";
-import { EmailType, getSignEmailWithDkim, parseEmailParams, pureEmailHash, SerializeDkimParams } from "./email";
+import {
+  arrayify,
+  hexlify,
+  joinSignature,
+  keccak256,
+  randomBytes,
+  sha256,
+  solidityPack,
+  toUtf8Bytes,
+} from "ethers/lib/utils";
+import {
+  EmailType,
+  getDkimParams,
+  getSignEmailWithDkim,
+  parseDkimResult,
+  parseEmailParams,
+  pureEmailHash,
+  SerializeDkimParams,
+  Signature,
+} from "./email";
 import { Role, signerSign } from "./sigPart";
 import * as jose from "jose";
-import { OPENID_AUDIENCE, OPENID_ISSUER, OPENID_KID } from "./common";
+import { buildResponse, OPENID_AUDIENCE, OPENID_ISSUER, OPENID_KID } from "./common";
 import NodeRSA from "node-rsa";
+import fetchPonyfill from "fetch-ponyfill";
 
 export enum KeyType {
   Secp256k1,
@@ -19,7 +38,8 @@ export interface RoleWeight {
 }
 
 function randomInt(max: number) {
-  return Math.ceil(Math.random() * (max + 1));
+  const rand = Math.random();
+  return Math.floor(rand * (max + 1));
 }
 
 export abstract class KeyBase {
@@ -60,6 +80,8 @@ export class KeySecp256k1 extends KeyBase {
 
 export interface EmailOptions {
   _isEmailOptions: true;
+  type: "ZK" | "Origin";
+  zkServerUrl?: string;
   emailAddress: string;
   pepper: string;
   unipassPrivateKey: string;
@@ -88,9 +110,12 @@ export interface OpenIDOptions {
 }
 
 export class KeyOpenIDWithEmail extends KeyBase {
+  private fetch;
   constructor(readonly inner: EmailOptions | OpenIDOptions, roleWeight: RoleWeight) {
     super(roleWeight);
+    this.fetch = fetchPonyfill().fetch;
   }
+
   public async generateSignature(digestHash: string): Promise<string> {
     if (isEmailOptions(this.inner)) {
       let subject: string;
@@ -127,19 +152,83 @@ export class KeyOpenIDWithEmail extends KeyBase {
           throw new Error(`Invalid EmailType: ${this.inner.emailType}`);
       }
       let email = await getSignEmailWithDkim(subject, this.inner.emailAddress, "test@unipass.me", this.inner.unipassPrivateKey);
-      let { params } = await parseEmailParams(email);
-      return solidityPack(
-        ["uint8", "uint8", "uint8", "bytes32", "bytes32", "bytes", "bytes"],
-        [
-          KeyType.OpenIDWithEmail,
-          1,
-          1,
-          this.inner.openIDHash,
-          this.inner.pepper,
-          SerializeDkimParams(params, this.inner.emailType),
-          this.serializeRoleWeight(),
-        ]
-      );
+      switch (this.inner.type) {
+        case "Origin": {
+          let { params } = await parseEmailParams(email);
+          return solidityPack(
+            ["uint8", "uint8", "uint8", "bytes32", "uint8", "bytes", "bytes32", "bytes"],
+            [
+              KeyType.OpenIDWithEmail,
+              1,
+              1,
+              this.inner.openIDHash,
+              0,
+              SerializeDkimParams(params, this.inner.emailType),
+              this.inner.pepper,
+              this.serializeRoleWeight(),
+            ]
+          );
+        }
+        case "ZK": {
+          const [, from, oriResults] = await parseDkimResult(email);
+          const results = oriResults.filter((result) => {
+            const signature = result.signature as any as Signature;
+            return signature.domain !== "1e100.net";
+          });
+          let res = await this.fetch(this.inner.zkServerUrl + "/request_proof", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              emailHeader: hexlify(toUtf8Bytes(results[0].processedHeader)),
+              fromPepper: this.inner.pepper,
+              headerHash: sha256(toUtf8Bytes(results[0].processedHeader)),
+            }),
+          });
+          let hash = await buildResponse(res);
+          await new Promise((resolve) => setTimeout(resolve, 30000));
+          res = await this.fetch(`${this.inner.zkServerUrl}/query_proof/${hash}`, {
+            method: "GET",
+          });
+          const ret = await buildResponse(res);
+          const params = getDkimParams(results, from);
+          params.emailHeader = ret.headerPubMatch;
+          let data = solidityPack(
+            [
+              "uint8",
+              "uint8",
+              "uint8",
+              "bytes32",
+              "uint8",
+              "bytes",
+              "uint128",
+              "uint32",
+              "uint256[]",
+              "uint32",
+              "uint256[]",
+              "uint32",
+              "uint256[]",
+              "bytes",
+            ],
+            [
+              KeyType.OpenIDWithEmail,
+              1,
+              1,
+              this.inner.openIDHash,
+              1,
+              SerializeDkimParams(params, this.inner.emailType),
+              ret.domainSize,
+              ret.publicInputs.length,
+              ret.publicInputs,
+              ret.vkData.length,
+              ret.vkData,
+              ret.proof.length,
+              ret.proof,
+              this.serializeRoleWeight(),
+            ]
+          );
+          return data;
+        }
+      }
     } else {
       let access_token = await new jose.SignJWT({ nonce: digestHash })
         .setProtectedHeader({ alg: "RS256", kid: this.inner.kid })
@@ -284,11 +373,16 @@ export class KeyERC1271Wallet extends KeyBase {
   }
 }
 
-export async function randomKeys(len: number, unipassPrivateKey: NodeRSA, contracts: [Contract, Wallet][]): Promise<KeyBase[]> {
+export async function randomKeys(
+  unipassPrivateKey: NodeRSA,
+  contracts: [Contract, Wallet][],
+  zkServerUrl?: string
+): Promise<KeyBase[]> {
   let ret: KeyBase[] = [];
-  for (let i = 0; i < len; i++) {
+  for (let i = 0; i < 20; i++) {
     for (const role of [Role.Owner, Role.AssetsOp, Role.Guardian]) {
-      let random = randomInt(3);
+      const maxInt = zkServerUrl ? 4 : 3;
+      let random = randomInt(maxInt);
       if (random === 0) {
         ret.push(new KeySecp256k1(Wallet.createRandom(), randomRoleWeight(role)));
       } else if (random === 1) {
@@ -298,11 +392,13 @@ export async function randomKeys(len: number, unipassPrivateKey: NodeRSA, contra
           new KeyOpenIDWithEmail(
             {
               _isEmailOptions: true,
+              type: "Origin",
               emailAddress: `${Buffer.from(randomBytes(10)).toString("hex")}@unipass.com`,
               pepper: hexlify(randomBytes(32)),
               unipassPrivateKey: unipassPrivateKey.exportKey("pkcs1"),
               emailType: EmailType.CallOtherContract,
               openIDHash: constants.HashZero,
+              zkServerUrl,
             },
             randomRoleWeight(role)
           )
@@ -322,6 +418,22 @@ export async function randomKeys(len: number, unipassPrivateKey: NodeRSA, contra
             randomRoleWeight(role)
           )
         );
+      } else if (random === 4) {
+        ret.push(
+          new KeyOpenIDWithEmail(
+            {
+              _isEmailOptions: true,
+              type: "ZK",
+              emailAddress: `${Buffer.from(randomBytes(10)).toString("hex")}@unipass.com`,
+              pepper: hexlify(randomBytes(32)),
+              zkServerUrl,
+              unipassPrivateKey: unipassPrivateKey.exportKey("pkcs1"),
+              emailType: EmailType.CallOtherContract,
+              openIDHash: constants.HashZero,
+            },
+            randomRoleWeight(role)
+          )
+        );
       }
     }
   }
@@ -335,6 +447,7 @@ export async function randomNewWallet(unipassPrivateKey: string): Promise<KeyBas
     new KeyOpenIDWithEmail(
       {
         _isEmailOptions: true,
+        type: "Origin",
         emailAddress: `${Buffer.from(randomBytes(10)).toString("hex")}@unipass.com`,
         pepper: hexlify(randomBytes(32)),
         unipassPrivateKey,
@@ -353,6 +466,7 @@ export async function randomNewWallet(unipassPrivateKey: string): Promise<KeyBas
     new KeyOpenIDWithEmail(
       {
         _isEmailOptions: true,
+        type: "ZK",
         emailAddress: `${Buffer.from(randomBytes(10)).toString("hex")}@unipass.com`,
         pepper: hexlify(randomBytes(32)),
         unipassPrivateKey,
@@ -374,21 +488,21 @@ export async function randomNewWallet(unipassPrivateKey: string): Promise<KeyBas
 export function randomRoleWeight(role: Role): RoleWeight {
   if (role === Role.Owner) {
     return {
-      ownerWeight: randomInt(40) + 10,
+      ownerWeight: randomInt(30) + 5,
       assetsOpWeight: 0,
       guardianWeight: 0,
     };
   } else if (role === Role.AssetsOp) {
     return {
       ownerWeight: 0,
-      assetsOpWeight: randomInt(40) + 10,
+      assetsOpWeight: randomInt(30) + 5,
       guardianWeight: 0,
     };
   } else if (role === Role.Guardian) {
     return {
       ownerWeight: 0,
       assetsOpWeight: 0,
-      guardianWeight: randomInt(40) + 10,
+      guardianWeight: randomInt(30) + 5,
     };
   } else {
     throw new Error(`Invalid Role: ${role}`);
