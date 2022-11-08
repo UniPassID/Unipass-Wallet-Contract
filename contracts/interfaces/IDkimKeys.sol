@@ -18,11 +18,7 @@ interface IDkimKeys {
 
     function getDKIMKey(bytes calldata _emailServer) external view returns (bytes memory);
 
-    function dkimVerify(
-        bytes32 _pepper,
-        uint256 _index,
-        bytes calldata _data
-    )
+    function dkimVerify(uint256 _index, bytes calldata _data)
         external
         view
         returns (

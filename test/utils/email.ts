@@ -131,18 +131,9 @@ export interface Signature {
   selector: string;
 }
 
-export function getDkimParams(
-  results: Dkim.VerifyResult[],
-  subs: Buffer[],
-  isSubBase64: boolean[],
-  subjectPadding: string,
-  fromHeader: string
-): DkimParams {
-  if (isSubBase64.length === 0) {
-    isSubBase64.push(false);
-  }
+export function getDkimParams(results: Dkim.VerifyResult[], fromHeader: string): DkimParams {
   for (const result of results) {
-    const processedHeader = result.processedHeader;
+    const processedHeader = Buffer.from(toUtf8Bytes(result.processedHeader));
     const fromIndex = processedHeader.indexOf("from:");
     const fromEndIndex = processedHeader.indexOf("\r\n", fromIndex);
 
@@ -166,16 +157,13 @@ export function getDkimParams(
     const selectorIndex = processedHeader.indexOf(signature.selector, processedHeader.indexOf("s=", dkimHeaderIndex));
     const selectorRightIndex = selectorIndex + signature.selector.length;
     const params = {
-      emailHeader: "0x" + Buffer.from(processedHeader, "utf-8").toString("hex"),
+      emailHeader: hexlify(processedHeader),
       dkimSig: "0x" + signature.signature.toString("hex"),
       fromIndex,
       fromLeftIndex,
       fromRightIndex,
       subjectIndex,
       subjectRightIndex: processedHeader.indexOf("\r\n", subjectIndex),
-      subject: subs,
-      subjectPadding: Buffer.from(subjectPadding, "utf-8"),
-      isSubBase64,
       dkimHeaderIndex,
       sdidIndex,
       sdidRightIndex,
@@ -192,7 +180,18 @@ export interface EmailParams {
   from: string;
 }
 
-export async function parseEmailParams(email: string): Promise<EmailParams> {
+export async function parseDkimResult(email: string): Promise<
+  [
+    {
+      subs: any[];
+      subsAllLen: number;
+      subjectPadding: string;
+      subIsBase64: any[];
+    },
+    string,
+    Dkim.VerifyResult[]
+  ]
+> {
   const mail = await mailParser.simpleParser(email, {
     subjectSep: " ",
     isSepBase64: true,
@@ -213,7 +212,12 @@ export async function parseEmailParams(email: string): Promise<EmailParams> {
   if (from.split("@")[1] === "unipass.id") {
     Dkim.configKey(null);
   }
-  const params = getDkimParams(results, subs.subs, subs.subIsBase64, subs.subjectPadding, from);
+  return [subs, from, results];
+}
+
+export async function parseEmailParams(email: string): Promise<EmailParams> {
+  const [subs, from, results] = await parseDkimResult(email);
+  const params = getDkimParams(results, from);
   return { params, from };
 }
 

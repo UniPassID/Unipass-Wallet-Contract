@@ -137,10 +137,8 @@ library LibUnipassSig {
 
         bool succ;
         bytes32 subjectHash;
-        bytes32 pepper = _signature.mcReadBytes32(index);
-        index += 32;
         bytes32 emailHash;
-        (succ, emailType, emailHash, subjectHash, index) = LibDkimAuth._dkimVerify(_dkimKeys, pepper, index, _signature);
+        (succ, emailType, emailHash, subjectHash, index) = LibDkimAuth._dkimVerify(_dkimKeys, index, _signature);
         require(succ, "_parseKeyOpenIDWithEmail: INVALID_DKIM");
         require(keccak256((LibBytes.toHex(uint256(_hash), 32))) == subjectHash, "_parseKeyOpenIDWithEmail: INVALID_SIG_HASH");
 

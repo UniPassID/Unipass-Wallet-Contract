@@ -178,6 +178,20 @@ library LibBytes {
         }
     }
 
+    function mcReadUint256Array(bytes calldata data, uint256 index) internal pure returns (uint256[] memory a, uint256 newIndex) {
+        uint32 len;
+        (len, newIndex) = data.cReadUint32(index);
+        a = new uint256[](len);
+        uint256 offset;
+        for (uint256 i; i < len; i++) {
+            offset += 32;
+            assembly {
+                mstore(add(a, offset), calldataload(add(data.offset, newIndex)))
+            }
+            newIndex += 32;
+        }
+    }
+
     /**
      * @dev Convert a `uint32` to its ASCII `bytes32`
      */

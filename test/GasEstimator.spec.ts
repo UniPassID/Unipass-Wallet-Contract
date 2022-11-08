@@ -6,6 +6,7 @@ import NodeRSA from "node-rsa";
 import {
   getKeysetHash,
   GUARDIAN_TIMELOCK_THRESHOLD,
+  initDkimZK,
   OPENID_AUDIENCE,
   OPENID_ISSUER,
   OPENID_KID,
@@ -42,6 +43,8 @@ describe("GasEstimation", function () {
   let dkimKeys: Contract;
   let fakeKeys: KeyBase[];
   let dkimKeysAdmin: Wallet;
+  let dkimZKAdmin: Wallet;
+  let dkimZK: Contract;
   let txParams: Overrides;
   let metaNonce: number;
   let unipassPrivateKey: NodeRSA;
@@ -52,6 +55,7 @@ describe("GasEstimation", function () {
   let chainId: number;
   let openIDAdmin: Wallet;
   let openID: Contract;
+  const zkServerUrl = process.env.ZK_SERVER_URL;
   this.beforeAll(async function () {
     const [signer] = await ethers.getSigners();
     deployer = await new Deployer(signer).init();
@@ -62,7 +66,7 @@ describe("GasEstimation", function () {
     };
 
     const TestERC1271Wallet = await ethers.getContractFactory("TestERC1271Wallet");
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 20; i++) {
       const wallet = Wallet.createRandom();
       const contract = await deployer.deployContract(TestERC1271Wallet, i, txParams, wallet.address);
       testERC1271Wallet.push([contract, wallet]);
@@ -81,10 +85,16 @@ describe("GasEstimation", function () {
     ret = await (await moduleWhiteList.updateHookWhiteList(greeter2.address, true)).wait();
     expect(ret.status).to.equals(1);
 
+    const DkimZK = await ethers.getContractFactory("DkimZK");
+    dkimZKAdmin = Wallet.createRandom().connect(signer.provider!);
+    await transferEth(dkimZKAdmin.address, 10);
+    dkimZK = (await deployer.deployContract(DkimZK, 0, txParams, dkimZKAdmin.address)).connect(dkimZKAdmin);
+    await initDkimZK(dkimZK);
+
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     dkimKeysAdmin = Wallet.createRandom().connect(signer.provider!);
     await transferEth(dkimKeysAdmin.address, 10);
-    dkimKeys = await deployer.deployContract(DkimKeys, 0, txParams, dkimKeysAdmin.address);
+    dkimKeys = await deployer.deployContract(DkimKeys, 0, txParams, dkimKeysAdmin.address, dkimZK.address);
 
     const OpenID = await ethers.getContractFactory("OpenID");
     openIDAdmin = Wallet.createRandom().connect(signer.provider!);
@@ -128,7 +138,7 @@ describe("GasEstimation", function () {
       )
     ).wait();
     expect(ret.status).to.equals(1);
-    fakeKeys = await randomKeys(10, unipassPrivateKey, testERC1271Wallet);
+    fakeKeys = await randomKeys(unipassPrivateKey, testERC1271Wallet, zkServerUrl);
   });
   this.beforeEach(async function () {
     moduleMainGasEstimator = await ModuleMainGasEstimator.deploy(
@@ -169,7 +179,7 @@ describe("GasEstimation", function () {
     expect(estimate.gas.toNumber() + txBaseCost(txData)).to.approximately(realTx.gasUsed.toNumber(), 5000);
   });
   it("Should estimate deploy + Account Layer Transaction + Transfer", async function () {
-    const keys = await randomKeys(10, unipassPrivateKey, testERC1271Wallet);
+    const keys = await randomKeys(unipassPrivateKey, testERC1271Wallet, zkServerUrl);
     const keysetHash = getKeysetHash(keys);
     const deployTxData = deployer.singleFactoryContract.interface.encodeFunctionData("deploy", [
       Deployer.getInitCode(moduleMainGasEstimator.address),

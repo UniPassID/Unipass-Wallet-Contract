@@ -172,7 +172,7 @@ async function main() {
           address: dkimKeys.address,
         },
         {
-          name: "DkimKeys",
+          name: "OpenID",
           address: openID.address,
         },
         {

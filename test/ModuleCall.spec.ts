@@ -8,6 +8,7 @@ import {
   getKeysetHash,
   GUARDIAN_THRESHOLD,
   GUARDIAN_TIMELOCK_THRESHOLD,
+  initDkimZK,
   OPENID_AUDIENCE,
   OPENID_ISSUER,
   OPENID_KID,
@@ -47,6 +48,8 @@ describe("ModuleCall", function () {
   let keys: KeyBase[];
   let keysetHash: string;
   let dkimKeysAdmin: Wallet;
+  let dkimZKAdmin: Wallet;
+  let dkimZK: Contract;
   let chainId: number;
   let txParams: Overrides;
   let nonce: number;
@@ -59,6 +62,7 @@ describe("ModuleCall", function () {
   let moduleWhiteList: Contract;
   let openIDAdmin: Wallet;
   let openID: Contract;
+  const zkServerUrl = process.env.ZK_SERVER_URL;
   this.beforeAll(async function () {
     const TestERC1271Wallet = await ethers.getContractFactory("TestERC1271Wallet");
     const [signer] = await ethers.getSigners();
@@ -69,7 +73,7 @@ describe("ModuleCall", function () {
       gasPrice: (await signer.provider?.getGasPrice())?.mul(12).div(10),
     };
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 20; i++) {
       const wallet = Wallet.createRandom();
       testERC1271Wallet.push([await deployer.deployContract(TestERC1271Wallet, i, txParams, wallet.address), wallet]);
     }
@@ -87,10 +91,16 @@ describe("ModuleCall", function () {
     ret = await (await moduleWhiteList.updateHookWhiteList(greeter2.address, true)).wait();
     expect(ret.status).to.equals(1);
 
+    const DkimZK = await ethers.getContractFactory("DkimZK");
+    dkimZKAdmin = Wallet.createRandom().connect(signer.provider!);
+    await transferEth(dkimZKAdmin.address, 10);
+    dkimZK = (await deployer.deployContract(DkimZK, 0, txParams, dkimZKAdmin.address)).connect(dkimZKAdmin);
+    await initDkimZK(dkimZK);
+
     const DkimKeys = await ethers.getContractFactory("DkimKeys");
     dkimKeysAdmin = Wallet.createRandom().connect(signer.provider!);
     await transferEth(dkimKeysAdmin.address, 10);
-    dkimKeys = await deployer.deployContract(DkimKeys, 0, txParams, dkimKeysAdmin.address);
+    dkimKeys = await deployer.deployContract(DkimKeys, 0, txParams, dkimKeysAdmin.address, dkimZK.address);
 
     const OpenID = await ethers.getContractFactory("OpenID");
     openIDAdmin = Wallet.createRandom().connect(signer.provider!);
@@ -152,7 +162,7 @@ describe("ModuleCall", function () {
     expect(ret.status).to.equals(1);
   });
   this.beforeEach(async function () {
-    keys = await randomKeys(10, unipassPrivateKey, testERC1271Wallet);
+    keys = await randomKeys(unipassPrivateKey, testERC1271Wallet, zkServerUrl);
     keysetHash = getKeysetHash(keys);
 
     proxyTestModuleCall = await deployer.deployProxyContract(
@@ -175,7 +185,7 @@ describe("ModuleCall", function () {
     ["ModuleAuthFixed", "ModuleAuthUpgradable"].forEach(async (module) => {
       const init = async () => {
         if (module === "ModuleAuthUpgradable") {
-          const newKeys = await randomKeys(10, unipassPrivateKey, testERC1271Wallet);
+          const newKeys = await randomKeys(unipassPrivateKey, testERC1271Wallet, zkServerUrl);
           const newKeysetHash = getKeysetHash(newKeys);
           const selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
           const tx = await generateUpdateKeysetHashTx(
