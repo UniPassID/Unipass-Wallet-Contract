@@ -140,7 +140,7 @@ describe("Test Open ID", function () {
         signature,
       ]
     );
-    const [succ, , issHash, subHash, nonceHash] = await openID.callStatic.validateAccessToken(0, data);
+    const [succ, , issHash, subHash, nonceHash] = await openID.callStatic.validateIDToken(0, data);
     expect(succ).to.true;
     expect(issHash).to.equals(keccak256(toUtf8Bytes(OPENID_ISSUER)));
     expect(subHash).to.equals(keccak256(toUtf8Bytes(sub)));

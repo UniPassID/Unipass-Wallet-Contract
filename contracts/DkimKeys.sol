@@ -202,7 +202,7 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
         bytes calldata subjectHeader = _getSubjectHeader(_dkimParamsStartIndex, _data, _emailHeader);
         bytes memory decodedSubject = _parseSubjectHeader(subjectHeader);
         uint32 emailTypeInt;
-        (emailTypeInt, ) = _data.cReadUint32(_dkimParamsStartIndex + uint256(DkimParamsIndex.emailType));
+        (emailTypeInt, ) = _data.cReadUint32(_dkimParamsStartIndex + uint256(DkimParamsIndex.emailType) * 4);
         emailType = (EmailType)(emailTypeInt);
         sigHashHex = _checkSubjectHeader(decodedSubject, emailType);
     }
@@ -552,12 +552,9 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
             );
             (sigHashHex, ) = _decodedSubjectHeader.readBytes66(30);
         } else if (_emailType == EmailType.SyncAccount) {
-            require(_decodedSubjectHeader.length == 89, "_checkSubjectHeader: INVALID_LENGTH");
-            require(
-                _decodedSubjectHeader.readBytesN(0, 25) == "UniPass-Deploy-Account-0x",
-                "_checkSubjectHeader: INVALID_HEADER"
-            );
-            (sigHashHex, ) = _decodedSubjectHeader.readBytes66(23);
+            require(_decodedSubjectHeader.length == 87, "_checkSubjectHeader: INVALID_LENGTH");
+            require(_decodedSubjectHeader.readBytesN(0, 23) == "UniPass-Sync-Account-0x", "_checkSubjectHeader: INVALID_HEADER");
+            (sigHashHex, ) = _decodedSubjectHeader.readBytes66(21);
         } else if (_emailType == EmailType.CallOtherContract) {
             require(_decodedSubjectHeader.length == 88, "_checkSubjectHeader: INVALID_LENGTH");
             require(_decodedSubjectHeader.readBytesN(0, 24) == "UniPass-Call-Contract-0x", "_checkSubjectHeader: INVALID_HEADER");

@@ -19,7 +19,7 @@ library LibUnipassSig {
 
     bytes4 internal constant SELECTOR_ERC1271_BYTES32_BYTES = 0x1626ba7e;
     uint8 private constant OPENID_EMAIL_SIG = 1;
-    uint8 private constant OPENID_ACCESS_TOKEN_SIG = 2;
+    uint8 private constant OPENID_ID_TOKEN_SIG = 2;
 
     error InvalidKeyType(KeyType _keyType);
     error InvalidOpenIDWithEmailSig(uint8 _sigType);
@@ -106,7 +106,7 @@ library LibUnipassSig {
             ++index;
             if (sigType == OPENID_EMAIL_SIG) {
                 (emailType, ret, index) = _validateEmailSig(_dkimKeys, _hash, index, _signature);
-            } else if (sigType == OPENID_ACCESS_TOKEN_SIG) {
+            } else if (sigType == OPENID_ID_TOKEN_SIG) {
                 (ret, index) = _validateOpenIDSig(_openID, _hash, index, _signature);
             } else {
                 revert InvalidOpenIDWithEmailSig(sigType);
