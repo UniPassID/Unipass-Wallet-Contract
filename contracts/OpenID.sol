@@ -110,7 +110,7 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
         require(timestamp > bytes32(iat) && timestamp < bytes32(exp), "_validateTimestamp: INVALID_TIMESTAMP");
     }
 
-    function validateAccessToken(uint256 _index, bytes calldata _data)
+    function validateIDToken(uint256 _index, bytes calldata _data)
         external
         view
         returns (

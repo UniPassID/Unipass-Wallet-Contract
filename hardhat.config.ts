@@ -7,7 +7,6 @@ import "@typechain/hardhat";
 import "hardhat-gas-reporter";
 import "solidity-coverage";
 import "@openzeppelin/hardhat-upgrades";
-import "@tenderly/hardhat-tenderly";
 import "hardhat-contract-sizer";
 import "hardhat-change-network";
 import "hardhat-dependency-compiler";
@@ -29,7 +28,7 @@ task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
 
 const config: HardhatUserConfig = {
   solidity: {
-    version: "0.8.17",
+    version: "0.8.15",
     settings: {
       optimizer: {
         enabled: true,
@@ -64,15 +63,8 @@ const config: HardhatUserConfig = {
     enabled: process.env.REPORT_GAS !== undefined,
     currency: "USD",
   },
-  etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY,
-  },
   mocha: {
     timeout: 100000000,
-  },
-  tenderly: {
-    project: "@UniPassID/unipass-wallet",
-    username: "zz",
   },
   dependencyCompiler: {
     paths: ["@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol"],

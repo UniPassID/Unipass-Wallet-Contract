@@ -1,34 +1,38 @@
 [
   {
-    "contractName": "DkimKeys",
-    "address": "0xffEF85eb9b6FDd5462E7255FA4ab6E09Dc98e2aE"
+    "contractName": "DkimZK",
+    "address": "0x2e3D747Db1Ca2D464F65F3F94CC35839a43DE1d8"
   },
   {
     "contractName": "DkimKeys",
-    "address": "0x0E12aDcD52376614A14653f389801B7E25887aE5"
+    "address": "0x9D12e851442bDf1224E061e2994AB2DcaC051fa0"
+  },
+  {
+    "contractName": "OpenID",
+    "address": "0xaFc5526be0F5CcF5Da4B4d54A31f1d761Fe62C7f"
   },
   {
     "contractName": "ModuleWhiteList",
-    "address": "0x40F589896987eF460CaD5f37460d717d2Bf6d3FE"
+    "address": "0x28101Ce1aDFf9a017C818e9d522992bE6D490048"
   },
   {
     "contractName": "ModuleMain",
-    "address": "0x0B9B8631501DF5Fc9D7444CEb88080eCb77b4fBb"
+    "address": "0xF40BDC4b39477CADd74726c2c1943fF5047Ca391"
   },
   {
     "contractName": "ModuleMainUpgradable",
-    "address": "0xACb3b9f3BfE579b0DB0372a317AB4243189695fa"
+    "address": "0x300a359B7365162263B729d77467a5016D40A4Da"
   },
   {
     "contractName": "ModuleGuest",
-    "address": "0xA9dC809f017320362cAa0f973c4eB34234FefB77"
+    "address": "0x176C1CD760768E3aaD920A42d3f68E91428A86Ed"
   },
   {
     "contractName": "GasEstimator",
-    "address": "0x6041ae26F00BCec8c04a27190cB75f400a6582d3"
+    "address": "0x9E14b7098B2BBE2D24D665Fc4E8f5E7B6612d44D"
   },
   {
     "contractName": "FeeEstimator",
-    "address": "0xF4962123A0D5832ec96F95e493E6675B1A507b32"
+    "address": "0xfd29209EA318F3CAa829156b6216d922c3d63AE6"
   }
 ]

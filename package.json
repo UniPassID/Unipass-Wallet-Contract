@@ -23,7 +23,6 @@
     "@nomiclabs/hardhat-etherscan": "^3.1.0",
     "@nomiclabs/hardhat-waffle": "^2.0.3",
     "@openzeppelin/hardhat-upgrades": "^1.19.0",
-    "@tenderly/hardhat-tenderly": "^1.1.4",
     "@typechain/ethers-v5": "^7.2.0",
     "@typechain/hardhat": "^2.3.1",
     "@types/chai": "^4.3.1",
@@ -64,8 +63,8 @@
   },
   "dependencies": {
     "@0xsequence/deployer": "^0.39.6",
-    "@openzeppelin/contracts": "^4.7.0",
+    "@openzeppelin/contracts": "=4.7.0",
     "@openzeppelin/contracts-upgradeable": "^4.7.3",
-    "UniPass-verifier-contract": "github:UniPassID/UniPass-verifier-contract#0.3"
+    "UniPass-verifier-contract": "github:UniPassID/UniPass-verifier-contract#0.3.2"
   }
 }

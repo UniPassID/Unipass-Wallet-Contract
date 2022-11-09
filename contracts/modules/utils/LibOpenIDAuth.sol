@@ -23,7 +23,7 @@ library LibOpenIDAuth {
             bytes32
         )
     {
-        try _openID.validateAccessToken(0, _data[_index:]) returns (
+        try _openID.validateIDToken(0, _data[_index:]) returns (
             bool succ,
             uint256 index,
             bytes32 issHash,

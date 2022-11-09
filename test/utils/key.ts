@@ -1,14 +1,5 @@
 import { BytesLike, constants, Contract, Wallet } from "ethers";
-import {
-  arrayify,
-  hexlify,
-  joinSignature,
-  keccak256,
-  randomBytes,
-  sha256,
-  solidityPack,
-  toUtf8Bytes,
-} from "ethers/lib/utils";
+import { arrayify, hexlify, joinSignature, keccak256, randomBytes, sha256, solidityPack, toUtf8Bytes } from "ethers/lib/utils";
 import {
   EmailType,
   getDkimParams,
@@ -145,7 +136,7 @@ export class KeyOpenIDWithEmail extends KeyBase {
           break;
         }
         case EmailType.SyncAccount: {
-          subject = `UniPass-Deploy-Account-${digestHash}`;
+          subject = `UniPass-Sync-Account-${digestHash}`;
           break;
         }
         default:
@@ -185,11 +176,14 @@ export class KeyOpenIDWithEmail extends KeyBase {
             }),
           });
           let hash = await buildResponse(res);
-          await new Promise((resolve) => setTimeout(resolve, 30000));
-          res = await this.fetch(`${this.inner.zkServerUrl}/query_proof/${hash}`, {
-            method: "GET",
-          });
-          const ret = await buildResponse(res);
+          let ret;
+          while (!ret) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            res = await this.fetch(`${this.inner.zkServerUrl}/query_proof/${hash}`, {
+              method: "GET",
+            });
+            ret = await buildResponse(res);
+          }
           const params = getDkimParams(results, from);
           params.emailHeader = ret.headerPubMatch;
           let data = solidityPack(

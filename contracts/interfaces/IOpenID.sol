@@ -5,7 +5,7 @@ import "../modules/utils/LibEmailHash.sol";
 import "../interfaces/IModuleAccount.sol";
 
 interface IOpenID {
-    function validateAccessToken(uint256 _index, bytes calldata _data)
+    function validateIDToken(uint256 _index, bytes calldata _data)
         external
         view
         returns (
