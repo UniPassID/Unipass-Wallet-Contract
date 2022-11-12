@@ -31,6 +31,7 @@
     "@types/nodemailer": "^6.4.4",
     "@typescript-eslint/eslint-plugin": "^4.33.0",
     "@typescript-eslint/parser": "^4.33.0",
+    "@ethersproject/hardware-wallets": "^5.7.0",
     "chai": "^4.3.6",
     "dotenv": "^16.0.1",
     "eslint": "^7.32.0",
@@ -66,5 +67,10 @@
     "@openzeppelin/contracts": "=4.7.0",
     "@openzeppelin/contracts-upgradeable": "^4.7.3",
     "UniPass-verifier-contract": "github:UniPassID/UniPass-verifier-contract#0.3.2"
+  },
+  "resolutions": {
+    "@ledgerhq/hw-app-eth": "5.47.1",
+    "@ledgerhq/hw-transport": "5.46.0",
+    "@ledgerhq/hw-transport-u2f": "5.36.0-deprecated"
   }
 }
