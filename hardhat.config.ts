@@ -58,6 +58,22 @@ const config: HardhatUserConfig = {
       url: process.env.GOERLI_TESTNET_URL || "",
       accounts: process.env.GOERLI_TESTNET_PRIVATE_KEY !== undefined ? [process.env.GOERLI_TESTNET_PRIVATE_KEY] : [],
     },
+    polygon_mainnet: {
+      url: process.env.POLYGON_MAINNET_URL || "",
+      accounts: process.env.POLYGON_MAINNET_PRIVATE_KEY !== undefined ? [process.env.POLYGON_MAINNET_PRIVATE_KEY] : [],
+    },
+    bsc_mainnet: {
+      url: process.env.BSC_MAINNET_URL || "",
+      accounts: process.env.BSC_MAINNET_PRIVATE_KEY !== undefined ? [process.env.BSC_MAINNET_PRIVATE_KEY] : [],
+    },
+    rangers_mainnet: {
+      url: process.env.RANGERS_MAINNET_URL || "",
+      accounts: process.env.RANGERS_MAINNET_PRIVATE_KEY !== undefined ? [process.env.RANGERS_MAINNET_PRIVATE_KEY] : [],
+    },
+    eth_mainnet: {
+      url: process.env.ETH_MAINNET_URL || "",
+      accounts: process.env.ETH_MAINNET_PRIVATE_KEY !== undefined ? [process.env.ETH_MAINNET_PRIVATE_KEY] : [],
+    },
   },
   gasReporter: {
     enabled: process.env.REPORT_GAS !== undefined,

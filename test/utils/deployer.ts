@@ -106,7 +106,7 @@ export class Deployer {
     txParams: Overrides,
     ...args: Parameters<T["deploy"]>
   ): Promise<Contract> {
-    const deployTx = await contractFactory.getDeployTransaction(...args);
+    const deployTx = contractFactory.getDeployTransaction(...args);
     if (deployTx.data === undefined) {
       throw new Error("Expected Data For Deploy Tx");
     }

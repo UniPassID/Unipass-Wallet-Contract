@@ -12,21 +12,21 @@ const txParams = {
 
 async function main() {
   for (const addr of [
-    "0x4cB90069A9C6143E9F37fe5625ecbc0db3B88435",
-    "0xEA217a9DA14835c8a1CaDFa048f2375Bba93e1bE",
-    "0xD1313D1A01CC65F193AAC61f7b39F9DCff69d9Eb",
-    "0xd4777C529D8d65dba9b0eCB09d4e58cDeeADB8fe",
-    "0x10173a408193E1f6B7e7B253c076F7D593668AC5",
-    "0x7e0daf27f95d7444a67ead7c7060c23d4ab05c27",
-    "0x0d730c79108b88db1f6d665dc25c4f11dc1e2f7c",
-    "0x20d893bb9f3cb3b31949e5351338ee8857c5bad0",
-    "0x44d51a1f2a00695ce1b9f8f2ddf482e35a280b0d",
-    "0x264ac2c4bda11f824b468ee16895f8adc17fbb88",
-    "0x12918cae19193e39875afdc284223d27d6d01bd9",
-    "0xd7a4ba360a6d8b6867a79ae80a7de55d4c7b0fc2",
-    "0x0798ba216cfbd579f135d91663deb165edb270bc",
-    "0xfe4d581b34785cf63eaeaf738d88f58798647be3",
-    "0xc5405927901be723e927e9b7a84289eb7a0b66f5",
+    "0x379eea612c1a1b6a8c63e3c17cc19910b8a47376",
+    "0x5ce8332e1605eac27ad2535d3a9366d09b3a646f",
+    "0x413c3105954945bfffff263bd4c044d16a4ba79e",
+    "0xf3639b1d454f8ba382ef732f9b58717993a0e28e",
+    "0x9242ea3c4b32dbab17bc0f861118bd72062c57e0",
+    "0xc25e854cd5a318ca73999638e74f70329efccef1",
+    "0x3decce449859af7ad471ded2f56069d465160e61",
+    "0xe67c592ad6f242a7fa82a6b96af6c505818961f8",
+    "0x5532c8b8efa8cd81afd1f9de988cdee6ae2443d3",
+    "0xca8871336e1973c5dbcd46dbbca2576f703990a8",
+    "0x8c6caa65b67b069c8f02d32a05a5139de973c8ef",
+    "0x03dec4b534a6c17bedd489de330b2f89ff3a115a",
+    "0x2698e40a9d94fcc3f9d1aff04c8f53fe041636df",
+    "0x32591fd2e5f35f6f80915dbec66f15c4cd56f59c",
+    "0x55cfaf2796a47b5a1adb086787e52c9991cb05cc",
   ]) {
     const ret = await (await signer.sendTransaction({ to: addr, value: parseEther("1") })).wait();
     expect(ret.status).to.equal(1);
