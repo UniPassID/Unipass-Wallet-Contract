@@ -37,7 +37,7 @@ describe("Test Open ID", function () {
     privateKey = await jose.importPKCS8(nodeRsa.exportKey("pkcs8-pem"), "RS256");
 
     let ret = await (
-      await openID.updateOpenIDPublidKey(
+      await openID.updateOpenIDPublicKey(
         keccak256(solidityPack(["bytes", "bytes"], [toUtf8Bytes(OPENID_ISSUER), toUtf8Bytes(OPENID_KID)])),
         nodeRsa.exportKey("components-public").n.slice(1)
       )

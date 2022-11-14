@@ -41,7 +41,7 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
     mapping(bytes32 => bytes) openIDPublicKey;
 
     /**
-     * openIDAudience: keccak256(issuser + audiance) => is valid
+     * openIDAudience: keccak256(issuser + audience) => is valid
      */
     mapping(bytes32 => bool) openIDAudience;
 
@@ -57,7 +57,7 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
         publicKey = openIDPublicKey[_key];
     }
 
-    function updateOpenIDPublidKey(bytes32 _key, bytes calldata _publicKey) external onlyAdmin {
+    function updateOpenIDPublicKey(bytes32 _key, bytes calldata _publicKey) external onlyAdmin {
         openIDPublicKey[_key] = _publicKey;
         emit UpdateOpenIDPublicKey(_key, _publicKey);
     }
@@ -230,7 +230,7 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
         uint32 kidRightIndex;
         (kidRightIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.kidRightIndex) * 4 + _index);
         bytes2 suffix = bytes2(_header[kidRightIndex:kidRightIndex + 2]);
-        require(suffix == bytes2('",') || suffix == bytes2('"}'), "_getIss: INVALID_KID_RIGHT");
+        require(suffix == bytes2('",') || suffix == bytes2('"}'), "_getKid: INVALID_KID_RIGHT");
 
         kid = _header[kidLeftIndex:kidRightIndex];
     }

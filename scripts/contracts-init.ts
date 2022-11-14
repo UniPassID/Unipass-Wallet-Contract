@@ -96,7 +96,7 @@ async function openIDInitPublicKey(openID: Contract) {
     const n = base64url.toBuffer(pubKey);
     if ((await openID.callStatic.getOpenIDPublicKey(key)) !== hexlify(n)) {
       console.log("Updating OpenID Public Key");
-      const ret = await (await openID.updateOpenIDPublidKey(key, n, txParams)).wait();
+      const ret = await (await openID.updateOpenIDPublicKey(key, n, txParams)).wait();
       expect(ret.status).to.equals(1);
     } else {
       console.log("OpenID Public Key Has Been Updated");

@@ -151,7 +151,7 @@ describe("ModuleMain", function () {
     ).wait();
     expect(ret.status).to.equals(1);
     ret = await (
-      await openID.updateOpenIDPublidKey(
+      await openID.updateOpenIDPublicKey(
         keccak256(solidityPack(["bytes", "bytes"], [toUtf8Bytes(OPENID_ISSUER), toUtf8Bytes(OPENID_KID)])),
         unipassPrivateKey.exportKey("components-public").n.slice(1)
       )
@@ -547,7 +547,7 @@ describe("ModuleMain", function () {
       ret = await (
         await localOpenID
           .connect(openIDAdmin)
-          .updateOpenIDPublidKey(
+          .updateOpenIDPublicKey(
             keccak256(solidityPack(["bytes", "bytes"], [toUtf8Bytes(OPENID_ISSUER), toUtf8Bytes(OPENID_KID)])),
             unipassPrivateKey.exportKey("components-public").n.slice(1)
           )
