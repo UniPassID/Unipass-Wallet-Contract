@@ -11,11 +11,13 @@ import "./DkimZK.sol";
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 
 import "hardhat/console.sol";
 
 contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable {
     using LibBytes for bytes;
+    using Address for address;
 
     mapping(bytes => bytes) private dkimKeys;
 
@@ -167,7 +169,7 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
 
     function _authorizeUpgrade(address newImplementation) internal override onlyAdmin {}
 
-    function _writeDkimZK(IDkimKeys _dkimZK) internal {
+    function _writeDkimZK(IDkimZK _dkimZK) internal {
         ModuleStorage.writeBytes32(DKIM_ZK_KEY, bytes32(bytes20(address(_dkimZK))));
     }
 
@@ -178,6 +180,11 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
     function getDkimZK() public view returns (IDkimZK dkimZK) {
         dkimZK = _readDkimZK();
         if (address(dkimZK) == address(0)) dkimZK = INIT_DKIM_ZK;
+    }
+
+    function updateDkimZK(IDkimZK _dkimZK) external onlyAdmin {
+        require(address(_dkimZK).isContract(), "updateDkimZK: INVALID_DKIM_ZK");
+        _writeDkimZK(_dkimZK);
     }
 
     function getDKIMKey(bytes memory _emailServer) public view override returns (bytes memory) {
