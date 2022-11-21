@@ -62,18 +62,6 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
         emit UpdateOpenIDPublicKey(_key, _publicKey);
     }
 
-    function batchUpdateOpenIDPublicKey(bytes32[] calldata _keys, bytes[] calldata _publicKeys) external onlyAdmin {
-        uint256 length = _keys.length;
-        require(length == _publicKeys.length, "batchUpdateOpenIDPublicKey: INVALID_LENGTH");
-
-        for (uint256 i; i < length; i++) {
-            bytes32 key = _keys[i];
-            bytes calldata publicKey = _publicKeys[i];
-            openIDPublicKey[key] = publicKey;
-            emit UpdateOpenIDPublicKey(key, publicKey);
-        }
-    }
-
     function deleteOpenIDPublicKey(bytes32 _key) external onlyAdmin {
         delete openIDPublicKey[_key];
         emit DeleteOpenIdPublicKey(_key);

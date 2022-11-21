@@ -1,6 +1,6 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { constants, Contract } from "ethers";
-import { formatBytes32String, hexlify, keccak256, randomBytes, solidityPack, toUtf8Bytes } from "ethers/lib/utils";
+import { hexlify, keccak256, randomBytes, solidityPack, toUtf8Bytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import { Deployer } from "./utils/deployer";
 import * as jose from "jose";
@@ -145,37 +145,5 @@ describe("Test Open ID", function () {
     expect(issHash).to.equals(keccak256(toUtf8Bytes(OPENID_ISSUER)));
     expect(subHash).to.equals(keccak256(toUtf8Bytes(sub)));
     expect(nonceHash).to.equals(keccak256(toUtf8Bytes(constants.HashZero)));
-  });
-
-  it("Batch Update OpenID Public Keys Should Success", async () => {
-    let keys: string[] = [];
-    let pubKeys: string[] = [];
-    for (const { iss, kid, pubKey } of [
-      {
-        iss: "https://accounts.google.com",
-        kid: "27b86dc6938dc327b204333a250ebb43b32e4b3c",
-        pubKey:
-          "1X7rNtYVglDjBJgsBOSv7C6MYU6Mv-yraGOp_AGs777c2UcVGj88dBe9KihGicQ3LqU8Vf5fVhPixVy0GFBS7mJt3qJryyBpmG7sChnJQBwJmZEffZUl_rLtwGli8chbZj_Fpgjd-7t74VQJmn2SYkFqHNB3vrW_I8zmwn7_Enn4N84d4dP5R9UChUSLhuPNKaKA-a4vtTKy1LNoZpbr6LG1_QaWGDKNhgPWR-6l5fmBdaXtUgDmPFwdQZuiBUDfnPQ7t1lSUD2PJMnG3M9DKG5gqpSk1L1AlWsxntideNsKWIviZ5PhCpmzEComWNtFtFrzfAWQvLkBbgb0pwWp5w",
-      },
-      {
-        iss: "https://accounts.google.com",
-        kid: "713fd68c966e29380981edc0164a2f6c06c5702a",
-        pubKey:
-          "z8PS6saDU3h5ZbQb3Lwl_Arwgu65ECMi79KUlzx4tqk8bgxtaaHcqyvWqVdsA9H6Q2ZtQhBZivqV4Jg0HoPHcEwv46SEziFQNR2LH86e-WIDI5pk2NKg_9cFMee9Mz7f_NSQJ3uyD1pu86bdUTYhCw57DbEVDOuubClNMUV456dWx7dx5W4kdcQe63vGg9LXQ-9PPz9AL-0ZKr8eQEHp4KRfRUfngjqjYBMTFuuo38l94KR99B04Z-FboGnqYLgNxctwZ9eXbCerb9bV5-Q9Gb3zoo0x1h90tFdgmC2ZU1xcIIjHmFqJ29mSDZHYAAYtMNAeWreK4gqWJunc9o0vpQ",
-      },
-    ]) {
-      const key = keccak256(solidityPack(["bytes", "bytes"], [toUtf8Bytes(iss), toUtf8Bytes(kid)]));
-      const n = base64url.toBuffer(pubKey);
-      keys.push(key);
-      pubKeys.push(hexlify(n));
-    }
-
-    const ret = await (await openID.batchUpdateOpenIDPublicKey(keys, pubKeys)).wait();
-    expect(ret.status).to.equals(1);
-    for (const [key, pubKey] of keys.map(function (e, i) {
-      return [e, pubKeys[i]];
-    })) {
-      expect(await openID.callStatic.getOpenIDPublicKey(key)).to.equals(pubKey);
-    }
   });
 });

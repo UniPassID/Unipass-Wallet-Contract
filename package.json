@@ -63,6 +63,7 @@
     "fetch-ponyfill": "^7.1.0"
   },
   "dependencies": {
+    "@0xsequence/deployer": "^0.39.6",
     "@openzeppelin/contracts": "=4.7.0",
     "@openzeppelin/contracts-upgradeable": "^4.7.3",
     "UniPass-verifier-contract": "github:UniPassID/UniPass-verifier-contract#0.3.2"
