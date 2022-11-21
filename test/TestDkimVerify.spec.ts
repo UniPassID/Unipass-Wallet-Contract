@@ -13,7 +13,7 @@ import {
 import * as fs from "fs";
 import { Deployer } from "./utils/deployer";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { arrayify, formatBytes32String, hexlify, randomBytes, solidityPack, toUtf8Bytes } from "ethers/lib/utils";
+import { arrayify, hexlify, randomBytes, solidityPack, toUtf8Bytes } from "ethers/lib/utils";
 import fetchPonyfill from "fetch-ponyfill";
 import { sha256 } from "ethereumjs-util";
 import { buildResponse, initDkimZK } from "./utils/common";
@@ -167,37 +167,5 @@ describe("TestDkimVerify", function () {
       };
       await expect(upgrade()).to.revertedWith("NOT_AUTHORIZED");
     });
-  });
-
-  it("Batch Update Public Keys Should Success", async () => {
-    let emailServers: string[] = [];
-    let keys: string[] = [];
-    for (const { selector, domain, n } of [
-      {
-        selector: formatBytes32String("20161025"),
-        domain: formatBytes32String("gmail.com"),
-        n: hexlify(
-          "0xbe23c6064e1907ae147d2a96c8089c751ee5a1d872b5a7be11845056d28384cfb59978c4a91b4ffe90d3dec0616b3926038f27da4e4d254c8c1283bc9dcdabeac500fbf0e89b98d1059a7aa832893b08c9e51fcea476a69511be611250a91b6a1204a22561bb87b79f1985a687851184533d93dfab986fc2c02830c7b12df9cf0e3259e068b974e3f6cf99fa63744c8b5b23629a4efad425fa2b29b3622443373d4c389389ececc5692e0f15b54b9f49b999fd0754db41a4fc16b8236f68555f9546311326e56c1ea1fe858e3c66f3a1282d440e3b487579dd2c198c8b15a5bab82f1516f48c4013063319c4a06789f943c5fc4e7768c2c0d4ce871c3c51a177"
-        ),
-      },
-      {
-        selector: formatBytes32String("20161025"),
-        domain: formatBytes32String("googlemail.com"),
-        n: hexlify(
-          "0xbe23c6064e1907ae147d2a96c8089c751ee5a1d872b5a7be11845056d28384cfb59978c4a91b4ffe90d3dec0616b3926038f27da4e4d254c8c1283bc9dcdabeac500fbf0e89b98d1059a7aa832893b08c9e51fcea476a69511be611250a91b6a1204a22561bb87b79f1985a687851184533d93dfab986fc2c02830c7b12df9cf0e3259e068b974e3f6cf99fa63744c8b5b23629a4efad425fa2b29b3622443373d4c389389ececc5692e0f15b54b9f49b999fd0754db41a4fc16b8236f68555f9546311326e56c1ea1fe858e3c66f3a1282d440e3b487579dd2c198c8b15a5bab82f1516f48c4013063319c4a06789f943c5fc4e7768c2c0d4ce871c3c51a177"
-        ),
-      },
-    ]) {
-      const emailServer = solidityPack(["bytes32", "bytes32"], [selector, domain]);
-      emailServers.push(emailServer);
-      keys.push(n);
-    }
-
-    const ret = await (await dkimKeys.batchUpdateDKIMKeys(emailServers, keys)).wait();
-    expect(ret.status).to.equals(1);
-
-    for (const [emailServer, key] of emailServers.map((v, i) => [v, keys[i]])) {
-      expect(await dkimKeys.callStatic.getDKIMKey(emailServer)).to.equals(key);
-    }
   });
 });

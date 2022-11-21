@@ -5,11 +5,11 @@
   },
   {
     "contractName": "DkimKeys",
-    "address": "0x635e182D6154082f4E8199d83F9E6E0D0C5D7c67"
+    "address": "0xF073c382F29D1b45436923C1A7BB4BA21D354aD8"
   },
   {
     "contractName": "OpenID",
-    "address": "0xF71c2271C210bdE909AcbDB80b29be3426d732D9"
+    "address": "0x51f701e6FaF73cb20aA2b69EfcEa4e6f24478B75"
   },
   {
     "contractName": "ModuleWhiteList",
@@ -17,11 +17,11 @@
   },
   {
     "contractName": "ModuleMain",
-    "address": "0xd365410A3FE9Ef1C35F6b34E1C1329922CF06Ac8"
+    "address": "0xcFf9881905CDf1B3c3beA5644C97d0E38b186E8c"
   },
   {
     "contractName": "ModuleMainUpgradable",
-    "address": "0x53af0f89a1627Be6Ad9f5e5A606aC22B74A15d19"
+    "address": "0xf7584d0e9b9D088E21798010449eD61eB4C80864"
   },
   {
     "contractName": "ModuleGuest",
