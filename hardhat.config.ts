@@ -10,6 +10,7 @@ import "@openzeppelin/hardhat-upgrades";
 import "hardhat-contract-sizer";
 import "hardhat-change-network";
 import "hardhat-dependency-compiler";
+import * as fs from "fs";
 
 dotenv.config();
 
@@ -21,6 +22,40 @@ task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
   for (const account of accounts) {
     console.log(account.address);
   }
+});
+
+task("compile", "Pre Compile Script", async (taskArgs, hre, runSuper) => {
+  const networkName = hre.network.name;
+  console.log(`Running Precompile Script For Network[${networkName}]`);
+  if (networkName.includes("mainnet")) {
+    fs.writeFileSync(
+      "./contracts/modules/utils/LibTimeLock.sol",
+      `// SPDX-License-Identifier: Apache-2.0
+pragma solidity ^0.8.0;
+
+library LibTimeLock {
+    //                       INIT_LOCK_DURING = 48 hours
+    uint32 internal constant INIT_LOCK_DURING = 172800;
+}
+`
+    );
+  } else if (networkName.includes("testnet") || networkName === "hardhat") {
+    fs.writeFileSync(
+      "contracts/modules/utils/LibTimeLock.sol",
+      `// SPDX-License-Identifier: Apache-2.0
+pragma solidity ^0.8.0;
+ 
+library LibTimeLock {
+    //                       INIT_LOCK_DURING = 30 minutes
+    uint32 internal constant INIT_LOCK_DURING = 1800;
+}
+`
+    );
+  } else {
+    throw new Error(`Unknown Network: ${networkName}`);
+  }
+  console.log("Running Precompile Script Success");
+  await runSuper();
 });
 
 // You need to export an object to set up your config

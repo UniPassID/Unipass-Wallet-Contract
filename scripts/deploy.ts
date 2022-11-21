@@ -11,11 +11,16 @@ const WhiteListAdmin: string = "0xb80D25a543241fb4dBf6bb219D80835400Df704f";
 const OpenIDAdmin: string = "0xb80D25a543241fb4dBf6bb219D80835400Df704f";
 const DkimZKAmin: string = "0xb80D25a543241fb4dBf6bb219D80835400Df704f";
 
+// const DkimKeysAdmin: string = new Wallet(process.env.DKIM_KEYS_ADMIN!).address;
+// const WhiteListAdmin: string = new Wallet(process.env.DKIM_KEYS_ADMIN!).address;
+// const OpenIDAdmin: string = new Wallet(process.env.DKIM_KEYS_ADMIN!).address;
+// const DkimZKAmin: string = new Wallet(process.env.DKIM_KEYS_ADMIN!).address;
+
 const prompt = ora();
 const provider = new providers.Web3Provider(network.provider.send);
 const signer = provider.getSigner();
 const txParams = {
-  gasLimit: 10000000,
+  gasLimit: 5000000,
   gasPrice: BigNumber.from(10).pow(9).mul(16),
 };
 

@@ -2,14 +2,13 @@
 pragma solidity ^0.8.0;
 
 import "./ModuleStorage.sol";
+import "../utils/LibTimeLock.sol";
 
 import "hardhat/console.sol";
 
 /* solhint-disable no-inline-assembly */
 
 abstract contract ModuleTimeLock {
-    uint32 private constant INIT_LOCK_DURING = 1800;
-
     //                       LOCKED_KEYSET_HASH_KEY = keccak256("unipass-wallet:module-time-lock:locked-keyset-hash")
     bytes32 private constant LOCKED_KEYSET_HASH_KEY = bytes32(0x7e037a85480f86b76d12a4370b597f2eda994cb35030d7b7485c0ce95ff55540);
 
@@ -33,7 +32,7 @@ abstract contract ModuleTimeLock {
 
     function _getLockDuring() internal view returns (uint32 lockDuringRet) {
         if (lockDuring == 0) {
-            lockDuringRet = INIT_LOCK_DURING;
+            lockDuringRet = LibTimeLock.INIT_LOCK_DURING;
         } else {
             lockDuringRet = lockDuring - 1;
         }

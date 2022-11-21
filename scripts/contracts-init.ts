@@ -1,15 +1,17 @@
-import { hexlify, keccak256, parseEther, parseUnits, sha256, solidityPack, toUtf8Bytes } from "ethers/lib/utils";
+import { formatBytes32String, hexlify, keccak256, sha256, solidityPack, toUtf8Bytes } from "ethers/lib/utils";
 import { BigNumber, constants, Contract, providers, Signer, Wallet } from "ethers";
 import { ethers, network } from "hardhat";
 import { expect } from "chai";
 import base64url from "base64url";
 import { LedgerSigner } from "@ethersproject/hardware-wallets";
+import { publicEncrypt } from "crypto";
 
 const provider = new providers.Web3Provider(network.provider.send);
-const OPENID_ADDRESS = "0x51f701e6FaF73cb20aA2b69EfcEa4e6f24478B75";
-const DKIMZK_ADDRESS = "0xfB9Ee09DaC09216076ef44D632921Ecd52d07421";
-const WHITE_LIST_ADDRESS = "0x93b3eDFc588EdE0a90d8bb3A59348CFCc3C4444c";
-const MODULE_MAIN_UPGRADABLE_ADDRESS = "0xf7584d0e9b9D088E21798010449eD61eB4C80864";
+const OPENID_ADDRESS = "0xF6FaD55A2CaB9f74E5F465680a7B7fD0A00976E3";
+const DKIMZK_ADDRESS = "0x03Ed1c04baBaC1dBb20DA99cEd71faDF25ef2853";
+const DKIM_KEYS_ADDRESS = "0xeC5904c54779D0786F539095DeF6D6320F385cE0";
+const WHITE_LIST_ADDRESS = "0x28101Ce1aDFf9a017C818e9d522992bE6D490048";
+const MODULE_MAIN_UPGRADABLE_ADDRESS = "0xD018Ba18004BE9e7dCfBdcCDE12A92C413812C2B";
 
 const adminPath = "44'/60'/5'/0/0";
 
@@ -28,7 +30,208 @@ async function main() {
   const signer = await getAppEth();
   await openIDInit(signer);
   await dkimZKInit(signer);
+  await dkimKeysInit(signer);
   await whiteListInit(signer);
+}
+
+async function dkimKeysInit(signer: Signer) {
+  const contractFactory = await ethers.getContractFactory("DkimKeys");
+  const dkimKeys = new Contract(DKIM_KEYS_ADDRESS, contractFactory.interface, signer);
+
+  let emailServers: string[] = [];
+  let keys: string[] = [];
+  for (const { selector, domain, n } of [
+    {
+      selector: formatBytes32String("20161025"),
+      domain: formatBytes32String("gmail.com"),
+      n: hexlify(
+        "0xbe23c6064e1907ae147d2a96c8089c751ee5a1d872b5a7be11845056d28384cfb59978c4a91b4ffe90d3dec0616b3926038f27da4e4d254c8c1283bc9dcdabeac500fbf0e89b98d1059a7aa832893b08c9e51fcea476a69511be611250a91b6a1204a22561bb87b79f1985a687851184533d93dfab986fc2c02830c7b12df9cf0e3259e068b974e3f6cf99fa63744c8b5b23629a4efad425fa2b29b3622443373d4c389389ececc5692e0f15b54b9f49b999fd0754db41a4fc16b8236f68555f9546311326e56c1ea1fe858e3c66f3a1282d440e3b487579dd2c198c8b15a5bab82f1516f48c4013063319c4a06789f943c5fc4e7768c2c0d4ce871c3c51a177"
+      ),
+    },
+    {
+      selector: formatBytes32String("20161025"),
+      domain: formatBytes32String("googlemail.com"),
+      n: hexlify(
+        "0xbe23c6064e1907ae147d2a96c8089c751ee5a1d872b5a7be11845056d28384cfb59978c4a91b4ffe90d3dec0616b3926038f27da4e4d254c8c1283bc9dcdabeac500fbf0e89b98d1059a7aa832893b08c9e51fcea476a69511be611250a91b6a1204a22561bb87b79f1985a687851184533d93dfab986fc2c02830c7b12df9cf0e3259e068b974e3f6cf99fa63744c8b5b23629a4efad425fa2b29b3622443373d4c389389ececc5692e0f15b54b9f49b999fd0754db41a4fc16b8236f68555f9546311326e56c1ea1fe858e3c66f3a1282d440e3b487579dd2c198c8b15a5bab82f1516f48c4013063319c4a06789f943c5fc4e7768c2c0d4ce871c3c51a177"
+      ),
+    },
+    {
+      selector: formatBytes32String("s201512"),
+      domain: formatBytes32String("qq.com"),
+      n: hexlify(
+        "0xcfb0520e4ad78c4adb0deb5e605162b6469349fc1fde9269b88d596ed9f3735c00c592317c982320874b987bcc38e8556ac544bdee169b66ae8fe639828ff5afb4f199017e3d8e675a077f21cd9e5c526c1866476e7ba74cd7bb16a1c3d93bc7bb1d576aedb4307c6b948d5b8c29f79307788d7a8ebf84585bf53994827c23a5"
+      ),
+    },
+    {
+      selector: formatBytes32String("s201512"),
+      domain: formatBytes32String("foxmail.com"),
+      n: hexlify(
+        "0xcfb0520e4ad78c4adb0deb5e605162b6469349fc1fde9269b88d596ed9f3735c00c592317c982320874b987bcc38e8556ac544bdee169b66ae8fe639828ff5afb4f199017e3d8e675a077f21cd9e5c526c1866476e7ba74cd7bb16a1c3d93bc7bb1d576aedb4307c6b948d5b8c29f79307788d7a8ebf84585bf53994827c23a5"
+      ),
+    },
+    {
+      selector: formatBytes32String("s110527"),
+      domain: formatBytes32String("163.com"),
+      n: hexlify(
+        "0xa9f49a52ec4391363c089ed5c8235ee626ec286fe849a15987af68761cfa5213b418821f35e641dd602e096f15e070fd26359398dd1d5593a7540d1f0d4222fec41f5f44d5854b7e93abb0b33c4fd423ff8fc5684fccf9ef001af881b41cadeb3c79ef5c80430f143a5c9383bb50b3493711f4d3739f7268752bec431b2a8f59"
+      ),
+    },
+    {
+      selector: formatBytes32String("s110527"),
+      domain: formatBytes32String("126.com"),
+      n: hexlify(
+        "0xa9f49a52ec4391363c089ed5c8235ee626ec286fe849a15987af68761cfa5213b418821f35e641dd602e096f15e070fd26359398dd1d5593a7540d1f0d4222fec41f5f44d5854b7e93abb0b33c4fd423ff8fc5684fccf9ef001af881b41cadeb3c79ef5c80430f143a5c9383bb50b3493711f4d3739f7268752bec431b2a8f59"
+      ),
+    },
+    {
+      selector: formatBytes32String("s110527"),
+      domain: formatBytes32String("yeah.net"),
+      n: hexlify(
+        "0xa9f49a52ec4391363c089ed5c8235ee626ec286fe849a15987af68761cfa5213b418821f35e641dd602e096f15e070fd26359398dd1d5593a7540d1f0d4222fec41f5f44d5854b7e93abb0b33c4fd423ff8fc5684fccf9ef001af881b41cadeb3c79ef5c80430f143a5c9383bb50b3493711f4d3739f7268752bec431b2a8f59"
+      ),
+    },
+    {
+      selector: formatBytes32String("s110527"),
+      domain: formatBytes32String("188.com"),
+      n: hexlify(
+        "0xa9f49a52ec4391363c089ed5c8235ee626ec286fe849a15987af68761cfa5213b418821f35e641dd602e096f15e070fd26359398dd1d5593a7540d1f0d4222fec41f5f44d5854b7e93abb0b33c4fd423ff8fc5684fccf9ef001af881b41cadeb3c79ef5c80430f143a5c9383bb50b3493711f4d3739f7268752bec431b2a8f59"
+      ),
+    },
+    {
+      selector: formatBytes32String("s110527"),
+      domain: formatBytes32String("vip.163.com"),
+      n: hexlify(
+        "0xa9f49a52ec4391363c089ed5c8235ee626ec286fe849a15987af68761cfa5213b418821f35e641dd602e096f15e070fd26359398dd1d5593a7540d1f0d4222fec41f5f44d5854b7e93abb0b33c4fd423ff8fc5684fccf9ef001af881b41cadeb3c79ef5c80430f143a5c9383bb50b3493711f4d3739f7268752bec431b2a8f59"
+      ),
+    },
+    {
+      selector: formatBytes32String("s110527"),
+      domain: formatBytes32String("vip.126.com"),
+      n: hexlify(
+        "0xa9f49a52ec4391363c089ed5c8235ee626ec286fe849a15987af68761cfa5213b418821f35e641dd602e096f15e070fd26359398dd1d5593a7540d1f0d4222fec41f5f44d5854b7e93abb0b33c4fd423ff8fc5684fccf9ef001af881b41cadeb3c79ef5c80430f143a5c9383bb50b3493711f4d3739f7268752bec431b2a8f59"
+      ),
+    },
+    {
+      selector: formatBytes32String("s110527"),
+      domain: formatBytes32String("vip.188.com"),
+      n: hexlify(
+        "0xa9f49a52ec4391363c089ed5c8235ee626ec286fe849a15987af68761cfa5213b418821f35e641dd602e096f15e070fd26359398dd1d5593a7540d1f0d4222fec41f5f44d5854b7e93abb0b33c4fd423ff8fc5684fccf9ef001af881b41cadeb3c79ef5c80430f143a5c9383bb50b3493711f4d3739f7268752bec431b2a8f59"
+      ),
+    },
+    {
+      selector: formatBytes32String("s2048"),
+      domain: formatBytes32String("yahoo.com"),
+      n: hexlify(
+        "0xba85ae7e06d6c39f0c7335066ccbf5efa45ac5d64638c9109a7f0e389fc71a843a75a95231688b6a3f0831c1c2d5cb9b271da0ce200f40754fb4561acb22c0e1ac89512364d74feea9f072894f2a88f084e09485ae9c5f961308295e1bb7e835b87c3bc0bce0b827f8600a11e97c54291b00a07ba817b33ebfa6cc67f5f51bebe258790197851f80943a3bc17572428aa19e4aa949091f9a436aa6e0b3e1773e9ca201441f07a104cce03528c3d15891a9ce03ed2a8ba40dc42e294c3d180ba5ee4488c84722ceaadb69428d2c6026cf47a592a467cc8b15a73ea3753d7f615e518ba614390e6c3796ea37367c4f1a109646d5472e9e28e8d49e84924e648087"
+      ),
+    },
+    {
+      selector: formatBytes32String("dbd5af2cbaf7"),
+      domain: formatBytes32String("mail.com"),
+      n: hexlify(
+        "0xede596d226cb20962f0813f0f77192bffa52b5ef8668a4eee295ce446ec8f683edbb7ad2373023ff3267d44c1ba792381f68dbee3d17431db3e11f521513f126444a0cc134cb702bd693f7a000be9f0c6b57f2b67ea2462de0ef85c9929b937bd5f58e66882b82b9d23e08648318602c8de499e9b1287b6682a3f2dd3e22e2f5"
+      ),
+    },
+    {
+      selector: formatBytes32String("selector1"),
+      domain: formatBytes32String("outlook.com"),
+      n: hexlify(
+        "0xbd6ca4b6b20bf033bff941af31bbfb70f77f5e88296ecee9815c3ccbd95d3ba00032683cfa28c4365fdcec56f531f28ceee1b72ccc00af475554ac8cfa66e4a17da4e4bee5b11390af467d8064a9bbbc6b9d939ae7cfbfa4885dd9793f0c53e96b9f9329b5a875bb1264f44df33d11639c79f6377349c957944c8df661197663a2293b0e3fa03bbd0c5f4b26bd8e0e4df3575f34dbcfec79d67a330cb0ac8832b5e9b713a1201b84607ebb2437bdf10817d78a07bc6336533e7789ffd25bc305d3dad887db29e19b1a58b220e93df8dc9ce56edaec1911820c9f493e9c515998a6b73f94a7f0652b34fab020ab06285bfc18b7a59884041e148bfbebb8be5109"
+      ),
+    },
+    {
+      selector: formatBytes32String("selector1"),
+      domain: formatBytes32String("hotmail.com"),
+      n: hexlify(
+        "0xbd6ca4b6b20bf033bff941af31bbfb70f77f5e88296ecee9815c3ccbd95d3ba00032683cfa28c4365fdcec56f531f28ceee1b72ccc00af475554ac8cfa66e4a17da4e4bee5b11390af467d8064a9bbbc6b9d939ae7cfbfa4885dd9793f0c53e96b9f9329b5a875bb1264f44df33d11639c79f6377349c957944c8df661197663a2293b0e3fa03bbd0c5f4b26bd8e0e4df3575f34dbcfec79d67a330cb0ac8832b5e9b713a1201b84607ebb2437bdf10817d78a07bc6336533e7789ffd25bc305d3dad887db29e19b1a58b220e93df8dc9ce56edaec1911820c9f493e9c515998a6b73f94a7f0652b34fab020ab06285bfc18b7a59884041e148bfbebb8be5109"
+      ),
+    },
+    {
+      selector: formatBytes32String("20210112"),
+      domain: formatBytes32String("gmail.com"),
+      n: hexlify(
+        "0xabc27154130b1d9463d56bc83121c0a516370eb684fc4885891e88300943abd1809eb572d2d0d0c81343d46f3ed5fcb9470b2c43d0e07cd7bbac89b0c5a6d67d6c49d4b4a6a3f0f311d38738935088ffe7c3b31d986bbe47d844bc17864500269f58e43b8e8a230fe9da51af98f49edfe0150fe5f2697678bc919364a1540a7a1cb40554c878d20d3eca9c4b1a88d0f6ad5b03bf28ac254007f84c917e61d20707c954701d27da03f1c9fd36322e9ff1072d2230842c5798b26568978d005b5c19e0f669119b1da4bb33a69314ffaa9387f6b9c471df57320b16eee7408355f53e778264203341143895f8c22968315721fd756c6a12d3ca010508b23d7817d3"
+      ),
+    },
+    {
+      selector: formatBytes32String("20210112"),
+      domain: formatBytes32String("googlemail.com"),
+      n: hexlify(
+        "0xabc27154130b1d9463d56bc83121c0a516370eb684fc4885891e88300943abd1809eb572d2d0d0c81343d46f3ed5fcb9470b2c43d0e07cd7bbac89b0c5a6d67d6c49d4b4a6a3f0f311d38738935088ffe7c3b31d986bbe47d844bc17864500269f58e43b8e8a230fe9da51af98f49edfe0150fe5f2697678bc919364a1540a7a1cb40554c878d20d3eca9c4b1a88d0f6ad5b03bf28ac254007f84c917e61d20707c954701d27da03f1c9fd36322e9ff1072d2230842c5798b26568978d005b5c19e0f669119b1da4bb33a69314ffaa9387f6b9c471df57320b16eee7408355f53e778264203341143895f8c22968315721fd756c6a12d3ca010508b23d7817d3"
+      ),
+    },
+    {
+      selector: formatBytes32String("protonmail"),
+      domain: formatBytes32String("protonmail.com"),
+      n: hexlify(
+        "0xca678aeacca0caadf24728d7d3821d41ff736da07ad1f13e185d3b8796da4526585cf867230c4a5fdadbf31e747b47b11b84e762c32e122e0097a8421141eeecc0e4fcbeae733d9ebf239d28f22b31cf9d10964bcda085b27a2350aa50cf40b41ecb441749f2f39d063f6c7c6f280a808b7dc2087c12fce3eeb96707abc0c2a9"
+      ),
+    },
+    {
+      selector: formatBytes32String("protonmail"),
+      domain: formatBytes32String("pm.me"),
+      n: hexlify(
+        "0xa66408196cdf68bf5c7be5611dcad34f32bdaf19fc1f7f4f3eeff3b833b98af8baf1accc646cfc6aa3d3bcc017471d96b58bddf5b3e3897d9fb6172050fc86da55246122c4cb973ea027d69faf8e0e656cff6d1f2bad70d42d2eedf38ccd8b203a39a9d8aa133dc401a721df31b566cc219eb9ee55256be36a8d0a5f51849c39999d9d0cad3705e5b4a243ab40b9457818d1f27f2b2101e03021201bf94b4093d83e2e9e218c3bb12ee1cad100ef04d2b54ddbb42c6e1b138da18f780dea12cf7cda903556ebc1969b49c5ae0262e84add20afbe5cd11f9087d8fd181081f2169d7501b27019b2684092eef62b0c8c7c8093e3995f919516fe55e7fa01dbbda5"
+      ),
+    },
+    {
+      selector: formatBytes32String("1a1hai"),
+      domain: formatBytes32String("icloud.com"),
+      n: hexlify(
+        "0xd5911f6e47f84db3b64c3648ebb5a127a1bc0f0937489c806c1944fd029dc971590781df114ec072e641cdc5d2245134dc3966c8e91402669a47cc85970a281f268a44b21a4f77a91a52f9606a30c9f22d2e5cb6934263d08388091c56ac1dfbf1beea31e8a613c2a51f550d695a514d38b45c862320a00ea539419a433d6bfdd1978356cbca4b600a570fe582918c4f731a0002068df28b2a193089e6bf951c553b5a6f71aaadcc6669dfa346f322717851a8c22a324041af8736e87de4358860fff057beff3f19046a43adce46c932514988afe1309f87414bd36ed296dacfade2e0caf03235e91a2db27e9ed214bcc6e5cf995b5ef59ce9943d1f4209b6ab"
+      ),
+    },
+    {
+      selector: formatBytes32String("1ca1ba"),
+      domain: formatBytes32String("icloud.com"),
+      n: hexlify(
+        "0xc98924fd152c4166028dd31acba0ece995af40b179fed81f25362aa274ea4cb12e60fe650336631867149036380b5e52069d8500e582906ad3c2ae7a87ee9ef7c1e3a06370af40451bd6fb157b621654e0bbebb3fa9de6d862ab783972de5610ef9da04c14e863d604f9d9166c1a027a1c67e580bd7b988dc8915245af8031a1a513cb4c10e36930105a74a2af50b8f852ea260f6f86bfc195d73c3292d886c8a2dd259013124b637037b25464850d80f52aa73f7823288514fe11ea7910a0e2d41e46667180554389b8eddf588549f533606ba1dcbc943c9fca4db43c3d93009e8d2d89283d1847d6245261b1300f255743d8e06d2e6ba167c5f05f35c83125"
+      ),
+    },
+    {
+      selector: formatBytes32String("protonmail2"),
+      domain: formatBytes32String("protonmail.com"),
+      n: hexlify(
+        "0xa9c499799ec7a22011a1a1821a5c86fd0e770169c5e4f7958e4b604663167853af23322b36a6d869ae618e5eee751a53b506db5a4c93517a2d50bf937225d4ee6a03793dc969db81345214eec777e5df808c9f16406b8f72e787d705590f9c6cb682ebaba72ac9fb56b2f23f05c8af7c197f364445070865e05452baa5cf444571d6dd2c0f5b8aa3e97be1b84ec1fd4d021fdde175258b8c17e52f7ba32a4210bccdae5947f417f563cf44f9b06c80eede484228970324b565a63741f816a3b2bd3a14b86d30e65299f0a5e7896339931683292e2d0d2280c6f2a704989f8709e323380fe40085a05970c8c5ad4006d150dff204a9953bd6cdcb2e0ebc7f54b1"
+      ),
+    },
+    {
+      selector: formatBytes32String("protonmail2"),
+      domain: formatBytes32String("pm.me"),
+      n: hexlify(
+        "0xb1dfac7052467ccf79f7870f2aa3a514effcbb0da7e5981945b386512de1fd9dd70bae840b13aac4a6083b585228825e7be1e0ea144746598e42ca340279c8039e2d13c066f33ff30bb97c231350c2c3d4169fd9d73d1fd1acf2d650ddeba77852ed8fbb8f1177ac717d4cb3eecfd38317b939ce98a858f1dc0e5dabcaf9be9636b6a24ec74d6dc532496aaa83b2d9f7191aedb595073a99baa5524093c7629f4b39ca20e6c1a17f894e18e5e44fa7ea4a7177bb4038c2bcbbab413e733494bbae41ae70ec059791b2e508f396058b9e6a2c581417f7a4f59332460f08a2565ed057182a1e34a3ece7ab9622b131472104c4fbed30c672012571847bba281b25"
+      ),
+    },
+    {
+      selector: formatBytes32String("protonmail3"),
+      domain: formatBytes32String("protonmail.com"),
+      n: hexlify(
+        "0xce616b9af91a54e135d2e79ea0438c8e8b698faeed33e6cd0006ff5c40db87f7cfa168db932cecc51fc76dc121ee57c9cab4e5e19fb8cec269b527fb3f9f9dd69b8588bb023fc5be2e7e5fe2524d769edc104b2ce2fd2e33c87671ecfcf4f652ba80f6ea1e5c7c59e745dcbb774e408345db13fbd82efd647561c7c0afd4c4bdba1abb0a25c4ca70da3e524c771a75ea86c24934bcbf514600232e30de64509f18dd134282ef87d0051ffb5b08906f8ec96d04c3889685b6286207708d77afe165f8b97ec1aca32a565d1fee2ff2e241c4c6802f2048ce18b92033c08b941383feff6ddd380f25f355a62d38ca45d8783565f574638f43a6bdde72275247d39b"
+      ),
+    },
+    {
+      selector: formatBytes32String("protonmail3"),
+      domain: formatBytes32String("pm.me"),
+      n: hexlify(
+        "0xb1929caebbdbfc48b036f6b8b0d3ec94c4c4599d64534d8ff77d8713f52e40ba71068d783e7ee1f454ce009504b5c0739ab256cb2131d03884ad002d1e2abbf921f3d0614df8eb80e423e1cb3a8df3a383a46078c82e4d8085ead422e86afe9f4d7e722548c561c92c39cb2ad36cd6ea6c29ea40827ce0d4e2de9863199670e5c604af6238e56f5d018adaeba59df46807996ed726e39d28d38274b0b3583e482addce9249d9168f85f118222c039abf85e5a9b7209651d6a77c064285ff1f0c1bc45f47d0c764c4d69e0552dc295a17d1ca588d63cdd10a31e1e30eeace43d110d943fce788572d2a096e05cff6e8ec72dc869473c415ec080508478194d661"
+      ),
+    },
+  ]) {
+    const emailServer = solidityPack(["bytes32", "bytes32"], [selector, domain]);
+    if ((await dkimKeys.callStatic.getDKIMKey(emailServer)) !== n && !emailServers.includes(emailServer) && !keys.includes(n)) {
+      emailServers.push(emailServer);
+      keys.push(n);
+    }
+  }
+
+  if (emailServers.length !== 0) {
+    console.log("Updating Dkim Keys Public Keys");
+    const ret = await (await dkimKeys.batchUpdateDKIMKeys(emailServers, keys, txParams)).wait();
+    expect(ret.status).to.equals(1);
+    console.log("Updating Dkim Keys Success");
+  } else {
+    console.log("DkimKeys Pbulic Keys Have Been Updated");
+  }
 }
 
 async function openIDInit(signer: Signer) {
@@ -66,12 +269,14 @@ async function addOpenIDAudience(openID: Contract, issuer: string, audience: str
 }
 
 async function openIDInitPublicKey(openID: Contract) {
+  let keys: string | string[] = [];
+  let pubKeys = [];
   for (const { iss, kid, pubKey } of [
     {
       iss: "https://accounts.google.com",
-      kid: "f451345fad08101bfb345cf642a2da9267b9ebeb",
+      kid: "27b86dc6938dc327b204333a250ebb43b32e4b3c",
       pubKey:
-        "ppFPAZUqIVqCf_SffT6xDCXu1R7aRoT6TNT5_Q8PKxkkqbOVysJPNwliF-486VeM8KNW8onFOv0GkP0lJ2ASrVgyMG1qmlGUlKug64dMQXPxSlVUCXCPN676W5IZTvT0tD2byM_29HZXnOifRg-d7PRRvIBLSUWe-fGb1-tP2w65SOW-W6LuOjGzLNPJFYQvHyUx_uXHOCfIoSb8kaMwx8bCWvKc76yT0DG1wcygGXKuFQHW-Sdi1j_6bF19lVu30DX-jhYsNMUnGUr6g2iycQ50pWMORZqvcHVOH1bbDrWuz0b564sK0ET2B3XDR37djNQ305PxiQZaBStm-hM8Aw",
+        "1X7rNtYVglDjBJgsBOSv7C6MYU6Mv-yraGOp_AGs777c2UcVGj88dBe9KihGicQ3LqU8Vf5fVhPixVy0GFBS7mJt3qJryyBpmG7sChnJQBwJmZEffZUl_rLtwGli8chbZj_Fpgjd-7t74VQJmn2SYkFqHNB3vrW_I8zmwn7_Enn4N84d4dP5R9UChUSLhuPNKaKA-a4vtTKy1LNoZpbr6LG1_QaWGDKNhgPWR-6l5fmBdaXtUgDmPFwdQZuiBUDfnPQ7t1lSUD2PJMnG3M9DKG5gqpSk1L1AlWsxntideNsKWIviZ5PhCpmzEComWNtFtFrzfAWQvLkBbgb0pwWp5w",
     },
     {
       iss: "https://accounts.google.com",
@@ -94,12 +299,34 @@ async function openIDInitPublicKey(openID: Contract) {
   ]) {
     const key = keccak256(solidityPack(["bytes", "bytes"], [toUtf8Bytes(iss), toUtf8Bytes(kid)]));
     const n = base64url.toBuffer(pubKey);
-    if ((await openID.callStatic.getOpenIDPublicKey(key)) !== hexlify(n)) {
-      console.log("Updating OpenID Public Key");
-      const ret = await (await openID.updateOpenIDPublicKey(key, n, txParams)).wait();
+    if ((await openID.callStatic.getOpenIDPublicKey(key)) !== hexlify(n) && !keys.includes(key)) {
+      keys.push(key);
+      pubKeys.push(n);
+    }
+  }
+
+  if (keys.length !== 0) {
+    console.log("Updating OpenID Public Key");
+    const ret = await (await openID.batchUpdateOpenIDPublicKey(keys, pubKeys)).wait();
+    expect(ret.status).to.equals(1);
+    console.log("Updating OpenID Public Key Success");
+  } else {
+    console.log("OpenID Public Keys Have Been Updated");
+  }
+
+  for (const { iss, kid } of [
+    {
+      iss: "https://accounts.google.com",
+      kid: "f451345fad08101bfb345cf642a2da9267b9ebeb",
+    },
+  ]) {
+    const key = keccak256(solidityPack(["bytes", "bytes"], [toUtf8Bytes(iss), toUtf8Bytes(kid)]));
+    if ((await openID.callStatic.getOpenIDPublicKey(key)) !== "0x") {
+      console.log("Deleting OpenID Public Key");
+      const ret = await (await openID.deleteOpenIDPublicKey(key, txParams)).wait();
       expect(ret.status).to.equals(1);
     } else {
-      console.log("OpenID Public Key Has Been Updated");
+      console.log("OpenID Public Key Has Been Deleted");
     }
   }
 }
@@ -249,8 +476,8 @@ async function setupSRSHash(dkimZK: Contract, srsHash: string) {
 }
 
 async function setupVKHash(dkimZK: Contract, len: 1024 | 2048, inputsLen: BigNumber, domainSize: BigNumber, vkData: string[]) {
-  const vkHash = sha256(solidityPack(["uint64", "uint64", "uint128", "uint256[]"], [len, inputsLen, domainSize, vkData]));
-  const currentVkHash = len === 1024 ? await dkimZK.vk1024hash : await dkimZK.vk2048hash;
+  const vkHash = sha256(solidityPack(["uint64", "uint128", "uint256[]"], [inputsLen, domainSize, vkData]));
+  const currentVkHash = len === 1024 ? await dkimZK.vk1024hash() : await dkimZK.vk2048hash();
   if (currentVkHash !== vkHash) {
     console.log("Set Up VK Hash Start");
     const ret = await (await dkimZK.setupVKHash(len, inputsLen, domainSize, vkData, txParams)).wait();
@@ -286,7 +513,8 @@ async function addHookWhiteList(whiteList: Contract, addr: string) {
 }
 
 async function getAppEth() {
-  const signer = new LedgerSigner(provider, "hid", adminPath);
+  // const signer = new LedgerSigner(provider, "hid", adminPath);
+  const signer = new Wallet(process.env.DKIM_KEYS_ADMIN!, provider);
 
   const address = await signer.getAddress();
   console.log("address", address);
