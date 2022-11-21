@@ -6,16 +6,28 @@ import { Deployer } from "../test/utils/deployer";
 import { expect } from "chai";
 import { parseEther } from "ethers/lib/utils";
 
-const DkimKeysAdmin: string = "0xb80D25a543241fb4dBf6bb219D80835400Df704f";
-const WhiteListAdmin: string = "0xb80D25a543241fb4dBf6bb219D80835400Df704f";
-const OpenIDAdmin: string = "0xb80D25a543241fb4dBf6bb219D80835400Df704f";
-const DkimZKAmin: string = "0xb80D25a543241fb4dBf6bb219D80835400Df704f";
+const networkName = network.name;
+let DkimKeysAdmin: string = "";
+let WhiteListAdmin: string = "";
+let OpenIDAdmin: string = "";
+let DkimZKAmin: string = "";
+if (networkName.includes("testnet")) {
+  DkimKeysAdmin = new Wallet(process.env.DKIM_KEYS_ADMIN!).address;
+  WhiteListAdmin = new Wallet(process.env.DKIM_KEYS_ADMIN!).address;
+  OpenIDAdmin = new Wallet(process.env.DKIM_KEYS_ADMIN!).address;
+  DkimZKAmin = new Wallet(process.env.DKIM_KEYS_ADMIN!).address;
+} else {
+  DkimKeysAdmin = "0xb80D25a543241fb4dBf6bb219D80835400Df704f";
+  WhiteListAdmin = "0xb80D25a543241fb4dBf6bb219D80835400Df704f";
+  OpenIDAdmin = "0xb80D25a543241fb4dBf6bb219D80835400Df704f";
+  DkimZKAmin = "0xb80D25a543241fb4dBf6bb219D80835400Df704f";
+}
 
 const prompt = ora();
 const provider = new providers.Web3Provider(network.provider.send);
 const signer = provider.getSigner();
 const txParams = {
-  gasLimit: 10000000,
+  gasLimit: 500000,
   gasPrice: BigNumber.from(10).pow(9).mul(16),
 };
 
