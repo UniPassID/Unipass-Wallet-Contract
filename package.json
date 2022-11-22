@@ -1,7 +1,7 @@
 {
   "name": "unipass-wallet-contracts",
   "description": "Wallet Contracts For Unipass Account System",
-  "version": "0.0.22",
+  "version": "0.0.23",
   "files": [
     "/contracts/**/*.sol",
     "!/contracts/tests/**/*"
