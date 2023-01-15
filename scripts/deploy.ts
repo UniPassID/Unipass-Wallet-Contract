@@ -67,6 +67,9 @@ async function main() {
   const calldata = DkimKeys.interface.encodeFunctionData("initialize");
   const dkimKeyserc1967 = await deployer.deployContract(ERC1967, instance, txParams, nativeDkimKeys.address, calldata);
   const dkimKeys = nativeDkimKeys.attach(dkimKeyserc1967.address);
+  const setDkimKeysAdminRet = (await dkimKeys.setAdmin(DkimKeysAdmin)).wait();
+  expect(setDkimKeysAdminRet.status).to.equals(1);
+  expect(dkimKeys.getAdmin()).to.equals(DkimKeysAdmin);
   prompt.succeed();
 
   const OpenID = await ethers.getContractFactory("OpenID");
@@ -75,6 +78,9 @@ async function main() {
   prompt.start("Start To Proxy OpenID");
   const openIDerc1967 = await deployer.deployContract(ERC1967, instance, txParams, nativeOpenID.address, calldata);
   const openID = nativeOpenID.attach(openIDerc1967.address).connect(new Wallet(process.env.OPENID_ADMIN!).connect(provider));
+  const setOpenIDAdminRet = (await openID.setAdmin(OpenIDAdmin)).wait();
+  expect(setOpenIDAdminRet.status).to.equals(1);
+  expect(openID.getAdmin()).to.equals(OpenIDAdmin);
   prompt.succeed();
 
   const WhiteList = await ethers.getContractFactory("ModuleWhiteList");
