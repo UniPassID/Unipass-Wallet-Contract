@@ -43,11 +43,7 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, Modu
      * @param _nonce Signature nonce
      * @param _signature Signature bytes
      */
-    function execute(
-        Transaction[] calldata _txs,
-        uint256 _nonce,
-        bytes calldata _signature
-    ) external payable {
+    function execute(Transaction[] calldata _txs, uint256 _nonce, bytes calldata _signature) external payable {
         _validateNonce(_nonce);
 
         bytes32 txhash = LibUnipassSig._subDigest(keccak256(abi.encode(_nonce, _txs)), block.chainid);
@@ -60,9 +56,10 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, Modu
             uint32 guardianWeight
         ) = validateSignature(txhash, _signature);
         require(
-            succ && (emailType == IDkimKeys.EmailType.None || emailType == IDkimKeys.EmailType.CallOtherContract),
-            "execute: INVALID_SIG_WEIGHT"
+            emailType == IDkimKeys.EmailType.None || emailType == IDkimKeys.EmailType.CallOtherContract,
+            "execute: INVALID_EMAIL"
         );
+        require(succ, "execute: INVALID_SIG_WEIGHT");
 
         _execute(txhash, _txs, ownerWeight, assetsOpWeight, guardianWeight);
     }
@@ -136,15 +133,9 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, Modu
         }
     }
 
-    function _getPermissionOfCallData(bytes calldata callData)
-        private
-        view
-        returns (
-            uint32 ownerWeight,
-            uint32 assetsWeight,
-            uint32 guardianWeight
-        )
-    {
+    function _getPermissionOfCallData(
+        bytes calldata callData
+    ) private view returns (uint32 ownerWeight, uint32 assetsWeight, uint32 guardianWeight) {
         uint256 index;
         bytes4 selector;
         (selector, index) = callData.cReadBytes4(index);
