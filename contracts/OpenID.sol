@@ -38,12 +38,12 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
     /**
      * openIDPublicKey: kecaak256(issuser + key id) => public key
      */
-    mapping(bytes32 => bytes) openIDPublicKey;
+    mapping(bytes32 => bytes) private openIDPublicKey;
 
     /**
      * openIDAudience: keccak256(issuser + audience) => is valid
      */
-    mapping(bytes32 => bool) openIDAudience;
+    mapping(bytes32 => bool) private openIDAudience;
 
     constructor(address _admin) ModuleAdminAuth(_admin) {
         _disableInitializers();
