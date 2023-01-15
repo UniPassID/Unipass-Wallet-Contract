@@ -6,7 +6,7 @@ import "./ModuleAdminAuth.sol";
 import "hardhat/console.sol";
 
 contract ModuleWhiteList is ModuleAdminAuth {
-    error InvalidStatus(bool _status, bool _changeStatus);
+    error InvalidStatus(bool _status);
 
     event UpdateHookWhiteList(address _addr, bool _isWhite);
     event UpdateImplementationWhiteList(address _addr, bool _isWhite);
@@ -30,7 +30,7 @@ contract ModuleWhiteList is ModuleAdminAuth {
             hooks[_addr] = _isWhite;
             emit UpdateHookWhiteList(_addr, _isWhite);
         } else {
-            revert InvalidStatus(isWhite, _isWhite);
+            revert InvalidStatus(isWhite);
         }
     }
 
@@ -48,7 +48,7 @@ contract ModuleWhiteList is ModuleAdminAuth {
             implementations[_addr] = _isWhite;
             emit UpdateImplementationWhiteList(_addr, _isWhite);
         } else {
-            revert InvalidStatus(isWhite, _isWhite);
+            revert InvalidStatus(isWhite);
         }
     }
 }
