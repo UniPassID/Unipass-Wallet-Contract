@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-pragma solidity ^0.8.0;
+pragma solidity 0.8.15;
 
 contract GasEstimator {
     function estimate(address _to, bytes calldata _data) external returns (bool success, bytes memory result, uint256 gas) {

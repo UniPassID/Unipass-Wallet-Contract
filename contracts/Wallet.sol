@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-pragma solidity ^0.8.0;
+pragma solidity 0.8.15;
 
 /**
     Minimal upgradeable proxy implementation, delegates all calls to the address

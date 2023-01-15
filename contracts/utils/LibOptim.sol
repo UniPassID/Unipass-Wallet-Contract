@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-pragma solidity ^0.8.0;
+pragma solidity 0.8.15;
 
 library LibOptim {
     function returnData() internal pure returns (bytes memory r) {
