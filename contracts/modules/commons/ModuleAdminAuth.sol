@@ -14,7 +14,7 @@ abstract contract ModuleAdminAuth {
         ModuleStorage.writeBytes32(ADMIN_KEY, bytes32(bytes20(_admin)));
     }
 
-    function _readAdmin() public view returns (address admin) {
+    function _readAdmin() internal view returns (address admin) {
         admin = address(bytes20(ModuleStorage.readBytes32(ADMIN_KEY)));
     }
 
