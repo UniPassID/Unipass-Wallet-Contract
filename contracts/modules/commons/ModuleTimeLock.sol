@@ -4,8 +4,6 @@ pragma solidity ^0.8.0;
 import "./ModuleStorage.sol";
 import "../utils/LibTimeLock.sol";
 
-import "hardhat/console.sol";
-
 /* solhint-disable no-inline-assembly */
 
 abstract contract ModuleTimeLock {
@@ -72,12 +70,7 @@ abstract contract ModuleTimeLock {
     function getLockInfo()
         external
         view
-        returns (
-            bool isLockedRet,
-            uint32 lockDuringRet,
-            bytes32 lockedKeysetHashRet,
-            uint256 unlockAfterRet
-        )
+        returns (bool isLockedRet, uint32 lockDuringRet, bytes32 lockedKeysetHashRet, uint256 unlockAfterRet)
     {
         isLockedRet = isLocked;
         lockDuringRet = _getLockDuring();

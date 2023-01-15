@@ -14,8 +14,6 @@ import "../../interfaces/IModuleHooks.sol";
 import "../../interfaces/IModuleWhiteList.sol";
 import "../../utils/LibBytes.sol";
 
-import "hardhat/console.sol";
-
 abstract contract ModuleHooks is ModuleSelfAuth, IERC1155Receiver, IERC721Receiver, IModuleHooks, ModuleERC165 {
     using LibBytes for bytes;
     //                       HOOKS_KEY = keccak256("org.arcadeum.module.hooks.hooks");
@@ -112,12 +110,7 @@ abstract contract ModuleHooks is ModuleSelfAuth, IERC1155Receiver, IERC721Receiv
      * @notice Handle the receipt of a single ERC721 token.
      * @return `bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"))`
      */
-    function onERC721Received(
-        address,
-        address,
-        uint256,
-        bytes calldata
-    ) external pure virtual override returns (bytes4) {
+    function onERC721Received(address, address, uint256, bytes calldata) external pure virtual override returns (bytes4) {
         return ModuleHooks.onERC721Received.selector;
     }
 

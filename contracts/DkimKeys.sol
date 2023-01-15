@@ -13,8 +13,6 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 
-import "hardhat/console.sol";
-
 contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable {
     using LibBytes for bytes;
     using Address for address;

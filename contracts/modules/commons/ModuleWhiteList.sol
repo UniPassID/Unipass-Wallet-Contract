@@ -3,8 +3,6 @@ pragma solidity ^0.8.0;
 
 import "./ModuleAdminAuth.sol";
 
-import "hardhat/console.sol";
-
 contract ModuleWhiteList is ModuleAdminAuth {
     error InvalidStatus(bool _status);
 

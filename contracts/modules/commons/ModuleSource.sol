@@ -3,8 +3,6 @@ pragma solidity ^0.8.0;
 
 import "./ModuleStorage.sol";
 
-import "hardhat/console.sol";
-
 abstract contract ModuleSource {
     //                       SOURCE_KEY = keccak256("unipass-wallet:module-source:source")
     bytes32 private constant SOURCE_KEY = bytes32(0xdaa79580c56b4e8ad10a9ff0528bff8a0024111f67686c391e48da8ced3b8c6c);

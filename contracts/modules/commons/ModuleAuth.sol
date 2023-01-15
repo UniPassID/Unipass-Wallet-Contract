@@ -10,8 +10,6 @@ import "../../interfaces/IDkimKeys.sol";
 
 import "@openzeppelin/contracts/interfaces/IERC1271.sol";
 
-import "hardhat/console.sol";
-
 abstract contract ModuleAuth is ModuleAuthBase, IERC1271 {
     using LibBytes for bytes;
 

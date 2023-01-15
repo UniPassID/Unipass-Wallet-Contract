@@ -5,8 +5,6 @@ import "./interfaces/IDkimZK.sol";
 import "./utils/LibBytes.sol";
 import "UniPass-verifier-contract/contracts/UnipassVerifier.sol";
 
-import "hardhat/console.sol";
-
 contract DkimZK is UnipassVerifier, IDkimZK {
     using LibBytes for bytes;
 
@@ -25,15 +23,7 @@ contract DkimZK is UnipassVerifier, IDkimZK {
         uint256 _index,
         bytes calldata _headerPubMatch,
         bytes calldata _data
-    )
-        external
-        view
-        returns (
-            bytes32 emailHash,
-            bytes32 emailHeaderHash,
-            uint256 index
-        )
-    {
+    ) external view returns (bytes32 emailHash, bytes32 emailHeaderHash, uint256 index) {
         uint128 domainSize = uint128(bytes16(_data[_index:_index + 16]));
         index = _index + 16;
 

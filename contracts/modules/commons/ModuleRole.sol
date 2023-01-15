@@ -3,7 +3,6 @@ pragma solidity ^0.8.0;
 
 import "./ModuleHooks.sol";
 import "../../interfaces/IModuleAccount.sol";
-import "../../interfaces/IModuleCall.sol";
 import "../../utils/LibRole.sol";
 
 contract ModuleRole is ModuleSelfAuth {

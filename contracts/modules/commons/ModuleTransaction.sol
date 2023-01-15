@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/interfaces/IERC20.sol";
-
 abstract contract ModuleTransaction {
     struct Transaction {
         CallType callType;
@@ -26,12 +24,7 @@ abstract contract ModuleTransaction {
     event TxFailedEvent(bytes32 _txHash, uint256 _index, bytes _reason);
     event TxPayFeeFailed(bytes32 _txHash, uint256 _index, bytes _reason);
 
-    function _revertBytes(
-        bool _revertOnError,
-        bytes32 _txHash,
-        uint256 _index,
-        bytes memory _reason
-    ) internal {
+    function _revertBytes(bool _revertOnError, bytes32 _txHash, uint256 _index, bytes memory _reason) internal {
         if (_revertOnError) {
             revert TxFailed(_txHash, _index, _reason);
         } else {

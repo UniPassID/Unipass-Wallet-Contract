@@ -10,8 +10,6 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 
-import "hardhat/console.sol";
-
 contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
     using LibBytes for bytes;
 
@@ -95,11 +93,7 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
 
     function _authorizeUpgrade(address newImplementation) internal override onlyAdmin {}
 
-    function _validateTimestamp(
-        uint256 _index,
-        bytes calldata _data,
-        bytes calldata _payload
-    ) private view {
+    function _validateTimestamp(uint256 _index, bytes calldata _data, bytes calldata _payload) private view {
         bytes calldata iat;
         {
             uint32 iatLeftIndex;
@@ -122,17 +116,10 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
         require(timestamp > bytes32(iat) && timestamp < bytes32(exp), "_validateTimestamp: INVALID_TIMESTAMP");
     }
 
-    function validateIDToken(uint256 _index, bytes calldata _data)
-        external
-        view
-        returns (
-            bool succ,
-            uint256 index,
-            bytes32 issHash,
-            bytes32 subHash,
-            bytes32 nonceHash
-        )
-    {
+    function validateIDToken(
+        uint256 _index,
+        bytes calldata _data
+    ) external view returns (bool succ, uint256 index, bytes32 issHash, bytes32 subHash, bytes32 nonceHash) {
         bytes calldata header;
         bytes calldata payload;
         bytes calldata signature;
@@ -179,11 +166,7 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
         nonce = _payload[nonceLeftIndex:nonceLeftIndex + 66];
     }
 
-    function _getSub(
-        uint256 _index,
-        bytes calldata _data,
-        bytes calldata _payload
-    ) internal pure returns (bytes calldata sub) {
+    function _getSub(uint256 _index, bytes calldata _data, bytes calldata _payload) internal pure returns (bytes calldata sub) {
         uint32 subLeftIndex;
         (subLeftIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.subLeftIndex) * 4 + _index);
         require(bytes7(_payload[subLeftIndex - 7:subLeftIndex]) == bytes7('"sub":"'), "_getSub: INVALID_SUB_LEFT");
@@ -213,11 +196,7 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
         require(publicKey.length > 0, "_getPublicKeyAndIssHash: INVALID_PUB_KEY");
     }
 
-    function _getIss(
-        uint256 _index,
-        bytes calldata _data,
-        bytes calldata _payload
-    ) internal pure returns (bytes calldata iss) {
+    function _getIss(uint256 _index, bytes calldata _data, bytes calldata _payload) internal pure returns (bytes calldata iss) {
         uint32 issLeftIndex;
         (issLeftIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.issLeftIndex) * 4 + _index);
         require(bytes7(_payload[issLeftIndex - 7:issLeftIndex]) == bytes7('"iss":"'), "_getIss: INVALID_ISS_LEFT");
@@ -230,11 +209,7 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
         iss = _payload[issLeftIndex:issRightIndex];
     }
 
-    function _getKid(
-        uint256 _index,
-        bytes calldata _data,
-        bytes calldata _header
-    ) internal pure returns (bytes calldata kid) {
+    function _getKid(uint256 _index, bytes calldata _data, bytes calldata _header) internal pure returns (bytes calldata kid) {
         uint32 kidLeftIndex;
         (kidLeftIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.kidLeftIndex) * 4 + _index);
         require(bytes7(_header[kidLeftIndex - 7:kidLeftIndex]) == bytes7('"kid":"'), "_getKid: INVALID_KID_LEFT");
@@ -247,11 +222,7 @@ contract OpenID is Initializable, ModuleAdminAuth, UUPSUpgradeable {
         kid = _header[kidLeftIndex:kidRightIndex];
     }
 
-    function _getAud(
-        uint256 _index,
-        bytes calldata _data,
-        bytes calldata _payload
-    ) internal pure returns (bytes calldata aud) {
+    function _getAud(uint256 _index, bytes calldata _data, bytes calldata _payload) internal pure returns (bytes calldata aud) {
         uint32 audLeftIndex;
         (audLeftIndex, ) = _data.cReadUint32(uint256(OpenIDParamsIndex.audLeftIndex) * 4 + _index);
         require(bytes7(_payload[audLeftIndex - 7:audLeftIndex]) == bytes7('"aud":"'), "_getAud: INVALID_AUD_LEFT");
