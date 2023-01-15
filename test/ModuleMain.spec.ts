@@ -688,7 +688,7 @@ describe("ModuleMain", function () {
       expect(await proxyModuleMain.getKeysetHash()).to.equals(keysetHash);
       const lockInfo = await proxyModuleMain.getLockInfo();
       expect(lockInfo.lockDuringRet).to.equals(timeLockDuring);
-      expect(await proxyModuleMain.getImplementation()).to.equals(moduleMainUpgradable.address);
+      expect(await proxyModuleMain.getImplementation()).to.equals(moduleMain.address);
       hre.changeNetwork("hardhat");
     });
   });

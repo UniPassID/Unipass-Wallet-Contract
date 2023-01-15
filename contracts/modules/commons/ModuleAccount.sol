@@ -85,10 +85,10 @@ abstract contract ModuleAccount is IModuleAccount, ModuleSelfAuth, ModuleAuthBas
 
         require(ownerWeight >= LibRole.OWNER_THRESHOLD, "syncAccount: INVALID_WEIGHT");
 
+        _updateKeysetHash(_keysetHash);
         if (getImplementation() != _newImplementation) {
             _setImplementation(_newImplementation);
         }
-        _updateKeysetHash(_keysetHash);
         if (_getLockDuring() != _newTimeLockDuring) {
             _setLockDuring(_newTimeLockDuring);
         }
@@ -102,11 +102,7 @@ abstract contract ModuleAccount is IModuleAccount, ModuleSelfAuth, ModuleAuthBas
      * @param _newKeysetHash New KeysetHash
      * @param _signature The internal signature of Accont layer transction
      */
-    function updateKeysetHash(
-        uint32 _metaNonce,
-        bytes32 _newKeysetHash,
-        bytes calldata _signature
-    ) external override onlySelf {
+    function updateKeysetHash(uint32 _metaNonce, bytes32 _newKeysetHash, bytes calldata _signature) external override onlySelf {
         _validateMetaNonce(_metaNonce);
         _requireUnLocked();
         bytes32 digestHash = LibUnipassSig._subDigest(
@@ -216,11 +212,7 @@ abstract contract ModuleAccount is IModuleAccount, ModuleSelfAuth, ModuleAuthBas
      * @param _newTimeLockDuring New TimeLock Lock During
      * @param _signature The internal signature of Accont layer transction
      */
-    function updateTimeLockDuring(
-        uint32 _metaNonce,
-        uint32 _newTimeLockDuring,
-        bytes calldata _signature
-    ) external onlySelf {
+    function updateTimeLockDuring(uint32 _metaNonce, uint32 _newTimeLockDuring, bytes calldata _signature) external onlySelf {
         _validateMetaNonce(_metaNonce);
         _requireUnLocked();
 
@@ -247,11 +239,7 @@ abstract contract ModuleAccount is IModuleAccount, ModuleSelfAuth, ModuleAuthBas
      * @param _newImplementation New Contract Implemenation
      * @param _signature The internal signature of Accont layer transction
      */
-    function updateImplementation(
-        uint32 _metaNonce,
-        address _newImplementation,
-        bytes calldata _signature
-    ) external onlySelf {
+    function updateImplementation(uint32 _metaNonce, address _newImplementation, bytes calldata _signature) external onlySelf {
         _validateMetaNonce(_metaNonce);
         _requireUnLocked();
         if (!_newImplementation.isContract()) revert InvalidImplementation(_newImplementation);
