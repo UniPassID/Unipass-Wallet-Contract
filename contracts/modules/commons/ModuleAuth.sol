@@ -142,15 +142,6 @@ abstract contract ModuleAuth is ModuleAuthBase, IERC1271 {
         succ = isValidKeysetHash(keysetHash);
     }
 
-    function _parseRoleWeight(
-        uint256 _index,
-        bytes calldata _signature
-    ) private pure returns (uint32 ownerWeight, uint32 assetsOpWeight, uint32 guardianWeight, uint256 index) {
-        (ownerWeight, index) = _signature.cReadUint32(_index);
-        (assetsOpWeight, index) = _signature.cReadUint32(index);
-        (guardianWeight, index) = _signature.cReadUint32(index);
-    }
-
     /**
      * @dev Should return whether the signature provided is valid for the provided data
      * @param _hash      Hash of the data to be signed

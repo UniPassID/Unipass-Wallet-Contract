@@ -63,9 +63,6 @@ abstract contract ModuleTimeLock {
         lockDuring = _lockDuring + 1;
     }
 
-    function _setUnLock() internal {
-        isLocked = false;
-    }
 
     function getLockInfo()
         external
