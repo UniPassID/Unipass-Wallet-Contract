@@ -34,7 +34,6 @@ abstract contract ModuleAccount is IModuleAccount, ModuleSelfAuth, ModuleAuthBas
     event UpdateImplementation(uint256 _metaNonce, address _newImplementation);
     event SyncAccount(uint256 _metaNonce, bytes32 _newKeysetHash, uint32 _newTimeLockDuring, address newImplementation);
 
-    error InvalidActionType(uint256 _actionType);
     error InvalidImplementation(address _implementation);
 
     constructor() ModuleTimeLock() {}

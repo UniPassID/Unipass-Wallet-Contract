@@ -23,10 +23,6 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, Modu
     // NONCE_KEY = kecaak256("unipass-wallet:module-call:nonce");
     bytes32 private constant NONCE_KEY = bytes32(0x93ed8d86f5d7fd79ac84d87731132a08aec6fc45dd823a5af26bb3e79833c46b);
 
-    error UnknownCallDataSelector(bytes4 _selector);
-    error SelectorDoesNotExist(bytes4 _selector);
-    error ImmutableSelectorSigWeight(bytes4 _selector);
-
     function getNonce() public view returns (uint256) {
         return uint256(ModuleStorage.readBytes32(NONCE_KEY));
     }
