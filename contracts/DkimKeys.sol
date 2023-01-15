@@ -104,8 +104,9 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
     }
 
     function deleteDKIMKey(bytes calldata _emailServer) external onlyAdmin {
+        bytes memory oldKey = dkimKeys[_emailServer];
         delete dkimKeys[_emailServer];
-        emit DeleteDKIMKey(_emailServer, dkimKeys[_emailServer]);
+        emit DeleteDKIMKey(_emailServer, oldKey);
     }
 
     function _validateEmailSubject(
@@ -148,15 +149,7 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
         uint256 _dkimParamsStartIndex,
         bytes calldata _data,
         bytes calldata _emailHeader
-    )
-        internal
-        pure
-        returns (
-            uint32 fromIndex,
-            uint32 fromLeftIndex,
-            uint32 fromRightIndex
-        )
-    {
+    ) internal pure returns (uint32 fromIndex, uint32 fromLeftIndex, uint32 fromRightIndex) {
         (fromIndex, ) = _data.cReadUint32(_dkimParamsStartIndex + uint256(DkimParamsIndex.fromIndex) * 4);
         (fromLeftIndex, ) = _data.cReadUint32(_dkimParamsStartIndex + uint256(DkimParamsIndex.fromLeftIndex) * 4);
         (fromRightIndex, ) = _data.cReadUint32(_dkimParamsStartIndex + uint256(DkimParamsIndex.fromRightIndex) * 4);
@@ -192,15 +185,7 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
         uint256 _dkimParamsStartindex,
         bytes calldata _data,
         bytes calldata _emailHeader
-    )
-        internal
-        view
-        returns (
-            bytes32 emailHash,
-            bytes32 emailHeaderHash,
-            uint256 dkimParamsEndIndex
-        )
-    {
+    ) internal view returns (bytes32 emailHash, bytes32 emailHeaderHash, uint256 dkimParamsEndIndex) {
         (, uint32 fromLeftIndex, uint32 fromRightIndex) = _getEmailFromIndexes(_dkimParamsStartindex, _data, _emailHeader);
 
         (emailHash, emailHeaderHash, dkimParamsEndIndex) = _getEmailHashByZK(
@@ -218,15 +203,7 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
         uint256 _dkimParamsEndIndex,
         bytes calldata _headerPubMatch,
         bytes calldata _data
-    )
-        internal
-        view
-        returns (
-            bytes32,
-            bytes32,
-            uint256
-        )
-    {
+    ) internal view returns (bytes32, bytes32, uint256) {
         IDkimZK dkimZK = getDkimZK();
         try dkimZK.getEmailHashByZK(_fromLeftIndex, _fromLen, _dkimParamsEndIndex, _headerPubMatch, _data) returns (
             bytes32 emailHash,
@@ -301,17 +278,14 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
         ret = LibRsa.rsapkcs1Verify(_emailHeaderHash, n, hex"010001", _dkimSig);
     }
 
-    function dkimVerify(uint256 _dkimParamsStartIndex, bytes calldata _data)
+    function dkimVerify(
+        uint256 _dkimParamsStartIndex,
+        bytes calldata _data
+    )
         external
         view
         override
-        returns (
-            bool ret,
-            EmailType emailType,
-            bytes32 emailHash,
-            bytes32 subjectHash,
-            uint256 dkimParamsEndIndex
-        )
+        returns (bool ret, EmailType emailType, bytes32 emailHash, bytes32 subjectHash, uint256 dkimParamsEndIndex)
     {
         uint8 emailVerifyType = _data.mcReadUint8(_dkimParamsStartIndex);
         ++_dkimParamsStartIndex;
@@ -425,11 +399,10 @@ contract DkimKeys is IDkimKeys, Initializable, ModuleAdminAuth, UUPSUpgradeable 
         }
     }
 
-    function _checkSubjectHeader(bytes memory _decodedSubjectHeader, EmailType _emailType)
-        private
-        pure
-        returns (bytes memory sigHashHex)
-    {
+    function _checkSubjectHeader(
+        bytes memory _decodedSubjectHeader,
+        EmailType _emailType
+    ) private pure returns (bytes memory sigHashHex) {
         if (_emailType == EmailType.UpdateKeysetHash) {
             require(_decodedSubjectHeader.length == 89, "_checkSubjectHeader: INVALID_LENGTH");
             require(
