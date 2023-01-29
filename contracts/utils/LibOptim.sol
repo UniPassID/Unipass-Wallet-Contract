@@ -20,6 +20,9 @@ library LibOptim {
         bytes calldata _data
     ) internal returns (bool r) {
         assembly {
+            // We will not restore a new point address to `0x40`, as
+            // we will not reuse the data.
+            // Notice that there may be dirty data in the free memory.
             let tmp := mload(0x40)
             calldatacopy(tmp, _data.offset, _data.length)
 
