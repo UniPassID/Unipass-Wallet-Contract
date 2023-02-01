@@ -6,8 +6,9 @@ Contracts of unipass wallet based on unipass accounts system.
 
 Internal Architecture in Contracts:
 
-- ModuleMain is the entrypoint of UniPass-Wallet.
+- ModuleMain is the implementation of UniPass-Wallet account.
 - Method `execute` in the ModuleCall is the entrypoint of UniPass-Wallet transactions.
+- ModuleAccount manages account layer transactions like updating keyset, update time lock and so on.
 - ModuleAuth validates transaction signature and supports account layer transactions.
 - ModuleRole supports authorization weights and executive roles of UniPass-Wallet permissions, whose value is method selectors.
 - ModuleHooks supports hooks relative methods. You can delegateCall methods by the hooks.
@@ -16,6 +17,7 @@ Internal Architecture in Contracts:
 sequenceDiagram
     participant ModuleMain
     participant ModuleCall
+    participant ModuleAccount
     participant ModuleAuth
     participant DkimKeys
     participant ModuleRole
@@ -23,7 +25,8 @@ sequenceDiagram
 
     ModuleMain->>ModuleCall: execute([accountTxCallData, roleTxCallData, hooksTxCallData])
     Note right of ModuleCall: accountTx includes updateKeysetHash, updateTimeLockDuring, updateImplemenation, ...
-    ModuleCall->>ModuleAuth: call(accountTxCalldata)
+    ModuleCall->>ModuleAccount: call(accountTxCalldata)
+    ModuleAccount->>ModuleAuth: validate signature
     ModuleAuth->>DkimKeys: validateEmailDkim
     Note right of ModuleCall: accountTx includes addPermission, removePermission
     ModuleCall->>ModuleRole: call(roleTxCallData)
@@ -105,7 +108,7 @@ sequenceDiagram
 
 ## ModuleMain
 
-The Entrypoint of UniPass Wallet.
+The Implementation of UniPass Wallet account.
 
 ### Constructor
 
