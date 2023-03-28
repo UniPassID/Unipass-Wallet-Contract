@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-pragma solidity ^0.8.0;
+pragma solidity 0.8.15;
 
 /* solhint-disable no-unused-vars */
 /* solhint-disable no-inline-assembly */
@@ -15,9 +15,6 @@ import "../../utils/LibBytes.sol";
 import "../../utils/LibOptim.sol";
 import "../../interfaces/IModuleHooks.sol";
 import "../../interfaces/IModuleCall.sol";
-import "../../interfaces/IEIP4337Wallet.sol";
-
-import "hardhat/console.sol";
 
 abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, ModuleAuthBase, IModuleHooks {
     using LibBytes for bytes;
@@ -25,10 +22,6 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, Modu
 
     // NONCE_KEY = kecaak256("unipass-wallet:module-call:nonce");
     bytes32 private constant NONCE_KEY = bytes32(0x93ed8d86f5d7fd79ac84d87731132a08aec6fc45dd823a5af26bb3e79833c46b);
-
-    error UnknownCallDataSelector(bytes4 _selector);
-    error SelectorDoesNotExist(bytes4 _selector);
-    error ImmutableSelectorSigWeight(bytes4 _selector);
 
     function getNonce() public view returns (uint256) {
         return uint256(ModuleStorage.readBytes32(NONCE_KEY));
@@ -43,11 +36,7 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, Modu
      * @param _nonce Signature nonce
      * @param _signature Signature bytes
      */
-    function execute(
-        Transaction[] calldata _txs,
-        uint256 _nonce,
-        bytes calldata _signature
-    ) external payable {
+    function execute(Transaction[] calldata _txs, uint256 _nonce, bytes calldata _signature) external payable {
         _validateNonce(_nonce);
 
         bytes32 txhash = LibUnipassSig._subDigest(keccak256(abi.encode(_nonce, _txs)), block.chainid);
@@ -60,9 +49,10 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, Modu
             uint32 guardianWeight
         ) = validateSignature(txhash, _signature);
         require(
-            succ && (emailType == IDkimKeys.EmailType.None || emailType == IDkimKeys.EmailType.CallOtherContract),
-            "execute: INVALID_SIG_WEIGHT"
+            emailType == IDkimKeys.EmailType.None || emailType == IDkimKeys.EmailType.CallOtherContract,
+            "execute: INVALID_EMAIL"
         );
+        require(succ, "execute: INVALID_SIG_WEIGHT");
 
         _execute(txhash, _txs, ownerWeight, assetsOpWeight, guardianWeight);
     }
@@ -136,15 +126,9 @@ abstract contract ModuleCall is IModuleCall, ModuleTransaction, ModuleRole, Modu
         }
     }
 
-    function _getPermissionOfCallData(bytes calldata callData)
-        private
-        view
-        returns (
-            uint32 ownerWeight,
-            uint32 assetsWeight,
-            uint32 guardianWeight
-        )
-    {
+    function _getPermissionOfCallData(
+        bytes calldata callData
+    ) private view returns (uint32 ownerWeight, uint32 assetsWeight, uint32 guardianWeight) {
         uint256 index;
         bytes4 selector;
         (selector, index) = callData.cReadBytes4(index);

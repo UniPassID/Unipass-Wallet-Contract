@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-pragma solidity ^0.8.0;
+pragma solidity 0.8.15;
 
 import "@openzeppelin/contracts/utils/math/Math.sol";
-
-import "hardhat/console.sol";
 
 /* solhint-disable no-inline-assembly */
 
@@ -72,11 +70,7 @@ library LibBytes {
         return result;
     }
 
-    function readBytesN(
-        bytes memory b,
-        uint256 index,
-        uint32 length
-    ) internal pure returns (bytes32 result) {
+    function readBytesN(bytes memory b, uint256 index, uint32 length) internal pure returns (bytes32 result) {
         // Arrays are prefixed by a 256 bit length parameter
         uint256 pos = index + 32;
 
@@ -110,11 +104,7 @@ library LibBytes {
         require(newIndex <= data.length, "LibBytes#readBytes66: OUT_OF_BOUNDS");
     }
 
-    function mcReadBytesN(
-        bytes calldata data,
-        uint256 index,
-        uint256 length
-    ) internal pure returns (bytes32 a) {
+    function mcReadBytesN(bytes calldata data, uint256 index, uint256 length) internal pure returns (bytes32 a) {
         uint256 ret;
         assembly {
             ret := calldataload(add(data.offset, index))
@@ -130,15 +120,7 @@ library LibBytes {
         }
     }
 
-    function cReadUint8Uint8(bytes calldata data, uint256 index)
-        internal
-        pure
-        returns (
-            uint8 a,
-            uint8 b,
-            uint256 newIndex
-        )
-    {
+    function cReadUint8Uint8(bytes calldata data, uint256 index) internal pure returns (uint8 a, uint8 b, uint256 newIndex) {
         assembly {
             let word := calldataload(add(index, data.offset))
             a := shr(248, word)
@@ -249,11 +231,7 @@ library LibBytes {
         return buffer;
     }
 
-    function findBytes1(
-        bytes calldata self,
-        uint256 _index,
-        bytes1 _needle
-    ) internal pure returns (uint256 index) {
+    function findBytes1(bytes calldata self, uint256 _index, bytes1 _needle) internal pure returns (uint256 index) {
         for (index = _index; index < self.length; index++) {
             if (self[index] == _needle) {
                 return index;
@@ -262,11 +240,7 @@ library LibBytes {
         revert SplitInvalidNeedle();
     }
 
-    function findBytes(
-        bytes calldata self,
-        uint256 _index,
-        bytes calldata _needle
-    ) internal pure returns (uint256 index) {
+    function findBytes(bytes calldata self, uint256 _index, bytes calldata _needle) internal pure returns (uint256 index) {
         uint256 selfLength = self.length;
         uint256 needleLength = _needle.length;
         for (index = _index; index < selfLength; index++) {

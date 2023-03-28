@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.0;
-
-import "hardhat/console.sol";
+pragma solidity 0.8.15;
 
 /* solhint-disable no-inline-assembly */
 
@@ -120,20 +118,7 @@ library LibBase64 {
         return string(res);
     }
 
-    function encode3(
-        uint256 a0,
-        uint256 a1,
-        uint256 a2
-    )
-        private
-        pure
-        returns (
-            bytes1 b0,
-            bytes1 b1,
-            bytes1 b2,
-            bytes1 b3
-        )
-    {
+    function encode3(uint256 a0, uint256 a1, uint256 a2) private pure returns (bytes1 b0, bytes1 b1, bytes1 b2, bytes1 b3) {
         uint256 n = (a0 << 16) | (a1 << 8) | a2;
 
         uint256 c0 = (n >> 18) & 63;

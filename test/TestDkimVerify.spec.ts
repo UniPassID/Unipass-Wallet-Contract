@@ -13,7 +13,7 @@ import {
 import * as fs from "fs";
 import { Deployer } from "./utils/deployer";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { arrayify, formatBytes32String, hexlify, randomBytes, solidityPack, toUtf8Bytes } from "ethers/lib/utils";
+import { formatBytes32String, hexlify, randomBytes, solidityPack, toUtf8Bytes } from "ethers/lib/utils";
 import fetchPonyfill from "fetch-ponyfill";
 import { sha256 } from "ethereumjs-util";
 import { buildResponse, initDkimZK } from "./utils/common";
@@ -45,7 +45,9 @@ describe("TestDkimVerify", function () {
     const ERC1967 = await ethers.getContractFactory("ERC1967Proxy");
     const calldata = DkimKeys.interface.encodeFunctionData("initialize");
     const erc1967 = await deployer.deployContract(ERC1967, instance, txParams, dkimKeys.address, calldata);
-    dkimKeys = DkimKeys.attach(erc1967.address);
+    dkimKeys = DkimKeys.attach(erc1967.address).connect(signer);
+    const ret = await (await dkimKeys.setAdmin(signer.address)).wait();
+    expect(ret.status).to.equals(1);
   });
   if (process.env.VALIDATE_ALL_EMAILS_BY_ORIGIN) {
     let emails: { from: string; params: DkimParams }[] = [];
@@ -152,14 +154,16 @@ describe("TestDkimVerify", function () {
   describe("Test Upgradable", () => {
     let newDkimkeys: Contract;
     this.beforeEach(async () => {
-      newDkimkeys = await DkimKeys.deploy(signer1.address, dkimZK.address);
+      newDkimkeys = (await DkimKeys.deploy(signer1.address, dkimZK.address)).connect(signer1);
+      const ret = await (await newDkimkeys.setAdmin(signer1.address)).wait();
+      expect(ret.status).to.equals(1);
     });
     it("Upgrade Should Success", async () => {
       expect(await dkimKeys.getAdmin()).equals(signer.address);
       const ret = await (await dkimKeys.upgradeTo(newDkimkeys.address)).wait();
       expect(ret.status).to.equals(1);
-      expect(await dkimKeys.getAdmin()).to.equals(signer1.address);
-      expect(await dkimKeys.getAdmin()).to.not.equals(signer.address);
+      expect(await dkimKeys.getAdmin()).to.equals(signer.address);
+      expect(await dkimKeys.getAdmin()).to.not.equals(signer1.address);
     });
     it("Not Admin Should Not Upgradable Successfully", async () => {
       const upgrade = async () => {

@@ -72,6 +72,9 @@ const config: HardhatUserConfig = {
     },
   },
   networks: {
+    hardhat: {
+      blockGasLimit: 40000000,
+    },
     local1: { url: "http://127.0.0.1:10086" },
     ropsten: {
       url: process.env.ROPSTEN_URL || "",

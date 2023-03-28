@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-pragma solidity ^0.8.0;
+pragma solidity 0.8.15;
 
 import "../../interfaces/IDkimKeys.sol";
-
-import "hardhat/console.sol";
 
 /**
  * @dev Account Layer Transactions Have To Be With Signature For
@@ -19,17 +17,14 @@ abstract contract ModuleAuthBase {
      * @return assetsOpWeight The Threshold Weight Of Role AssetsOp
      * @return guardianWeight The Threshold Weight Of Role Guardian
      */
-    function validateSignature(bytes32 _hash, bytes calldata _signature)
+    function validateSignature(
+        bytes32 _hash,
+        bytes calldata _signature
+    )
         public
         view
         virtual
-        returns (
-            bool succ,
-            IDkimKeys.EmailType emailType,
-            uint32 ownerWeight,
-            uint32 assetsOpWeight,
-            uint32 guardianWeight
-        );
+        returns (bool succ, IDkimKeys.EmailType emailType, uint32 ownerWeight, uint32 assetsOpWeight, uint32 guardianWeight);
 
     function isValidKeysetHash(bytes32 _keysetHash) public view virtual returns (bool);
 

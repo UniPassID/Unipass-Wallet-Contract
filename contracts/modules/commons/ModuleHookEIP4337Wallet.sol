@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.0;
+pragma solidity 0.8.15;
 
 /* solhint-disable avoid-low-level-calls */
 /* solhint-disable no-inline-assembly */
@@ -17,8 +17,6 @@ import "../../interfaces/IModuleAuth.sol";
 import "../../utils/LibBytes.sol";
 
 import "@openzeppelin/contracts/utils/Address.sol";
-
-import "hardhat/console.sol";
 
 /**
  * Basic wallet implementation.
@@ -93,11 +91,7 @@ contract ModuleHookEIP4337Wallet is ModuleTransaction, IEIP4337Wallet, ModuleSel
      * Validate user's signature and nonce.
      * subclass doesn't override this method. instead, it should override the specific internal validation methods.
      */
-    function validateUserOp(
-        UserOperation calldata userOp,
-        bytes32 requestId,
-        uint256 missingWalletFunds
-    ) external override {
+    function validateUserOp(UserOperation calldata userOp, bytes32 requestId, uint256 missingWalletFunds) external override {
         _requireFromEntryPoint();
         _validateUserOp(userOp, requestId);
         //during construction, the "nonce" field hold the salt.

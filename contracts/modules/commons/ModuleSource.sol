@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-pragma solidity ^0.8.0;
+pragma solidity 0.8.15;
 
 import "./ModuleStorage.sol";
-
-import "hardhat/console.sol";
 
 abstract contract ModuleSource {
     //                       SOURCE_KEY = keccak256("unipass-wallet:module-source:source")

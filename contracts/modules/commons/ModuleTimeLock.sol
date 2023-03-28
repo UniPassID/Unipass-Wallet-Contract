@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-pragma solidity ^0.8.0;
+pragma solidity 0.8.15;
 
 import "./ModuleStorage.sol";
 import "../utils/LibTimeLock.sol";
-
-import "hardhat/console.sol";
 
 /* solhint-disable no-inline-assembly */
 
@@ -65,19 +63,11 @@ abstract contract ModuleTimeLock {
         lockDuring = _lockDuring + 1;
     }
 
-    function _setUnLock() internal {
-        isLocked = false;
-    }
 
     function getLockInfo()
         external
         view
-        returns (
-            bool isLockedRet,
-            uint32 lockDuringRet,
-            bytes32 lockedKeysetHashRet,
-            uint256 unlockAfterRet
-        )
+        returns (bool isLockedRet, uint32 lockDuringRet, bytes32 lockedKeysetHashRet, uint256 unlockAfterRet)
     {
         isLockedRet = isLocked;
         lockDuringRet = _getLockDuring();

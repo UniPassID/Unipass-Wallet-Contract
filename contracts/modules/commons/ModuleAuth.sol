@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-pragma solidity ^0.8.0;
+pragma solidity 0.8.15;
 
 import "./ModuleStorage.sol";
 import "./ModuleAuthBase.sol";
@@ -10,8 +10,6 @@ import "../../interfaces/IDkimKeys.sol";
 
 import "@openzeppelin/contracts/interfaces/IERC1271.sol";
 
-import "hardhat/console.sol";
-
 abstract contract ModuleAuth is ModuleAuthBase, IERC1271 {
     using LibBytes for bytes;
 
@@ -21,7 +19,7 @@ abstract contract ModuleAuth is ModuleAuthBase, IERC1271 {
     constructor(IDkimKeys _dkimKeys, IOpenID _openID) {
         require(address(_dkimKeys) != address(0), "INVALID_DKIMKEYS");
         dkimKeys = _dkimKeys;
-        require(address(_openID) != address(0), "INVALID_DKIMKEYS");
+        require(address(_openID) != address(0), "INVALID_OPENID");
         openID = _openID;
     }
 
@@ -47,18 +45,15 @@ abstract contract ModuleAuth is ModuleAuthBase, IERC1271 {
      * @return assetsOpWeight The Threshold Weight Of Role AssetsOp
      * @return guardianWeight The Threshold Weight Of Role Guardian
      */
-    function validateSignature(bytes32 _hash, bytes calldata _signature)
+    function validateSignature(
+        bytes32 _hash,
+        bytes calldata _signature
+    )
         public
         view
         virtual
         override
-        returns (
-            bool succ,
-            IDkimKeys.EmailType emailType,
-            uint32 ownerWeight,
-            uint32 assetsOpWeight,
-            uint32 guardianWeight
-        )
+        returns (bool succ, IDkimKeys.EmailType emailType, uint32 ownerWeight, uint32 assetsOpWeight, uint32 guardianWeight)
     {
         if (_signature.length == 0) {
             return (true, IDkimKeys.EmailType.None, 0, 0, 0);
@@ -102,13 +97,7 @@ abstract contract ModuleAuth is ModuleAuthBase, IERC1271 {
     )
         internal
         view
-        returns (
-            bool isSig,
-            IDkimKeys.EmailType emailType,
-            LibUnipassSig.KeyType keyType,
-            bytes32 ret,
-            uint256 index
-        )
+        returns (bool isSig, IDkimKeys.EmailType emailType, LibUnipassSig.KeyType keyType, bytes32 ret, uint256 index)
     {
         (isSig, emailType, keyType, ret, index) = LibUnipassSig._parseKey(dkimKeys, openID, _hash, _signature, _index);
     }
@@ -117,15 +106,7 @@ abstract contract ModuleAuth is ModuleAuthBase, IERC1271 {
         bytes32 _hash,
         uint256 _index,
         bytes calldata _signature
-    )
-        internal
-        view
-        returns (
-            bool succ,
-            IDkimKeys.EmailType emailType,
-            uint96 weights
-        )
-    {
+    ) internal view returns (bool succ, IDkimKeys.EmailType emailType, uint96 weights) {
         bytes32 keysetHash;
         IDkimKeys.EmailType tmpEmailType;
         while (_index < _signature.length - 1) {
@@ -159,21 +140,6 @@ abstract contract ModuleAuth is ModuleAuthBase, IERC1271 {
         }
 
         succ = isValidKeysetHash(keysetHash);
-    }
-
-    function _parseRoleWeight(uint256 _index, bytes calldata _signature)
-        private
-        pure
-        returns (
-            uint32 ownerWeight,
-            uint32 assetsOpWeight,
-            uint32 guardianWeight,
-            uint256 index
-        )
-    {
-        (ownerWeight, index) = _signature.cReadUint32(_index);
-        (assetsOpWeight, index) = _signature.cReadUint32(index);
-        (guardianWeight, index) = _signature.cReadUint32(index);
     }
 
     /**

@@ -479,6 +479,23 @@ export async function randomNewWallet(unipassPrivateKey: string): Promise<KeyBas
   return ret;
 }
 
+export class KeySecp256k1Address extends KeyBase {
+  constructor(readonly inner: string, roleWeight: RoleWeight) {
+    super(roleWeight);
+  }
+
+  public async generateSignature(digestHash: string): Promise<string> {
+    throw new Error("Not Implemented");
+  }
+
+  public async generateKey(): Promise<string> {
+    return solidityPack(["uint8", "uint8", "address", "bytes"], [KeyType.Secp256k1, 0, this.inner, this.serializeRoleWeight()]);
+  }
+  public serialize(): string {
+    return solidityPack(["uint8", "address", "bytes"], [KeyType.Secp256k1, this.inner, this.serializeRoleWeight()]);
+  }
+}
+
 export function randomRoleWeight(role: Role): RoleWeight {
   if (role === Role.Owner) {
     return {

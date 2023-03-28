@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-pragma solidity ^0.8.0;
+pragma solidity 0.8.15;
 
 import "./LibDkimAuth.sol";
 import "./LibOpenIDAuth.sol";
 import "../../utils/LibSignatureValidator.sol";
 import "../../utils/LibBytes.sol";
-
-import "hardhat/console.sol";
 
 library LibUnipassSig {
     using LibBytes for bytes;
@@ -34,17 +32,7 @@ library LibUnipassSig {
         bytes32 _hash,
         bytes calldata _signature,
         uint256 _index
-    )
-        internal
-        view
-        returns (
-            bool isSig,
-            IDkimKeys.EmailType emailType,
-            KeyType keyType,
-            bytes32 ret,
-            uint256 index
-        )
-    {
+    ) internal view returns (bool isSig, IDkimKeys.EmailType emailType, KeyType keyType, bytes32 ret, uint256 index) {
         keyType = (KeyType)(_signature.mcReadUint8(_index));
         index = _index + 1;
         if (keyType == KeyType.Secp256k1) {
@@ -87,16 +75,7 @@ library LibUnipassSig {
         bytes32 _hash,
         uint256 _index,
         bytes calldata _signature
-    )
-        private
-        view
-        returns (
-            bool isSig,
-            IDkimKeys.EmailType emailType,
-            bytes32 ret,
-            uint256 index
-        )
-    {
+    ) private view returns (bool isSig, IDkimKeys.EmailType emailType, bytes32 ret, uint256 index) {
         index = _index;
         isSig = _signature.mcReadUint8(index) == 1;
         ++index;
@@ -122,15 +101,7 @@ library LibUnipassSig {
         bytes32 _hash,
         uint256 _index,
         bytes calldata _signature
-    )
-        private
-        view
-        returns (
-            IDkimKeys.EmailType emailType,
-            bytes32 ret,
-            uint256 index
-        )
-    {
+    ) private view returns (IDkimKeys.EmailType emailType, bytes32 ret, uint256 index) {
         index = _index;
         bytes32 openIDHash = _signature.mcReadBytes32(index);
         index += 32;

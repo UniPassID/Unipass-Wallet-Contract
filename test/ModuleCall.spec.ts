@@ -26,6 +26,7 @@ import {
   generateAddPermissionTx,
   generateCancelLockKeysetHashTx,
   generateSignature,
+  generateSyncAccountTx,
   generateTransactionHash,
   generateTransferTx,
   generateUnlockKeysetHashTx,
@@ -43,6 +44,7 @@ describe("ModuleCall", function () {
   let testModuleCall: Contract;
   let TestModuleCall: ContractFactory;
   let proxyTestModuleCall: Contract;
+  let moduleMainUpgradable: Contract;
   let deployer: Deployer;
   let dkimKeys: Contract;
   let keys: KeyBase[];
@@ -113,7 +115,7 @@ describe("ModuleCall", function () {
     openID = openID.attach(erc1967.address);
 
     const ModuleMainUpgradable = await ethers.getContractFactory("ModuleMainUpgradable");
-    const moduleMainUpgradable = await deployer.deployContract(
+    moduleMainUpgradable = await deployer.deployContract(
       ModuleMainUpgradable,
       0,
       txParams,
@@ -387,6 +389,108 @@ describe("ModuleCall", function () {
         expect(ret.status).to.equal(1);
         proxyTestModuleCall = Greeter.attach(proxyTestModuleCall.address);
         expect(await proxyTestModuleCall.ret1()).to.equals(1);
+        nonce++;
+        metaNonce++;
+      });
+      it(`Sync Account to moduleMainUpgradable For ${module}`, async function () {
+        await init();
+        const selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
+
+        const newDelay = 3;
+        const newKeysetHash = hexlify(randomBytes(32));
+        let tx = await generateSyncAccountTx(
+          chainId,
+          proxyTestModuleCall,
+          metaNonce,
+          newKeysetHash,
+          newDelay,
+          moduleMainUpgradable.address,
+          selectedKeys
+        );
+        let ret = await executeCall([tx], chainId, nonce, [], proxyTestModuleCall, undefined, txParams);
+        expect(ret.status).to.equal(1);
+        proxyTestModuleCall = moduleMainUpgradable.attach(proxyTestModuleCall.address);
+        expect(await proxyTestModuleCall.getMetaNonce()).to.equals(metaNonce);
+        expect(await proxyTestModuleCall.getNonce()).to.equals(nonce);
+        expect(await proxyTestModuleCall.getKeysetHash()).to.equals(newKeysetHash);
+        const lockInfo = await proxyTestModuleCall.getLockInfo();
+        expect(lockInfo.isLockedRet).to.false;
+        expect(lockInfo.lockDuringRet).to.equal(newDelay);
+        expect(await proxyTestModuleCall.getImplementation()).to.equals(moduleMainUpgradable.address);
+        nonce++;
+        metaNonce++;
+      });
+      it(`Sync Account to greeter1 For ${module}`, async function () {
+        await init();
+        const selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
+
+        const newDelay = 3;
+        const newKeysetHash = hexlify(randomBytes(32));
+        let tx = await generateSyncAccountTx(
+          chainId,
+          proxyTestModuleCall,
+          metaNonce,
+          newKeysetHash,
+          newDelay,
+          greeter1.address,
+          selectedKeys
+        );
+        let ret = await executeCall([tx], chainId, nonce, [], proxyTestModuleCall, undefined, txParams);
+        expect(ret.status).to.equal(1);
+        proxyTestModuleCall = greeter1.attach(proxyTestModuleCall.address);
+        expect(await proxyTestModuleCall.ret1()).to.equals(1);
+        nonce++;
+        metaNonce++;
+      });
+      it(`Sync Account to moduleMainUpgradable For ${module}`, async function () {
+        await init();
+        const selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
+
+        const newDelay = 3;
+        const newKeysetHash = hexlify(randomBytes(32));
+        let tx = await generateSyncAccountTx(
+          chainId,
+          proxyTestModuleCall,
+          metaNonce,
+          newKeysetHash,
+          newDelay,
+          moduleMainUpgradable.address,
+          selectedKeys
+        );
+        let ret = await executeCall([tx], chainId, nonce, [], proxyTestModuleCall, undefined, txParams);
+        expect(ret.status).to.equal(1);
+        proxyTestModuleCall = moduleMainUpgradable.attach(proxyTestModuleCall.address);
+        expect(await proxyTestModuleCall.getMetaNonce()).to.equals(metaNonce);
+        expect(await proxyTestModuleCall.getNonce()).to.equals(nonce);
+        expect(await proxyTestModuleCall.getKeysetHash()).to.equals(newKeysetHash);
+        const lockInfo = await proxyTestModuleCall.getLockInfo();
+        expect(lockInfo.isLockedRet).to.false;
+        expect(lockInfo.lockDuringRet).to.equal(newDelay);
+        expect(await proxyTestModuleCall.getImplementation()).to.equals(moduleMainUpgradable.address);
+        nonce++;
+        metaNonce++;
+      });
+      it(`Sync Account to greeter1 For ${module}`, async function () {
+        await init();
+        const selectedKeys = selectKeys(keys, Role.Owner, OWNER_THRESHOLD);
+
+        const newDelay = 3;
+        const newKeysetHash = hexlify(randomBytes(32));
+        let tx = await generateSyncAccountTx(
+          chainId,
+          proxyTestModuleCall,
+          metaNonce,
+          newKeysetHash,
+          newDelay,
+          greeter1.address,
+          selectedKeys
+        );
+        let ret = await executeCall([tx], chainId, nonce, [], proxyTestModuleCall, undefined, txParams);
+        expect(ret.status).to.equal(1);
+        proxyTestModuleCall = greeter1.attach(proxyTestModuleCall.address);
+        expect(await proxyTestModuleCall.ret1()).to.equals(1);
+        nonce++;
+        metaNonce++;
       });
     });
   });
