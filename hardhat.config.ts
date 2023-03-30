@@ -118,7 +118,10 @@ const config: HardhatUserConfig = {
     timeout: 100000000,
   },
   dependencyCompiler: {
-    paths: ["@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol"],
+    paths: [
+      "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol",
+      "@account-abstraction/contracts/samples/VerifyingPaymaster.sol",
+    ],
   },
 };
 

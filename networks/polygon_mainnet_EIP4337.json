@@ -1,0 +1,10 @@
+[
+  {
+    "contractName": "MoeulHookEIP4337",
+    "address": "0xD46c1a3D33ab419F58a524a880f6BAc0E17553e5"
+  },
+  {
+    "contractName": "VerifyingPaymaster",
+    "address": "0xcBAE528014C7e5a4FC6eBCadEd8BBc96FE0aC39B"
+  }
+]
