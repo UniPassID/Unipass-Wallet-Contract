@@ -9,14 +9,14 @@ import "./ModuleStorage.sol";
 import "./ModuleSelfAuth.sol";
 import "./ModuleRole.sol";
 import "./ModuleTransaction.sol";
-import "../../UserOperation.sol";
-import "../../interfaces/IEIP4337Wallet.sol";
 import "../../interfaces/IModuleCall.sol";
 import "../../interfaces/IModuleAccount.sol";
 import "../../interfaces/IModuleAuth.sol";
 import "../../utils/LibBytes.sol";
 
 import "@openzeppelin/contracts/utils/Address.sol";
+import "@account-abstraction/contracts/interfaces/UserOperation.sol";
+import "@account-abstraction/contracts/interfaces/IAccount.sol";
 
 import "hardhat/console.sol";
 
@@ -25,10 +25,14 @@ import "hardhat/console.sol";
  * this contract provides the basic logic for implementing the IWallet interface  - validateUserOp
  * specific wallet implementation should inherit it and provide the wallet-specific logic
  */
-contract ModuleHookEIP4337Wallet is ModuleTransaction, IEIP4337Wallet, ModuleSelfAuth {
+contract ModuleHookEIP4337Wallet is ModuleTransaction, IAccount, ModuleSelfAuth {
     using UserOperationLib for UserOperation;
     using Address for address;
     using LibBytes for bytes;
+
+    //return value in case of signature failure, with no time-range.
+    // equivalent to _packValidationData(true,0,0);
+    uint256 internal constant SIG_VALIDATION_FAILED = 1;
 
     address public immutable ENTRY_POINT;
 
@@ -95,17 +99,17 @@ contract ModuleHookEIP4337Wallet is ModuleTransaction, IEIP4337Wallet, ModuleSel
      */
     function validateUserOp(
         UserOperation calldata userOp,
-        bytes32 requestId,
-        uint256 missingWalletFunds
-    ) external override {
+        bytes32 userOpHash,
+        uint256 missingAccountFunds
+    ) external override returns (uint256 validationData) {
         _requireFromEntryPoint();
-        _validateUserOp(userOp, requestId);
+        validationData = _validateUserOp(userOp, userOpHash);
         //during construction, the "nonce" field hold the salt.
         // if we assert it is zero, then we allow only a single wallet per owner.
         if (userOp.initCode.length == 0) {
             _validateAndUpdateNonce(userOp);
         }
-        _payPrefund(missingWalletFunds);
+        _payPrefund(missingAccountFunds);
     }
 
     /**
@@ -125,7 +129,7 @@ contract ModuleHookEIP4337Wallet is ModuleTransaction, IEIP4337Wallet, ModuleSel
      * @param requestId convenient field: the hash of the request, to check the signature against
      *          (also hashes the entrypoint and chain-id)
      */
-    function _validateUserOp(UserOperation calldata userOp, bytes32 requestId) private view {
+    function _validateUserOp(UserOperation calldata userOp, bytes32 requestId) private view returns (uint256 validationData) {
         require(
             bytes4(userOp.callData[:4]) == ModuleHookEIP4337Wallet.execFromEntryPoint.selector,
             "_validateUserOp: INVALID_SELECTOR"
@@ -135,16 +139,20 @@ contract ModuleHookEIP4337Wallet is ModuleTransaction, IEIP4337Wallet, ModuleSel
         if (transaction.target != address(this)) {
             (bool success, IDkimKeys.EmailType emailType, , uint32 assetsOpWeight, ) = IModuleAuth(address(this))
                 .validateSignature(requestId, userOp.signature);
+            if (!success) {
+                return SIG_VALIDATION_FAILED;
+            }
             require(
-                success &&
-                    (emailType == IDkimKeys.EmailType.None || emailType == IDkimKeys.EmailType.CallOtherContract) &&
+                (emailType == IDkimKeys.EmailType.None || emailType == IDkimKeys.EmailType.CallOtherContract) &&
                     assetsOpWeight >= LibRole.ASSETS_OP_THRESHOLD,
-                "execute: INVALID_SIG_WEIGHT"
+                "_validateUserOp: INVALID_EMAIL_RO_ROLE_WEIGHT"
             );
         } else {
             bool success = IModuleCall(userOp.sender).isValidCallData(transaction.data, requestId, userOp.signature);
 
-            require(success, "_validateUserOp: INVALID_SIGNATURE");
+            if (!success) {
+                return SIG_VALIDATION_FAILED;
+            }
         }
     }
 

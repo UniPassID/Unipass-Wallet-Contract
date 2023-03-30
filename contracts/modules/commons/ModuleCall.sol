@@ -15,7 +15,6 @@ import "../../utils/LibBytes.sol";
 import "../../utils/LibOptim.sol";
 import "../../interfaces/IModuleHooks.sol";
 import "../../interfaces/IModuleCall.sol";
-import "../../interfaces/IEIP4337Wallet.sol";
 
 import "hardhat/console.sol";
 
