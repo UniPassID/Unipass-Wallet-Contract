@@ -30,7 +30,7 @@ task("compile", "Pre Compile Script", async (taskArgs, hre, runSuper) => {
   if (networkName.includes("mainnet") || networkName === "hardhat") {
     fs.writeFileSync(
       "./contracts/modules/utils/LibTimeLock.sol",
-      `// SPDX-License-Identifier: Apache-2.0
+      `// SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.0;
 
 library LibTimeLock {
@@ -42,7 +42,7 @@ library LibTimeLock {
   } else if (networkName.includes("testnet")) {
     fs.writeFileSync(
       "contracts/modules/utils/LibTimeLock.sol",
-      `// SPDX-License-Identifier: Apache-2.0
+      `// SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.0;
  
 library LibTimeLock {
