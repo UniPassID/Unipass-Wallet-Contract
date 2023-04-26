@@ -4,7 +4,7 @@ import ora from "ora";
 import fs from "fs";
 import { Deployer } from "../test/utils/deployer";
 import { expect } from "chai";
-import { parseEther } from "ethers/lib/utils";
+import { defaultAbiCoder, parseEther } from "ethers/lib/utils";
 
 const networkName = network.name;
 let DkimKeysAdmin: string = "";
@@ -22,6 +22,8 @@ if (networkName.includes("testnet")) {
   OpenIDAdmin = "0xb80D25a543241fb4dBf6bb219D80835400Df704f";
   DkimZKAmin = "0xb80D25a543241fb4dBf6bb219D80835400Df704f";
 }
+
+const IMPLEMENTATION_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
 
 const prompt = ora();
 const provider = new providers.Web3Provider(network.provider.send);
@@ -75,6 +77,21 @@ async function main() {
   prompt.start("Start To Proxy OpenID");
   const openIDerc1967 = await deployer.deployContract(ERC1967, instance, txParams, nativeOpenID.address, calldata);
   const openID = nativeOpenID.attach(openIDerc1967.address).connect(new Wallet(process.env.OPENID_ADMIN!).connect(provider));
+  if (network.name.includes("platon")) {
+    prompt.info!("Start To Attach OpenIDBlockMillisecond Address");
+    const OpenIDBlockMillisecond = await ethers.getContractFactory("OpenIDBlockMillisecond");
+    const nativeOpenIDBlockMillisecond = await deployer.deployContract(OpenIDBlockMillisecond, instance, txParams, OpenIDAdmin);
+    const currentImplementation = defaultAbiCoder.decode(
+      ["address"],
+      await provider.getStorageAt(openID.address, IMPLEMENTATION_SLOT)
+    )[0];
+    if (currentImplementation !== nativeOpenIDBlockMillisecond.address) {
+      const ret = await openID.upgradeTo(nativeOpenIDBlockMillisecond.address);
+      const receipt = await ret.wait();
+      expect(receipt.status).to.equals(1);
+      expect(openIDerc1967.get);
+    }
+  }
   prompt.succeed();
 
   const WhiteList = await ethers.getContractFactory("ModuleWhiteList");
